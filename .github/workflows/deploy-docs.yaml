@@ -11,6 +11,7 @@ on:
       - '.github/workflows/deploy-docs.yaml'
       - 'build_manuals.sh'
       - 'roff_to_md.sh'
+      - 'prelude'
 
 jobs:
   build:

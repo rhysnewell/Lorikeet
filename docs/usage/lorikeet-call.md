@@ -132,17 +132,17 @@ read alignments
 :   Underlying mapping software used for short reads [default:
     `minimap2-sr`]. One of:
 
-  name                   description
-  ---------------------- ----------------------------------------
-  `minimap2-sr`          minimap2 with \'`-x sr`\' option
-  `bwa-mem`              bwa mem using default parameters
-  `bwa-mem2`             bwa-mem2 using default parameters
-  `minimap2-ont`         minimap2 with \'`-x map-ont`\' option
-  `minimap2-pb`          minimap2 with \'`-x map-pb`\' option
-  `minimap2-hifi`        minimap2 with \'`-x map-hifi`\' option
-  `minimap2-no-preset`   minimap2 with no \'`-x`\' option
-  `ngmlr-ont`            ngmlr with \'`-x ont`\' option
-  `ngmlr-pb`             ngmlr with \'`-x pb`\' option
+  name                  |description
+  ----------------------|----------------------------------------
+  `minimap2-sr`         |minimap2 with \'`-x sr`\' option
+  `bwa-mem`             |bwa mem using default parameters
+  `bwa-mem2`            |bwa-mem2 using default parameters
+  `minimap2-ont`        |minimap2 with \'`-x map-ont`\' option
+  `minimap2-pb`         |minimap2 with \'`-x map-pb`\' option
+  `minimap2-hifi`       |minimap2 with \'`-x map-hifi`\' option
+  `minimap2-no-preset`  |minimap2 with no \'`-x`\' option
+  `ngmlr-ont`           |ngmlr with \'`-x ont`\' option
+  `ngmlr-pb`            |ngmlr with \'`-x pb`\' option
 
 **\--longread-mapper** *NAME*
 

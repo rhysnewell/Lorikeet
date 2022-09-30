@@ -624,9 +624,6 @@ impl Profile for ActivityProfile {
                 debug!("Active {}", self.get_prob(end_of_active_region));
                 break;
             }
-            if end_of_active_region % 25 == 0 {
-                debug!("Inactive {}", self.get_prob(end_of_active_region));
-            }
             end_of_active_region += 1;
         }
         return end_of_active_region;

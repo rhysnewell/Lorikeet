@@ -771,3 +771,42 @@ pub fn std_deviation(data: &[i32]) -> Option<f32> {
         _ => None,
     }
 }
+
+pub fn table_roff(strings: &[&[&str]]) -> String {
+    //start with a new line so the first .IP starts at the first char of the row
+    let mut s: String = "\n.TS\n\
+        tab(@);\n"
+        .to_string();
+    for row in strings {
+        for _ in *row {
+            s.push_str("l ");
+        }
+        break;
+    }
+    s.push_str(".\n");
+
+    let mut first_row = true;
+    for e in strings {
+        let mut first_column = true;
+        for cell in *e {
+            if !first_column {
+                s.push_str("@");
+            }
+            s.push_str("T{\n");
+            if !first_column {
+                s.push_str("|")
+            } else {
+                first_column = false
+            }
+            s.push_str(cell.clone());
+            s.push_str("\nT}");
+        }
+        s.push_str("\n");
+        if first_row {
+            first_row = false;
+            s.push_str("T{\n----------------------\nT}@T{\n|----------------------------------------\nT}\n");
+        }
+    }
+    s.push_str(".TE\n");
+    s
+}

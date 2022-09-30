@@ -5,6 +5,7 @@ use clap_complete::*;
 use galah::cluster_argument_parsing::GalahClustererCommandDefinition;
 use roff::bold as roff_bold;
 use roff::Roff;
+use utils::utils::table_roff;
 
 // See https://github.com/rust-cli/roff-rs/issues/19
 fn bold(s: &str) -> String {
@@ -34,7 +35,7 @@ fn add_mapping_options(manual: Manual) -> Manual {
             .option(Opt::new("NAME").long("--mapper").help(&format!(
                 "Underlying mapping software used for short reads {}. One of: {}",
                 default_roff("minimap2-sr"),
-                bird_tool_utils::clap_utils::table_roff(&[
+                table_roff(&[
                     &["name", "description"],
                     &[
                         &monospace_roff("minimap2-sr"),
@@ -76,8 +77,8 @@ fn add_mapping_options(manual: Manual) -> Manual {
             )))
             .option(Opt::new("NAME").long("--longread-mapper").help(&format!(
                 "Underlying mapping software used for long reads {}. One of: {}",
-                default_roff("minimap2-sr"),
-                bird_tool_utils::clap_utils::table_roff(&[
+                default_roff("minimap2-ont"),
+                table_roff(&[
                     &["name", "description"],
                     &[
                         &monospace_roff("minimap2-ont"),
@@ -111,7 +112,7 @@ fn add_mapping_options(manual: Manual) -> Manual {
         mapping. Note that usage of this parameter \
         has security implications if untrusted input \
         is specified. '{}' is always specified to minimap2. \
-        [default: none]",
+        [default: none] \n",
                 &monospace_roff("-a")
             )))
             .flag(Flag::new().long("--minimap2-reference-is-index").help(
@@ -121,14 +122,14 @@ fn add_mapping_options(manual: Manual) -> Manual {
                 "Extra parameters to provide to BWA or BWA-MEM2. Note \
         that usage of this parameter has security \
         implications if untrusted input is specified. \
-        [default: none]",
+        [default: none] \n",
             ))
             .option(Opt::new("PARAMS").long("--ngmlr-params").help(
                 "Extra parameters to provide to NGMLR. \
         --bam-fix, -x ont, -t are already set. Note \
         that usage of this parameter has security \
         implications if untrusted input is specified. \
-        [default: none]",
+        [default: none] \n",
             )),
     )
 }
@@ -141,7 +142,7 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .long("--min-read-aligned-length")
                     .help(&format!(
                         "Exclude reads with smaller numbers of \
-        aligned bases. {}",
+        aligned bases. {} \n",
                         default_roff("0")
                     )),
             )
@@ -150,7 +151,7 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .long("--min-read-percent-identity")
                     .help(&format!(
                         "Exclude reads by overall percent \
-        identity e.g. 95 for 95%. {}",
+        identity e.g. 95 for 95%. {} \n",
                         default_roff("0")
                     )),
             )
@@ -160,7 +161,7 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .help(&format!(
                         "Exclude reads by percent aligned \
         bases e.g. 95 means 95% of the read's \
-        bases must be aligned. {}",
+        bases must be aligned. {} \n",
                         default_roff("0")
                     )),
             )
@@ -170,7 +171,7 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .help(&format!(
                         "Exclude pairs with smaller numbers of \
         aligned bases. \
-        Implies --proper-pairs-only. {}",
+        Implies --proper-pairs-only. {} \n",
                         default_roff("0")
                     )),
             )
@@ -180,7 +181,7 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .help(&format!(
                         "Exclude pairs by overall percent \
                 identity e.g. 95 for 95%. \
-                Implies --proper-pairs-only. {}",
+                Implies --proper-pairs-only. {} \n",
                         default_roff("0")
                     )),
             )
@@ -191,24 +192,24 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                         "Exclude reads by percent aligned \
                 bases e.g. 95 means 95% of the read's \
                 bases must be aligned. \
-                Implies --proper-pairs-only. {}",
+                Implies --proper-pairs-only. {} \n",
                         default_roff("0")
                     )),
             )
             .flag(
                 Flag::new()
                     .long("--proper-pairs-only")
-                    .help("Require reads to be mapped as proper pairs. [default: not set]"),
+                    .help("Require reads to be mapped as proper pairs. [default: not set] \n"),
             )
             .flag(
                 Flag::new()
                     .long("--exclude-supplementary")
-                    .help("Exclude supplementary alignments. [default: not set]"),
+                    .help("Exclude supplementary alignments. [default: not set] \n"),
             )
             .flag(
                 Flag::new()
                     .long("--include-secondary")
-                    .help("Include secondary alignments. [default: not set]"),
+                    .help("Include secondary alignments. [default: not set] \n"),
             )
             .option(
                 Opt::new("INT")
@@ -241,7 +242,7 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                         "Split the mapped read files up per reference.
                          Useful if you think run time is being hampered
                          by I/O. Most of the time this will not improve
-                         performance and instead just increase disk usage."
+                         performance and instead just increase disk usage. \n"
                     ),
             )
     )
@@ -252,33 +253,33 @@ fn read_mapping_params_section() -> Section {
         .option(
             Opt::new("PATH ..")
                 .short("-1")
-                .help("Forward FASTA/Q file(s) for mapping. These may be gzipped or not."),
+                .help("Forward FASTA/Q file(s) for mapping. These may be gzipped or not. \n"),
         )
         .option(
             Opt::new("PATH ..")
                 .short("-2")
-                .help("Reverse FASTA/Q file(s) for mapping. These may be gzipped or not."),
+                .help("Reverse FASTA/Q file(s) for mapping. These may be gzipped or not. \n"),
         )
         .option(Opt::new("PATH ..").short("-c").long("--coupled").help(
             "One or more pairs of forward and reverse \
         possibly gzipped FASTA/Q files for mapping in order \
         <sample1_R1.fq.gz> <sample1_R2.fq.gz> \
-        <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..",
+        <sample2_R1.fq.gz> <sample2_R2.fq.gz> .. \n",
         ))
         .option(
             Opt::new("PATH ..")
                 .long("--interleaved")
-                .help("Interleaved FASTA/Q files(s) for mapping. These may be gzipped or not."),
+                .help("Interleaved FASTA/Q files(s) for mapping. These may be gzipped or not. \n"),
         )
         .option(
             Opt::new("PATH ..")
                 .long("--single")
-                .help("Unpaired FASTA/Q files(s) for mapping. These may be gzipped or not."),
+                .help("Unpaired FASTA/Q files(s) for mapping. These may be gzipped or not. \n"),
         )
         .option(
             Opt::new("PATH ..")
                 .long("--longreads")
-                .help("Longread FASTA/Q files(s) for mapping. These may be gzipped or not."),
+                .help("Longread FASTA/Q files(s) for mapping. These may be gzipped or not. \n"),
         )
         .option(
             Opt::new("PATH")
@@ -289,7 +290,7 @@ fn read_mapping_params_section() -> Section {
                 reference sorted (e.g. with samtools sort) \
                 unless {} is specified, in which \
                 case they must be read name sorted (e.g. \
-                with {}). When specified, no read mapping algorithm is undertaken.",
+                with {}). When specified, no read mapping algorithm is undertaken. \n",
                     monospace_roff("--sharded"),
                     monospace_roff("samtools sort -n"),
                 )),
@@ -303,7 +304,7 @@ fn read_mapping_params_section() -> Section {
                 reference sorted (e.g. with samtools sort) \
                 unless {} is specified, in which \
                 case they must be read name sorted (e.g. \
-                with {}). When specified, no read mapping algorithm is undertaken.",
+                with {}). When specified, no read mapping algorithm is undertaken. \n",
                     monospace_roff("--sharded"),
                     monospace_roff("samtools sort -n"),
                 )),
@@ -320,7 +321,7 @@ fn reference_options() -> Section {
                     &format!(
                         "FASTA files of contigs e.g. concatenated \
                     genomes or metagenome assembly
-                    [required unless {} is specified]",
+                    [required unless {} is specified] \n",
                         monospace_roff("-d/--genome-fasta-directory")
                     )
                 )
@@ -333,7 +334,7 @@ fn reference_options() -> Section {
                     &format!(
                         "Directory containing FASTA files of contigs e.g. \
                     genomes or metagenome assembly
-                    [required unless {} is specified]",
+                    [required unless {} is specified] \n",
                         monospace_roff("-r/--reference")
                     )
                 )
@@ -346,7 +347,7 @@ fn reference_options() -> Section {
                 .help(
                     &format!(
                         "FASTA file extension in --genome-fasta-directory \
-                        [default \"fna\"]"
+                        [default \"fna\"] \n"
                     )
                 )
         )
@@ -359,7 +360,7 @@ fn threads_options() -> Section {
                 .long("--threads")
                 .short("-t")
                 .help(
-                    "Maximum number of threads used. [default: 8]"
+                    "Maximum number of threads used. [default: 8] \n"
                 )
         )
         .option(
@@ -370,7 +371,7 @@ fn threads_options() -> Section {
                     "Number of genomes to run in parallel. \
                      Increases memory usage linearly. \
                      Thread usage qill not exceed the value \
-                     provided by --threads [default 4]"
+                     provided by --threads [default 4] \n"
                 )
         )
 }
@@ -381,16 +382,16 @@ fn add_help_options(manual: Manual) -> Manual {
             Flag::new()
                 .short("-h")
                 .long("--help")
-                .help("Output a short usage message. [default: not set]"),
+                .help("Output a short usage message. [default: not set] \n"),
         )
         .flag(
             Flag::new()
                 .long("--full-help")
-                .help("Output a full help message and display in 'man'. [default: not set]"),
+                .help("Output a full help message and display in 'man'. [default: not set] \n"),
         )
         .flag(Flag::new().long("--full-help-roff").help(
             "Output a full help message in raw ROFF format for \
-        conversion to other formats. [default: not set]",
+        conversion to other formats. [default: not set] \n",
         ))
 }
 
@@ -400,16 +401,16 @@ fn add_help_options_to_section(section: Section) -> Section {
             Flag::new()
                 .short("-h")
                 .long("--help")
-                .help("Output a short usage message. [default: not set]"),
+                .help("Output a short usage message. [default: not set] \n"),
         )
         .flag(
             Flag::new()
                 .long("--full-help")
-                .help("Output a full help message and display in 'man'. [default: not set]"),
+                .help("Output a full help message and display in 'man'. [default: not set] \n"),
         )
         .flag(Flag::new().long("--full-help-roff").help(
             "Output a full help message in raw ROFF format for \
-        conversion to other formats. [default: not set]",
+        conversion to other formats. [default: not set] \n",
         ))
 }
 
@@ -421,7 +422,7 @@ fn sharding_section() -> Section {
         reference contig sets. Choose the best \
         hit for each read pair. Otherwise if mapping was carried out: \
         Map reads to each reference, choosing the \
-        best hit for each pair. [default: not set]",
+        best hit for each pair. [default: not set] \n",
         monospace_roff("-b/--bam-files")
     )))
 }
@@ -445,7 +446,7 @@ fn add_verbosity_flags(manual: Manual) -> Manual {
             Flag::new()
                 .short("-v")
                 .long("--verbose")
-                .help("Print extra debugging information. [default: not set]"),
+                .help("Print extra debugging information. [default: not set] \n"),
         )
         .flag(Flag::new().short("-q").long("--quiet").help(
             "Unless there is an error, do not print \
@@ -470,20 +471,20 @@ fn variant_calling_section_basic() -> Section {
                 .long("--ploidy")
                 .help(
                     "Sets the default ploidy for the analysis to N. \
-                    [default: 1]"
+                    [default: 1] \n"
                 )
         )
         .flag(
             Flag::new()
                 .long("--calculate-fst")
-                .help("Calculate Fst values between samples and variants.")
+                .help("Calculate Fst values between samples and variants. \n")
         )
         .flag(
             Flag::new()
                 .long("--calculate-dnds")
                 .help(
                     "Calculate coding regions and perform dN/dS calculations \
-                    along them using called variants. *Microbial only*."
+                    along them using called variants. *Microbial only*. \n"
                 )
         )
         .option(
@@ -498,7 +499,7 @@ fn variant_calling_section_basic() -> Section {
                      compressed using bgzip and indexed using bcftools index. If no index \
                      is present, and index will be attempted to be created. \
                      If the file is not properly compressed, Lorikeet will \
-                     unfortunately SEGFAULT with no error message."
+                     unfortunately SEGFAULT with no error message. \n"
                 )
         )
         .option(
@@ -506,7 +507,7 @@ fn variant_calling_section_basic() -> Section {
                 .long("--qual-by-depth-filter")
                 .help(
                     "The minimum QD value for a variant to have for it to be \
-                     included in the genotyping or ANI analyses. [default: 25]"
+                     included in the genotyping or ANI analyses. [default: 25] \n"
                 )
         )
         .option(
@@ -514,7 +515,7 @@ fn variant_calling_section_basic() -> Section {
                 .long("--qual-threshold")
                 .help(
                     "The PHRED-scaled quality score threshold for use \
-                     with ANI calculations. [default: 150]"
+                     with ANI calculations. [default: 150] \n"
                 )
         )
         .option(
@@ -523,7 +524,7 @@ fn variant_calling_section_basic() -> Section {
                 .help(
                     "Minimum depth of a variant in a sample for that \
                      sample to be included in ANI & Fst calculations for that \
-                     variant. [default: 5]"
+                     variant. [default: 5] \n"
                 )
         )
         .option(
@@ -531,7 +532,7 @@ fn variant_calling_section_basic() -> Section {
                 .long("--min-long-read-size")
                 .help(
                     "The minimum size for long reads to be used for analysis \
-                    [default: 1500]"
+                    [default: 1500] \n"
                 )
         )
         .option(
@@ -539,7 +540,7 @@ fn variant_calling_section_basic() -> Section {
                 .long("--min-long-read-average-base-qual")
                 .help(
                     "The minimum average base quality of a long read \
-                     for it to be used for analysis [default: 20]"
+                     for it to be used for analysis [default: 20] \n"
                 )
         )
         .option(
@@ -548,7 +549,7 @@ fn variant_calling_section_basic() -> Section {
                 .long("--min-base-quality")
                 .help(
                     "Minimum base quality required to consider a \
-                     base for calling. [default: 10]"
+                     base for calling. [default: 10] \n"
                 )
         )
         .option(
@@ -556,7 +557,7 @@ fn variant_calling_section_basic() -> Section {
                 .long("--min-mapq")
                 .help(
                     "Minimum MAPQ score for reads to be considered \
-                     during variant calling. [default: 20]"
+                     during variant calling. [default: 20] \n"
                 )
         )
         .option(
@@ -564,7 +565,7 @@ fn variant_calling_section_basic() -> Section {
                 .long("--base-quality-score-threshold")
                 .help(
                     "Base qualities below this threshold will \
-                     be reduced to the minimum (6). [default: 18]"
+                     be reduced to the minimum (6). [default: 18] \n"
                 )
         )
         .option(
@@ -575,7 +576,7 @@ fn variant_calling_section_basic() -> Section {
                      assembly region across all samples. Larger numbers \
                      increase run time. If the depth of an assembly region \
                      exceeds this value, then the reads will be filtered \
-                     by mean base quality. [default: 200000]"
+                     by mean base quality. [default: 200000] \n"
                 )
         )
         .option(
@@ -587,7 +588,7 @@ fn variant_calling_section_basic() -> Section {
                     mostly represent noise. Call variants on them can often \
                     be slow and not produce anything fruitful. If you \
                     wish to call variants on all available contigs, \
-                    then set this to 0. [default: 2500]"
+                    then set this to 0. [default: 2500] \n"
                 )
         )
         .option(
@@ -597,7 +598,7 @@ fn variant_calling_section_basic() -> Section {
                     "Minimum structural variants quality returned by svim \
                      and used by lorikeet. Not PHRED-scaled quality, value \
                      determined by number of supporting reads. Consult \
-                     svim documentation for details. [default: 3]"
+                     svim documentation for details. [default: 3] \n"
                 )
         )
         .flag(
@@ -606,7 +607,7 @@ fn variant_calling_section_basic() -> Section {
                 .help(
                     "Opts not to use svim to call structural variants \
                      using provided longreads. If no longreads are provided \
-                     this has no effect."
+                     this has no effect. \n"
                 )
         )
 }
@@ -617,7 +618,7 @@ fn variant_calling_options_advanced() -> Section {
             Opt::new("INT")
                 .long("--phred-scaled-global-read-mismapping-rate")
                 .help(
-                    "The global assumed mismapping rate for reads. [default: 45]"
+                    "The global assumed mismapping rate for reads. [default: 45] \n"
                 )
         )
         .option(
@@ -625,14 +626,14 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--pair-hmm-gap-continuation-penalty")
                 .help(
                     "Flat gap continuation penalty for use in the Pair HMM. \
-                    [default: 10]"
+                    [default: 10] \n"
                 )
         )
         .option(
             Opt::new("STR")
                 .long("--pcr-indel-model")
                 .help(
-                    "The PCR indel model to use. [default: conservative]"
+                    "The PCR indel model to use. [default: conservative] \n"
                 )
         )
         .option(
@@ -640,7 +641,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--heterozygosity")
                 .help(
                     "Heterozygosity value used to compute prior \
-                     likelihoods for any locus. [default: 0.001]"
+                     likelihoods for any locus. [default: 0.001] \n"
                 )
         )
         .option(
@@ -648,14 +649,14 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--heterozygosity-stdev")
                 .help(
                     "Standard deviation of heterozygosity for SNP and \
-                     indel calling. [default: 0.01]"
+                     indel calling. [default: 0.01] \n"
                 )
         )
         .option(
             Opt::new("FLOAT")
                 .long("--indel-heterozygosity")
                 .help(
-                    "Heterozygosity for indel calling. [default: 0.000125]"
+                    "Heterozygosity for indel calling. [default: 0.000125] \n"
                 )
         )
         .option(
@@ -664,7 +665,7 @@ fn variant_calling_options_advanced() -> Section {
                 .short("-C")
                 .help(
                     "The minimum phred-scaled confidence threshold at \
-                     which variants should be called. [default: 30.0]"
+                     which variants should be called. [default: 30.0] \n"
                 )
         )
         .flag(
@@ -672,7 +673,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--use-posteriors-to-calculate-qual")
                 .help(
                     "if available, use the genotype posterior \
-                     probabilities to calculate the site QUAL."
+                     probabilities to calculate the site QUAL. \n"
                 )
         )
         .flag(
@@ -681,7 +682,7 @@ fn variant_calling_options_advanced() -> Section {
                 .help(
                     "If provided, we will annotate records with the \
                      number of alternate alleles that were discovered \
-                     (but not necessarily genotyped) at a given site."
+                     (but not necessarily genotyped) at a given site. \n"
                 )
         )
         .option(
@@ -689,21 +690,21 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--active-probability-threshold")
                 .help(
                     "Minimum probability for a locus to be \
-                     considered active. [default: 0.002]"
+                     considered active. [default: 0.002] \n"
                 )
         )
         .option(
             Opt::new("INT")
                 .long("--min-assembly-region-size")
                 .help(
-                    "Minimum size of an assembly region. [default: 50]"
+                    "Minimum size of an assembly region. [default: 50] \n"
                 )
         )
         .option(
             Opt::new("INT")
                 .long("--max-assembly-region-size")
                 .help(
-                    "Maximum size of an assembly region. [default: 300]"
+                    "Maximum size of an assembly region. [default: 300] \n"
                 )
         )
         .option(
@@ -711,7 +712,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--assembly-region-padding")
                 .help(
                     "Number of additional bases of context to \
-                     include around each assembly region. [default: 100]"
+                     include around each assembly region. [default: 100] \n"
                 )
         )
         .flag(
@@ -719,28 +720,28 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--dont-increase-kmer-sizes-for-cycles")
                 .help(
                     "Disable iterating over kmer sizes when \
-                     graph cycles are detected."
+                     graph cycles are detected. \n"
                 )
         )
         .flag(
             Flag::new()
                 .long("--allow-non-unique-kmers-in-ref")
                 .help(
-                    "Allow graphs that have non-unique kmers in the reference."
+                    "Allow graphs that have non-unique kmers in the reference. \n"
                 )
         )
         .flag(
             Flag::new()
                 .long("--do-not-run-physical-phasing")
                 .help(
-                    "Disable physical phasing."
+                    "Disable physical phasing. \n"
                 )
         )
         .flag(
             Flag::new()
                 .long("--recover-all-dangling-branches")
                 .help(
-                    "Recover all dangling branches."
+                    "Recover all dangling branches. \n"
                 )
         )
         .option(
@@ -748,7 +749,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--min-dangling-branch-length")
                 .help(
                     "Minimum length of a dangling branch to \
-                     attempt recovery. [default: 4]"
+                     attempt recovery. [default: 4] \n"
                 )
         )
         .option(
@@ -756,7 +757,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--min-prune-factor")
                 .help(
                     "Minimum support to not prune paths in the graph. \
-                     [default: 2]"
+                     [default: 2] \n"
                 )
         )
         .flag(
@@ -766,7 +767,7 @@ fn variant_calling_options_advanced() -> Section {
                     "Use more advanced pruning algorithm to prune paths in
                      graph. Better suited when performing variant calling
                      on when depth along a genome is variable e.g. RNA
-                     and exome data."
+                     and exome data. \n"
                 )
         )
         .option(
@@ -774,21 +775,21 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--num-pruning-samples")
                 .help(
                     "Number of samples that must pass the \
-                     min_pruning threshold [default: 1]"
+                     min_pruning threshold [default: 1] \n"
                 )
         )
         .option(
             Opt::new("PATH")
                 .long("--graph-output")
                 .help(
-                    "Write debug assembly graph information to this file."
+                    "Write debug assembly graph information to this file. \n"
                 )
         )
         .flag(
             Flag::new()
                 .long("--dont-use-soft-clipped-bases")
                 .help(
-                    "Do not analyse soft clipped bases in the reads."
+                    "Do not analyse soft clipped bases in the reads. \n"
                 )
         )
         .option(
@@ -796,7 +797,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--initial-error-rate-for-pruning")
                 .help(
                     "Initial base error rate estimate for adaptive \
-                     pruning. [default: 0.001]"
+                     pruning. [default: 0.001] \n"
                 )
         )
         .option(
@@ -805,7 +806,7 @@ fn variant_calling_options_advanced() -> Section {
                 .help(
                     "Likelihood ratio threshold for adaptive \
                      pruning algorithm. This value will be converted to \
-                     log odds value. [default: 1.0]"
+                     log odds value. [default: 1.0] \n"
                 )
         )
         .option(
@@ -813,7 +814,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--max-unpruned-variants")
                 .help(
                     "Maximum number of variants in graph the \
-                     adaptive pruner will allow. [default: 100]"
+                     adaptive pruner will allow. [default: 100] \n"
                 )
         )
         .option(
@@ -822,7 +823,7 @@ fn variant_calling_options_advanced() -> Section {
                 .help(
                     "Upper limit on how many bases away probability mass \
                      can be moved around when calculating the boundaries \
-                     between active and inactive assembly regions. [default: 50]"
+                     between active and inactive assembly regions. [default: 50] \n"
                 )
         )
         .option(
@@ -830,14 +831,14 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--max-mnp-distance")
                 .help(
                     "Two or more phased substitutions separated by \
-                     this distance or less are merged into MNPs. [default: 0]"
+                     this distance or less are merged into MNPs. [default: 0] \n"
                 )
         )
         .flag(
             Flag::new()
                 .long("--disable-optimizations")
                 .help(
-                    "Don't skip calculations in ActiveRegions with no variants"
+                    "Don't skip calculations in ActiveRegions with no variants \n"
                 )
         )
         .flag(
@@ -845,7 +846,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--disable-avx")
                 .help(
                     "Disable the use of the GKL-rs AVX acceleration components \
-                     for PairHMM and Smith-Waterman calculations."
+                     for PairHMM and Smith-Waterman calculations. \n"
                 )
         )
         .option(
@@ -855,14 +856,14 @@ fn variant_calling_options_advanced() -> Section {
                     "Mainly used for debugging purposes. Only call variants \
                      within this given span on all contigs. E.g. providing \
                      '1000-2000' would only call variants between the 1000 \
-                     and 2000 bp span on each provided contig."
+                     and 2000 bp span on each provided contig. \n"
                 )
         )
         .flag(
             Flag::new()
                 .long("--force")
                 .help(
-                    "Forcefully overwrite previous runs."
+                    "Forcefully overwrite previous runs. \n"
                 )
         )
 }
@@ -877,7 +878,7 @@ fn add_verbosity_flags_to_section(section: Section) -> Section {
         )
         .flag(Flag::new().short("-q").long("--quiet").help(
             "Unless there is an error, do not print \
-    log messages. [default: not set]",
+    log messages. [default: not set] \n",
         ))
 }
 
@@ -941,13 +942,13 @@ pub fn genotype_full_help() -> Manual {
                 BAM files in this directory contain all mappings, including those that later \
                 are excluded by alignment thresholding (e.g. --min-read-percent-identity) or \
                 genome-wise thresholding (e.g. --min-covered-fraction). \
-                [default: not used]",
+                [default: not used] \n",
                     ),
             )
             .flag(
                 Flag::new()
                     .long("--discard-unmapped")
-                    .help("Exclude unmapped reads from cached BAM files. [default: not set]"),
+                    .help("Exclude unmapped reads from cached BAM files. [default: not set] \n"),
             )
     );
 
@@ -995,7 +996,7 @@ pub fn call_full_help() -> Manual {
             \n
             This process can be undertaken in several ways, for instance by specifying BAM files \n
             or raw reads as input, using different mapping programs, thresholding read alignments \n
-            ============================\
+            ============================\n
             "
         );
 
@@ -1035,7 +1036,7 @@ pub fn call_full_help() -> Manual {
                 BAM files in this directory contain all mappings, including those that later \
                 are excluded by alignment thresholding (e.g. --min-read-percent-identity) or \
                 genome-wise thresholding (e.g. --min-covered-fraction). \
-                [default: not used]",
+                [default: not used] \n",
                     ),
             )
             .flag(
@@ -1121,7 +1122,7 @@ pub fn consensus_full_help() -> Manual {
         Section::new("Output options")
             .option(Opt::new("DIRECTORY").short("-o").long("--output-directory").help(
                 "Output directory. Folder will contain subfolders for each input genome \n
-                [default: ./]",
+                [default: ./] \n",
             ))
             .option(
                 Opt::new("DIRECTORY")
@@ -1132,7 +1133,7 @@ pub fn consensus_full_help() -> Manual {
                 BAM files in this directory contain all mappings, including those that later \
                 are excluded by alignment thresholding (e.g. --min-read-percent-identity) or \
                 genome-wise thresholding (e.g. --min-covered-fraction). \
-                [default: not used]",
+                [default: not used] \n",
                     ),
             )
             .flag(
@@ -1180,16 +1181,16 @@ pub fn summarise_full_help() -> Manual {
         .description(
             "
             ===========================\n
-            lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI, \n\
-            subpopANI, and Fst metrics for the variants in each file.
-
-            NOTE: ANI metrics require coverage information to determine the number of shared bases
+            lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI,
+            subpopANI, and Fst metrics for the variants in each file. \n
+            \n
+            ANI metrics require coverage information to determine the number of shared bases
             in each sample. VCF files do not provide this information, so the shared base size is just
             the total size of the genome. In our experience, this doesn't really matter that much as
             the ANI metrics are quite insensitive when provided low coverage samples anyway.
             Fst tends to perform better for low and high coverage samples and does not require whole
             genome coverage information.
-            ============================\
+            ============================\n
             "
         );
 
@@ -1198,7 +1199,7 @@ pub fn summarise_full_help() -> Manual {
             .short("-i")
             .long("--vcfs")
             .help(
-                "Paths to input VCF files. Can provide one or more."
+                "Paths to input VCF files. Can provide one or more. \n"
             )
         )
         .option(
@@ -1206,19 +1207,19 @@ pub fn summarise_full_help() -> Manual {
                 .short("-i")
                 .long("--vcfs")
                 .help(
-                    "Paths to input VCF files. Can provide one or more."
+                    "Paths to input VCF files. Can provide one or more. \n"
                 )
         )
         .option(Opt::new("DIRECTORY").short("-o").long("--output").help(
             "Output directory. Folder will contain subfolders for each input VCF \n
-             [default: ./]",
+             [default: ./] \n",
         ))
         .option(
             Opt::new("INT")
                 .long("--threads")
                 .short("-t")
                 .help(
-                    "Maximum number of threads used. [default: 8]"
+                    "Maximum number of threads used. [default: 8] \n"
                 )
         )
         .option(
@@ -1226,7 +1227,7 @@ pub fn summarise_full_help() -> Manual {
                 .long("--qual-by-depth-filter")
                 .help(
                     "The minimum QD value for a variant to have for it to be \
-                     included in the genotyping or ANI analyses. [default: 25]"
+                     included in the genotyping or ANI analyses. [default: 25] \n"
                 )
         )
         .option(
@@ -1234,7 +1235,7 @@ pub fn summarise_full_help() -> Manual {
                 .long("--qual-threshold")
                 .help(
                     "The PHRED-scaled quality score threshold for use \
-                     with ANI calculations. [default: 150]"
+                     with ANI calculations. [default: 150] \n"
                 )
         )
         .option(
@@ -1243,7 +1244,7 @@ pub fn summarise_full_help() -> Manual {
                 .help(
                     "Minimum depth of a variant in a sample for that \
                      sample to be included in ANI & Fst calculations for that \
-                     variant. [default: 5]"
+                     variant. [default: 5] \n"
                 )
         );
 

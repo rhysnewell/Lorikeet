@@ -1,5 +1,5 @@
 ---
-title: "lorikeet summarise usage"
+title: lorikeet summarise usage
 ---
 
 lorikeet summarise - Calculate ANI and Fst metrics on a given set of VCF
