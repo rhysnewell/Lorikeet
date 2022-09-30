@@ -29,17 +29,17 @@ jobs:
         with:
           args: -t markdown -f man --output=docs/usage/lorikeet-call.wd.md docs/usage/lorikeet-call.wd.roff
       - name: 'Convert to markdown: consensus'
-          uses: docker://pandoc/core:2.9
-          with:
-            args: -t markdown -f man --output=docs/usage/lorikeet-consensus.wd.md docs/usage/lorikeet-consensus.wd.roff
+        uses: docker://pandoc/core:2.9
+        with:
+          args: -t markdown -f man --output=docs/usage/lorikeet-consensus.wd.md docs/usage/lorikeet-consensus.wd.roff
       - name: 'Convert to markdown: genotype'
-          uses: docker://pandoc/core:2.9
-          with:
-            args: -t markdown -f man --output=docs/usage/lorikeet-genotype.wd.md docs/usage/lorikeet-genotype.wd.roff
+        uses: docker://pandoc/core:2.9
+        with:
+          args: -t markdown -f man --output=docs/usage/lorikeet-genotype.wd.md docs/usage/lorikeet-genotype.wd.roff
       - name: 'Convert to markdown: summarise'
-          uses: docker://pandoc/core:2.9
-          with:
-            args: -t markdown -f man --output=docs/usage/lorikeet-summarise.wd.md docs/usage/lorikeet-summarise.wd.roff
+        uses: docker://pandoc/core:2.9
+        with:
+          args: -t markdown -f man --output=docs/usage/lorikeet-summarise.wd.md docs/usage/lorikeet-summarise.wd.roff
       - name: 'Build doctave site'
         run: doctave build --release --allow-failed-checks
       - name: 'GitHub Pages'
