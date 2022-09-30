@@ -370,7 +370,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                     })
             });
 
-        let chunk_size = max(250000, max_assembly_region_size);
+        let chunk_size = max(250000, max_assembly_region_size*5);
         let contexts = tids.into_iter().map(|tid| {
             let target_length = reference_reader.target_lens[&tid];
             // let mut reference_reader = reference_reader.clone();
@@ -681,10 +681,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
             for i in 0..likelihoodcount {
                 result.genotype_likelihoods[i] -= denominator
             }
-            if result.read_counts > 0 {
-                debug!("Pos {} counts {} likelihood {:?} ref count {} non ref {}",
-                       pos + outer_chunk_start, result.read_counts, &result.genotype_likelihoods, result.ref_depth, result.non_ref_depth);
-            }
         }
     }
 
@@ -875,7 +871,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let placeholder_vec = Vec::new();
         let depth_per_sample_filter = args.value_of("depth-per-sample-filter").unwrap().parse().unwrap();
 
-        let inner_chunk_size = max(50000, max_assembly_region_size);
+        let inner_chunk_size = max(50000, max_assembly_region_size*2);
         let variant_contexts =
                 (0..chunk_location.size()).into_par_iter().chunks(inner_chunk_size).enumerate().map(|(i, positions)| {
                     let within_bounds = match &limiting_interval {
