@@ -10,6 +10,7 @@ on:
       - 'doctave.yml'
       - '.github/workflows/deploy-docs.yaml'
       - 'build_manuals.sh'
+      - 'roff_to_md.sh'
 
 jobs:
   build:
@@ -22,14 +23,23 @@ jobs:
           toolchain: stable
       - run: cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
       - name: 'Build manual pages'
+        run: bash build_manuals.sh
+      - name: 'Convert to markdown: call'
         uses: docker://pandoc/core:2.9
-      - run: bash build_manuals.sh
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          args: -t markdown -f man --output=docs/usage/lorikeet-call.wd.md docs/usage/lorikeet-call.wd.roff
+      - name: 'Convert to markdown: consensus'
+          uses: docker://pandoc/core:2.9
+          with:
+            args: -t markdown -f man --output=docs/usage/lorikeet-consensus.wd.md docs/usage/lorikeet-consensus.wd.roff
+      - name: 'Convert to markdown: genotype'
+          uses: docker://pandoc/core:2.9
+          with:
+            args: -t markdown -f man --output=docs/usage/lorikeet-genotype.wd.md docs/usage/lorikeet-genotype.wd.roff
+      - name: 'Convert to markdown: summarise'
+          uses: docker://pandoc/core:2.9
+          with:
+            args: -t markdown -f man --output=docs/usage/lorikeet-summarise.wd.md docs/usage/lorikeet-summarise.wd.roff
       - name: 'Build doctave site'
         run: doctave build --release --allow-failed-checks
       - name: 'GitHub Pages'
