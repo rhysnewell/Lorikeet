@@ -40,6 +40,8 @@ jobs:
         uses: docker://pandoc/core:2.9
         with:
           args: -t markdown -f man --output=docs/usage/lorikeet-summarise.wd.md docs/usage/lorikeet-summarise.wd.roff
+      - name: 'Cleanup markdown'
+        run: bash roff_to_md.sh
       - name: 'Build doctave site'
         run: doctave build --release --allow-failed-checks
       - name: 'GitHub Pages'
