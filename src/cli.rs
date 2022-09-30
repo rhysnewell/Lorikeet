@@ -622,7 +622,7 @@ fn variant_calling_options_advanced() -> Section {
         )
         .option(
             Opt::new("INT")
-                .long("--pair-hmm-gap-continuation-penalty ")
+                .long("--pair-hmm-gap-continuation-penalty")
                 .help(
                     "Flat gap continuation penalty for use in the Pair HMM. \
                     [default: 10]"
