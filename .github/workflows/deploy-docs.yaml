@@ -9,6 +9,7 @@ on:
       - 'src/cli.rs'
       - 'doctave.yml'
       - '.github/workflows/deploy-docs.yaml'
+      - 'build_manuals.sh'
 
 jobs:
   build:
@@ -22,7 +23,7 @@ jobs:
       - run: cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
       - name: 'Build manual pages'
         uses: docker://pandoc/core:2.9
-      - run: bash release.sh
+      - run: bash build_manuals.sh
   deploy:
     runs-on: ubuntu-latest
     steps:
@@ -35,6 +36,6 @@ jobs:
         if: github.ref == 'refs/heads/master'
         uses: crazy-max/ghaction-github-pages@v3.0.0
         with:
-        build_dir: site/
+          build_dir: site/
         env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
