@@ -17,7 +17,7 @@ jobs:
           command: 'build'
           flags: '--features vendored-openssl'
       - name: Package binaries
-        run: mkdir -p release/ && cp ${{ steps.compile.outputs.release-dir }}/lorikeet ${{ steps.compile.outputs.release-dir }}/remove_minimap2_duplicated_headers INSTALL.md release/      
+        run: mkdir -p release/ && cp ${{ steps.compile.outputs.release-dir }}/lorikeet INSTALL.md release/
       - name: Compress action step
         uses: master-atul/tar-action@v1.0.2
         id: compress
