@@ -16,11 +16,12 @@ use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use coverm::*;
 
+extern crate bird_tool_utils;
+
 use std::env;
 use std::process;
-use std::str;
+use std::process::Stdio;
 
-extern crate tempdir;
 extern crate tempfile;
 use tempfile::NamedTempFile;
 
@@ -55,6 +56,12 @@ fn main() {
                 .build_global()
                 .unwrap();
             run_summarize(m);
+        }
+        Some("pangenome") => {
+            let m = matches.subcommand_matches("pangenome").unwrap();
+            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, summarise_full_help());
+            
+            run_pangenome(m);
         }
         Some("genotype") => {
             let m = matches.subcommand_matches("genotype").unwrap();
@@ -104,6 +111,41 @@ fn main() {
             println!();
         }
     }
+}
+
+fn run_pangenome(m: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    set_log_level(m, true);
+    let threads = m.value_of("threads").unwrap().parse()?;
+    rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build_global()
+                .unwrap();
+
+    let references = ReferenceReaderUtils::parse_references(m);
+    let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
+
+    let (concatenated_genomes, genomes_and_contigs_option) =
+        ReferenceReaderUtils::setup_genome_fasta_files(&m);
+    debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
+
+    let pggb_params = m.value_of("pggb-params").unwrap();
+    let output_dir = m.value_of("output").unwrap();
+
+    match concatenated_genomes {
+        Some(concatenated_genomes) => {
+            let cmd_string = format!("pggb -i {} -n {} -t {} -o {} {}", concatenated_genomes.path().to_str().unwrap(), references.len(), threads, output_dir, pggb_params);
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&cmd_string)
+                .stdout(Stdio::piped())
+                .output()
+                .expect("Unable to execute bash");
+        },
+        _ => return Err(Box::new(BirdToolError::DebugError("No concatenated genomes file generated".to_string())))
+    }
+
+
+    Ok(())
 }
 
 fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError> {
