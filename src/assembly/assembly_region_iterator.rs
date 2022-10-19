@@ -67,11 +67,13 @@ impl<'a> AssemblyRegionIterator<'a> {
         // should retrieve all reads regardless of if they have been seen before
 
         let min_mapq = args.value_of("min-mapq").unwrap().parse::<u8>().unwrap();
-        let min_long_read_size = args.value_of("min-long-read-size")
+        let min_long_read_size = args
+            .value_of("min-long-read-size")
             .unwrap()
             .parse::<usize>()
             .unwrap();
-        let min_long_read_average_base_qual = args.value_of("min-long-read-average-base-qual")
+        let min_long_read_average_base_qual = args
+            .value_of("min-long-read-average-base-qual")
             .unwrap()
             .parse::<usize>()
             .unwrap();
@@ -122,7 +124,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                                 read_type,
                                 &Self::DUMMY_LIMITING_INTERVAL,
                                 min_long_read_size,
-                                min_long_read_average_base_qual
+                                min_long_read_average_base_qual,
                             )
                             // Check against filter flags and current sample type
                             {

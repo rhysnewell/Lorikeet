@@ -302,16 +302,19 @@ impl<'a> PairHMM<'a> {
                         for a in 0..allele_count {
                             let allele = &match allele_likelihoods.alleles.get_allele(a) {
                                 Some(fetched_allele) => fetched_allele,
-                                None => panic!("Could not fetch allele for pairHMM")
+                                None => panic!("Could not fetch allele for pairHMM"),
                             };
                             let allele_bases = allele.get_bases();
                             let next_allele_bases = if a == allele_count - 1 {
                                 None
                             } else {
-                                Some(match allele_likelihoods.alleles.get_allele(a + 1) {
-                                    Some(next_allele) => next_allele,
-                                    None => panic!("Could not fetch next allele")
-                                }.get_bases())
+                                Some(
+                                    match allele_likelihoods.alleles.get_allele(a + 1) {
+                                        Some(next_allele) => next_allele,
+                                        None => panic!("Could not fetch next allele"),
+                                    }
+                                    .get_bases(),
+                                )
                             };
                             let lk = self.compute_read_likelihood_given_haplotype_log10(
                                 allele_bases,

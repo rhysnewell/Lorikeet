@@ -6,7 +6,7 @@ pub fn calculate_fst(
     genome_name: &str,
     vcf_path: &str,
     ploidy: usize,
-    depth_per_sample_filter: i64
+    depth_per_sample_filter: i64,
 ) -> PyResult<()> {
     pyo3::prepare_freethreaded_python();
     Python::with_gil(|py| {
@@ -20,9 +20,10 @@ pub fn calculate_fst(
             ("output_prefix", output_prefix),
             ("genome_name", genome_name),
             ("vcf_path", vcf_path),
-            ("depth_per_sample", depth_per_sample_str.as_str())
-        ].into_py_dict(py);
-        let code =r#"
+            ("depth_per_sample", depth_per_sample_str.as_str()),
+        ]
+        .into_py_dict(py);
+        let code = r#"
 import polars as pr
 import numpy as np
 import allel

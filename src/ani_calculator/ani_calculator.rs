@@ -69,7 +69,6 @@ impl ANICalculator {
         let compared_bases =
             self.calculate_compared_bases(passing_sites, genome_size, sample_names.len());
 
-
         debug!("Comparable bases \n{:?}", &compared_bases);
         self.calculate_from_contexts(
             contexts,
@@ -159,7 +158,8 @@ impl ANICalculator {
                         compared_bases[[s2_ind, s1_ind]] = comparable_bases;
                     }
                     let comparable_bases_to_ref = (genome_size as i32
-                        + s1.into_iter().filter(|x| x.is_negative()).sum::<i32>()) as f64;
+                        + s1.into_iter().filter(|x| x.is_negative()).sum::<i32>())
+                        as f64;
                     compared_bases[[s1_ind, s1_ind]] = comparable_bases_to_ref;
                 }
             }

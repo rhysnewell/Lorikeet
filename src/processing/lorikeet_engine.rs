@@ -1,38 +1,38 @@
 use abundance::abundance_calculator_engine::AbundanceCalculatorEngine;
 use ani_calculator::ani_calculator::ANICalculator;
 use assembly::assembly_region_walker::AssemblyRegionWalker;
+use bio::io::gff::GffType::GFF3;
+use bird_tool_utils::command::finish_command_safely;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::FlagFilter;
+use evolve::codon_structs::{CodonTable, Translations};
+use external_command_checker::{check_for_bcftools, check_for_svim};
 use haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle, style::TemplateError};
+use indicatif::{style::TemplateError, MultiProgress, ProgressBar, ProgressStyle};
+use model::fst_calculator::calculate_fst;
 use model::variant_context::VariantContext;
 use model::variant_context_utils::VariantContextUtils;
+use num::Saturating;
 use processing::bams::index_bams::*;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
 use reference::reference_writer::ReferenceWriter;
+use rust_htslib::bcf::Read;
 use scoped_threadpool::Pool;
 use std::cmp::{min, Reverse};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::path::Path;
+use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
-use utils::utils::get_cleaned_sample_names;
-use external_command_checker::{check_for_svim, check_for_bcftools};
-use bird_tool_utils::command::finish_command_safely;
-use std::process::{Command, Stdio};
-use num::Saturating;
-use rust_htslib::bcf::Read;
-use evolve::codon_structs::{CodonTable, Translations};
-use bio::io::gff::GffType::GFF3;
-use model::fst_calculator::calculate_fst;
 use utils::errors::BirdToolError;
-use std::time::Duration;
+use utils::utils::get_cleaned_sample_names;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -155,7 +155,9 @@ impl<'a> LorikeetEngine<'a> {
                             .to_string()
                     });
                     if cache.count() > 0 {
-                        if self.args.is_present("calculate-dnds") || self.args.is_present("calculate-fst") {
+                        if self.args.is_present("calculate-dnds")
+                            || self.args.is_present("calculate-fst")
+                        {
                             scope.execute(move || {
                                 // This is here to calculate dnds values if calculate dnds is
                                 // specified but not force. Kind of an edge case, but I think
@@ -169,13 +171,12 @@ impl<'a> LorikeetEngine<'a> {
                                     "Calculating evolutionary rates...",
                                 );
 
-                                let depth_per_sample_filter: i64 = self.args
+                                let depth_per_sample_filter: i64 = self
+                                    .args
                                     .value_of("depth-per-sample-filter")
                                     .unwrap()
                                     .parse()
                                     .unwrap();
-
-
 
                                 let mut reference_reader = ReferenceReader::new(
                                     &Some(reference_stem.to_string()),
@@ -192,18 +193,22 @@ impl<'a> LorikeetEngine<'a> {
                                         ));
                                     }
 
-                                    let vcf_path = format!("{}/{}.vcf", &output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx]);
+                                    let vcf_path = format!(
+                                        "{}/{}.vcf",
+                                        &output_prefix,
+                                        &reference_reader.genomes_and_contigs.genomes[ref_idx]
+                                    );
 
                                     match calculate_fst(
                                         &output_prefix,
                                         &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                         vcf_path.as_str(),
                                         ploidy,
-                                        depth_per_sample_filter
+                                        depth_per_sample_filter,
                                     ) {
                                         Ok(_) => {
                                             //
-                                        },
+                                        }
                                         Err(e) => {
                                             warn!("Python error {:?}", e);
                                         }
@@ -230,8 +235,10 @@ impl<'a> LorikeetEngine<'a> {
 
                                 {
                                     let pb = &tree.lock().unwrap()[ref_idx + 2];
-                                    pb.progress_bar
-                                        .set_message(format!("{}: All steps completed {}", &reference, "✔",));
+                                    pb.progress_bar.set_message(format!(
+                                        "{}: All steps completed {}",
+                                        &reference, "✔",
+                                    ));
                                     pb.progress_bar.finish_and_clear();
                                 }
                                 {
@@ -240,8 +247,10 @@ impl<'a> LorikeetEngine<'a> {
                                     let pos = pb.progress_bar.position();
                                     let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                                     if pos >= len {
-                                        pb.progress_bar
-                                            .finish_with_message(format!("All genomes analyzed {}", "✔",));
+                                        pb.progress_bar.finish_with_message(format!(
+                                            "All genomes analyzed {}",
+                                            "✔",
+                                        ));
                                     }
                                 }
                                 {
@@ -250,12 +259,14 @@ impl<'a> LorikeetEngine<'a> {
                                     let pos = pb.progress_bar.position();
                                     let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                                     if pos >= len {
-                                        pb.progress_bar
-                                            .finish_with_message(format!("All steps completed {}", "✔",));
+                                        pb.progress_bar.finish_with_message(format!(
+                                            "All steps completed {}",
+                                            "✔",
+                                        ));
                                     }
                                 }
                             });
-                            continue
+                            continue;
                         } else {
                             {
                                 let elem = &progress_bars[ref_idx + 2];
@@ -277,29 +288,29 @@ impl<'a> LorikeetEngine<'a> {
                                 let pos = pb.progress_bar.position();
                                 let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                                 if pos >= len {
-                                    pb.progress_bar
-                                        .finish_with_message(format!("All genomes analyzed {}", "✔",));
+                                    pb.progress_bar.finish_with_message(format!(
+                                        "All genomes analyzed {}",
+                                        "✔",
+                                    ));
                                 }
                             }
                             {
                                 let pb = &tree.lock().unwrap()[0];
-                                pb.progress_bar.inc(
-                                    1
-                                );
+                                pb.progress_bar.inc(1);
                                 pb.progress_bar.reset_eta();
                                 let pos = pb.progress_bar.position();
                                 let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                                 if pos >= len {
-                                    pb.progress_bar
-                                        .finish_with_message(format!("All steps completed {}", "✔",));
+                                    pb.progress_bar.finish_with_message(format!(
+                                        "All steps completed {}",
+                                        "✔",
+                                    ));
                                 }
                             }
                             continue;
                         }
-
                     }
                 }
-
 
                 scope.execute(move || {
                     let reference = &genomes_and_contigs.genomes[ref_idx];
@@ -346,10 +357,8 @@ impl<'a> LorikeetEngine<'a> {
                     if !self.args.is_present("do-not-call-svs") && self.long_read_bam_count > 0 {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(format!(
-                                "{}: Collecting SVs using svim...",
-                                pb.key
-                            ));
+                            pb.progress_bar
+                                .set_message(format!("{}: Collecting SVs using svim...", pb.key));
                         }
 
                         Self::call_structural_variants(
@@ -382,7 +391,6 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-
                     let vec_of_contexts_sites_tuple = assembly_engine.collect_shards(
                         self.args,
                         &indexed_bam_readers,
@@ -391,7 +399,7 @@ impl<'a> LorikeetEngine<'a> {
                         flag_filters,
                         n_threads,
                         &mut reference_reader,
-                        &output_prefix
+                        &output_prefix,
                     );
 
                     let genome_size = reference_reader
@@ -401,7 +409,8 @@ impl<'a> LorikeetEngine<'a> {
                         .sum::<u64>();
 
                     let mut contexts = Vec::with_capacity(genome_size as usize);
-                    let mut passing_sites = vec![Vec::with_capacity(genome_size as usize); indexed_bam_readers.len()];
+                    let mut passing_sites =
+                        vec![Vec::with_capacity(genome_size as usize); indexed_bam_readers.len()];
                     vec_of_contexts_sites_tuple.into_iter().for_each(|result| {
                         contexts.extend(result.0);
                         for (i, sites) in result.1.into_iter().enumerate() {
@@ -418,31 +427,37 @@ impl<'a> LorikeetEngine<'a> {
                     // ensure output path exists
                     create_dir_all(&output_prefix).expect("Unable to create output directory");
 
-
-
-                    let qual_by_depth_filter: f64 = self.args
+                    let qual_by_depth_filter: f64 = self
+                        .args
                         .value_of("qual-by-depth-filter")
                         .unwrap()
                         .parse()
                         .unwrap();
 
-                    let depth_per_sample_filter: i64 = self.args
+                    let depth_per_sample_filter: i64 = self
+                        .args
                         .value_of("depth-per-sample-filter")
                         .unwrap()
                         .parse()
                         .unwrap();
 
-                    let qual_filter = self.args.value_of("qual-threshold")
+                    let qual_filter = self
+                        .args
+                        .value_of("qual-threshold")
                         .unwrap()
                         .parse::<f64>()
-                        .unwrap() / -10.0;
+                        .unwrap()
+                        / -10.0;
 
-                    let vcf_path = format!("{}/{}.vcf",
-                                           &output_prefix,
-                                           &reference_reader.genomes_and_contigs.genomes[ref_idx]);
+                    let vcf_path = format!(
+                        "{}/{}.vcf",
+                        &output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx]
+                    );
                     if mode == "call" {
                         // calculate ANI statistics for short reads only
-                        let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
+                        let mut ani_calculator = ANICalculator::new(
+                            (self.short_read_bam_count + self.long_read_bam_count),
+                        );
                         ani_calculator.run_calculator(
                             &mut contexts,
                             &output_prefix,
@@ -452,7 +467,7 @@ impl<'a> LorikeetEngine<'a> {
                             Some(passing_sites),
                             qual_by_depth_filter,
                             qual_filter,
-                            depth_per_sample_filter
+                            depth_per_sample_filter,
                         );
 
                         {
@@ -471,7 +486,6 @@ impl<'a> LorikeetEngine<'a> {
                             false,
                         );
 
-
                         if self.args.is_present("calculate-fst") {
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -485,11 +499,11 @@ impl<'a> LorikeetEngine<'a> {
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                 vcf_path.as_str(),
                                 ploidy,
-                                depth_per_sample_filter
+                                depth_per_sample_filter,
                             ) {
                                 Ok(_) => {
                                     //
-                                },
+                                }
                                 Err(e) => {
                                     warn!("Python error {:?}", e);
                                 }
@@ -510,26 +524,28 @@ impl<'a> LorikeetEngine<'a> {
                                 output_prefix.as_str(),
                                 &mut reference_reader,
                                 ref_idx,
-                                cleaned_sample_names.len()
+                                cleaned_sample_names.len(),
                             );
                         }
                     } else if mode == "genotype" {
-
                         // If a variant context contains more than one allele, we need to split
                         // this context into n different contexts, where n is number of variant
                         // alleles
-                        let (mut split_contexts, filtered_contexts) = VariantContextUtils::split_contexts(
-                            contexts,
-                            qual_by_depth_filter,
-                            self.args
-                                .value_of("min-variant-depth-for-genotyping")
-                                .unwrap()
-                                .parse()
-                                .unwrap(),
-                        );
+                        let (mut split_contexts, filtered_contexts) =
+                            VariantContextUtils::split_contexts(
+                                contexts,
+                                qual_by_depth_filter,
+                                self.args
+                                    .value_of("min-variant-depth-for-genotyping")
+                                    .unwrap()
+                                    .parse()
+                                    .unwrap(),
+                            );
 
                         // calculate ANI statistics
-                        let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
+                        let mut ani_calculator = ANICalculator::new(
+                            (self.short_read_bam_count + self.long_read_bam_count),
+                        );
                         ani_calculator.run_calculator(
                             &mut split_contexts,
                             &output_prefix,
@@ -539,7 +555,7 @@ impl<'a> LorikeetEngine<'a> {
                             Some(passing_sites),
                             qual_by_depth_filter,
                             qual_filter,
-                            depth_per_sample_filter
+                            depth_per_sample_filter,
                         );
 
                         if split_contexts.len() >= 1 {
@@ -617,11 +633,11 @@ impl<'a> LorikeetEngine<'a> {
                                     &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                     vcf_path.as_str(),
                                     ploidy,
-                                    depth_per_sample_filter
+                                    depth_per_sample_filter,
                                 ) {
                                     Ok(_) => {
                                         //
-                                    },
+                                    }
                                     Err(e) => {
                                         warn!("Python error {:?}", e);
                                     }
@@ -642,7 +658,7 @@ impl<'a> LorikeetEngine<'a> {
                                     output_prefix.as_str(),
                                     &mut reference_reader,
                                     ref_idx,
-                                    cleaned_sample_names.len()
+                                    cleaned_sample_names.len(),
                                 );
                             }
 
@@ -686,11 +702,11 @@ impl<'a> LorikeetEngine<'a> {
                                     &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                     vcf_path.as_str(),
                                     ploidy,
-                                    depth_per_sample_filter
+                                    depth_per_sample_filter,
                                 ) {
                                     Ok(_) => {
                                         //
-                                    },
+                                    }
                                     Err(e) => {
                                         warn!("Python error {:?}", e);
                                     }
@@ -711,7 +727,7 @@ impl<'a> LorikeetEngine<'a> {
                                     output_prefix.as_str(),
                                     &mut reference_reader,
                                     ref_idx,
-                                    cleaned_sample_names.len()
+                                    cleaned_sample_names.len(),
                                 );
                             }
                             // Write genotypes to disk, reference specific
@@ -728,7 +744,9 @@ impl<'a> LorikeetEngine<'a> {
                         }
                     } else if mode == "consensus" {
                         // calculate ANI statistics
-                        let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
+                        let mut ani_calculator = ANICalculator::new(
+                            (self.short_read_bam_count + self.long_read_bam_count),
+                        );
                         ani_calculator.run_calculator(
                             &mut contexts,
                             &output_prefix,
@@ -738,7 +756,7 @@ impl<'a> LorikeetEngine<'a> {
                             Some(passing_sites),
                             qual_by_depth_filter,
                             qual_filter,
-                            depth_per_sample_filter
+                            depth_per_sample_filter,
                         );
                         // Get sample distances
                         {
@@ -754,7 +772,6 @@ impl<'a> LorikeetEngine<'a> {
                             false,
                         );
 
-
                         if self.args.is_present("calculate-fst") {
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -768,11 +785,11 @@ impl<'a> LorikeetEngine<'a> {
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                 vcf_path.as_str(),
                                 ploidy,
-                                depth_per_sample_filter
+                                depth_per_sample_filter,
                             ) {
                                 Ok(_) => {
                                     //
-                                },
+                                }
                                 Err(e) => {
                                     warn!("Python error {:?}", e);
                                 }
@@ -793,7 +810,7 @@ impl<'a> LorikeetEngine<'a> {
                                 output_prefix.as_str(),
                                 &mut reference_reader,
                                 ref_idx,
-                                cleaned_sample_names.len()
+                                cleaned_sample_names.len(),
                             );
                         }
 
@@ -925,7 +942,7 @@ impl<'a> LorikeetEngine<'a> {
                     .stderr(Stdio::piped())
                     .spawn()
                     .expect("Unable to execute bcftools command"),
-                "bcftools"
+                "bcftools",
             );
         } else {
             // if there is only one longread sample just use that one
@@ -933,9 +950,7 @@ impl<'a> LorikeetEngine<'a> {
                 "set -e -o pipefail; \
                 mv {}/svim_0/variants_filtered_sorted.vcf.gz {}/structural_variants.vcf.gz; \
                 bcftools index {}/structural_variants.vcf.gz",
-                output_prefix,
-                output_prefix,
-                output_prefix
+                output_prefix, output_prefix, output_prefix
             );
 
             debug!("Queuing cmd string {}", &cmd_string);
@@ -946,10 +961,9 @@ impl<'a> LorikeetEngine<'a> {
                     .stderr(Stdio::piped())
                     .spawn()
                     .expect("Unable to execute bcftools command"),
-                "mv"
+                "mv",
             );
         }
-
     }
 
     pub fn setup_progress_bars(
@@ -1006,8 +1020,9 @@ impl<'a> LorikeetEngine<'a> {
             ),
         };
 
-        let sty_eta = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]")?;
+        let sty_eta = ProgressStyle::default_bar().template(
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]",
+        )?;
 
         let sty_aux = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>4}/{len:4}")?;
@@ -1049,10 +1064,14 @@ pub fn start_lorikeet_engine<
     genomes_and_contigs: GenomesAndContigs,
     tmp_bam_file_cache: Option<TempDir>,
     concatenated_genomes: Option<NamedTempFile>,
-) -> Result<(), BirdToolError>{
+) -> Result<(), BirdToolError> {
     let threads = match m.value_of("threads").unwrap().parse() {
         Ok(val) => val,
-        Err(_) => return Err(BirdToolError::DebugError("Failed to parse number of threads.".to_string()))
+        Err(_) => {
+            return Err(BirdToolError::DebugError(
+                "Failed to parse number of threads.".to_string(),
+            ))
+        }
     };
     debug!("Parsing reference info...");
     let references = ReferenceReaderUtils::parse_references(&m);
@@ -1133,7 +1152,7 @@ pub fn start_lorikeet_engine<
         0,
     ) {
         Ok(val) => val,
-        Err(e) => return Err(BirdToolError::DebugError(e.to_string()))
+        Err(e) => return Err(BirdToolError::DebugError(e.to_string())),
     };
 
     let tree: Arc<Mutex<Vec<&Elem>>> =
@@ -1181,8 +1200,17 @@ pub fn start_lorikeet_engine<
 
 pub fn run_summarize(args: &clap::ArgMatches) {
     let vcf_files = args.values_of("vcfs").unwrap().collect::<Vec<&str>>();
-    let qual_by_depth_filter = args.value_of("qual-by-depth-filter").unwrap().parse().unwrap();
-    let qual_filter = args.value_of("qual-threshold").unwrap().parse::<f64>().unwrap() / -10.0;
+    let qual_by_depth_filter = args
+        .value_of("qual-by-depth-filter")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let qual_filter = args
+        .value_of("qual-threshold")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap()
+        / -10.0;
     let depth_per_sample_filter: i64 = args
         .value_of("depth-per-sample-filter")
         .unwrap()
@@ -1191,9 +1219,7 @@ pub fn run_summarize(args: &clap::ArgMatches) {
 
     let output_prefix = match args.is_present("output") {
         true => {
-            match std::fs::create_dir_all(
-                args.value_of("output").unwrap().to_string(),
-            ) {
+            match std::fs::create_dir_all(args.value_of("output").unwrap().to_string()) {
                 Ok(_) => {}
                 Err(err) => panic!("Unable to create output directory {:?}", err),
             };
@@ -1210,23 +1236,27 @@ pub fn run_summarize(args: &clap::ArgMatches) {
 
         // workout ploidy
         match variant_contexts.first_mut() {
-            Some(record) => {
-                ploidy = record.genotypes.get_max_ploidy(2)
-            },
-            None => {},
+            Some(record) => ploidy = record.genotypes.get_max_ploidy(2),
+            None => {}
         }
-        let samples: Vec<&str> = header.samples().into_iter().map(|s| std::str::from_utf8(s).unwrap()).collect::<Vec<&str>>();
+        let samples: Vec<&str> = header
+            .samples()
+            .into_iter()
+            .map(|s| std::str::from_utf8(s).unwrap())
+            .collect::<Vec<&str>>();
 
-        let genome_size: u64 = header.header_records().into_iter().map(|h_record| {
-            match h_record {
+        let genome_size: u64 = header
+            .header_records()
+            .into_iter()
+            .map(|h_record| match h_record {
                 rust_htslib::bcf::header::HeaderRecord::Contig { key, values } => {
                     let size = values.get("length").unwrap();
                     let size: u64 = size.parse().unwrap();
                     size
-                },
+                }
                 _ => 0,
-            }
-        }).sum();
+            })
+            .sum();
         // calculate ANI statistics
         let mut ani_calculator = ANICalculator::new(variant_contexts[0].genotypes.len());
         ani_calculator.run_calculator(
@@ -1238,7 +1268,7 @@ pub fn run_summarize(args: &clap::ArgMatches) {
             None,
             qual_by_depth_filter,
             qual_filter,
-            depth_per_sample_filter
+            depth_per_sample_filter,
         );
 
         calculate_fst(
@@ -1253,27 +1283,29 @@ pub fn run_summarize(args: &clap::ArgMatches) {
 
 /// Checks for the presence of gff file in the output directory for the current reference
 /// If none is present then generate one
-fn check_for_gff(reference: &str, output_prefix: &str, m: &clap::ArgMatches) -> Option<bio::io::gff::Reader<File>>{
-    let cache = glob::glob(&format!(
-        "{}/*.gff",
-        &output_prefix
-    )).expect("failed to interpret glob").map(|p| {
-        p.expect("Failed to read cached gff path")
-            .to_str()
-            .unwrap()
-            .to_string()
-    }).collect::<Vec<String>>();
+fn check_for_gff(
+    reference: &str,
+    output_prefix: &str,
+    m: &clap::ArgMatches,
+) -> Option<bio::io::gff::Reader<File>> {
+    let cache = glob::glob(&format!("{}/*.gff", &output_prefix))
+        .expect("failed to interpret glob")
+        .map(|p| {
+            p.expect("Failed to read cached gff path")
+                .to_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect::<Vec<String>>();
 
     if cache.len() > 1 {
         debug!("Too many GFF files in output folder: {}", output_prefix);
-        return None
+        return None;
     } else if cache.len() == 1 {
         debug!("Reading cached gff file: {}", &cache[0]);
         // Read in previous gff file
-        let gff_reader = bio::io::gff::Reader::from_file(
-            &cache[0],
-            bio::io::gff::GffType::GFF3,
-        ).expect("Failed to read GFF file");
+        let gff_reader = bio::io::gff::Reader::from_file(&cache[0], bio::io::gff::GffType::GFF3)
+            .expect("Failed to read GFF file");
         Some(gff_reader)
     } else {
         let gff_path = format!("{}/genes.gff", output_prefix);
@@ -1298,10 +1330,8 @@ fn check_for_gff(reference: &str, output_prefix: &str, m: &clap::ArgMatches) -> 
         );
 
         // Read in newly created gff
-        let gff_reader = bio::io::gff::Reader::from_file(
-            gff_path,
-            bio::io::gff::GffType::GFF3,
-        ).expect("Failed to read GFF file");
+        let gff_reader = bio::io::gff::Reader::from_file(gff_path, bio::io::gff::GffType::GFF3)
+            .expect("Failed to read GFF file");
         Some(gff_reader)
     }
 }
@@ -1326,10 +1356,12 @@ fn calculate_dnds(
         .parse()
         .unwrap();
 
-    let qual_filter = args.value_of("qual-threshold")
+    let qual_filter = args
+        .value_of("qual-threshold")
         .unwrap()
         .parse::<f64>()
-        .unwrap() / -10.0;
+        .unwrap()
+        / -10.0;
 
     match check_for_gff(reference, output_prefix, args) {
         Some(mut genes) => {
@@ -1339,11 +1371,10 @@ fn calculate_dnds(
             );
             if !Path::new(&vcf_path).exists() {
                 // no variants founds
-                return
+                return;
             }
 
             debug!("Reading VCF: {}", &vcf_path);
-
 
             let mut variants = VariantContext::generate_vcf_index(vcf_path.as_str());
             debug!("Success!");
@@ -1353,17 +1384,15 @@ fn calculate_dnds(
             let mut new_gff_writer = bio::io::gff::Writer::to_file(
                 format!(
                     "{}/{}.gff",
-                    output_prefix,
-                    &reference_reader.genomes_and_contigs.genomes[ref_idx]
+                    output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx]
                 ),
-                GFF3
-            ).expect("Unable to create GFF file");
+                GFF3,
+            )
+            .expect("Unable to create GFF file");
 
             for gene in genes.records() {
-
                 match gene {
                     Ok(mut gene) => {
-
                         let (snps, frameshifts, dnds_values) = dnds_calculator.find_mutations(
                             &gene,
                             &mut variants,
@@ -1372,7 +1401,7 @@ fn calculate_dnds(
                             sample_count,
                             qual_by_depth_filter,
                             qual_filter,
-                            depth_per_sample_filter
+                            depth_per_sample_filter,
                         );
 
                         let attributes = gene.attributes_mut();
@@ -1382,15 +1411,13 @@ fn calculate_dnds(
                         attributes.insert("dN/dS".to_string(), format!("{:?}", dnds_values));
                         match new_gff_writer.write(&gene) {
                             Ok(_) => continue,
-                            Err(_) => panic!("Unable to write to GFF file")
+                            Err(_) => panic!("Unable to write to GFF file"),
                         };
-                    },
-                    Err(_) => {
-                        continue
                     }
+                    Err(_) => continue,
                 }
             }
-        },
+        }
         None => {
             // too many GFF files in output folder, abort this genome
             debug!("Not calculating evolutionary rates for {} as their are too many GFF files in output folder: {}", &reference, &output_prefix);
@@ -1402,4 +1429,3 @@ fn calculate_dnds(
         std::fs::remove_file(&placeholder_gene_file);
     }
 }
-

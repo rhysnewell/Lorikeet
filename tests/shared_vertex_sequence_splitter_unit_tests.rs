@@ -15,11 +15,11 @@ extern crate lazy_static;
 #[macro_use]
 extern crate approx;
 extern crate bio;
+extern crate hashlink;
 extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
-extern crate hashlink;
 
 use hashlink::LinkedHashSet;
 use itertools::Itertools;
@@ -227,10 +227,20 @@ fn test_splitter_complete_cycle(strings: Vec<&str>, has_top: bool, has_bot: bool
     }
 
     println!("{has_top} {has_bot}");
-    let sources = graph.base_graph.get_sources_generic().collect::<HashSet<NodeIndex>>();
-    let sinks = graph.base_graph.get_sinks_generic().collect::<HashSet<NodeIndex>>();
+    let sources = graph
+        .base_graph
+        .get_sources_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let sinks = graph
+        .base_graph
+        .get_sinks_generic()
+        .collect::<HashSet<NodeIndex>>();
     println!("{} {}", sources.len(), sinks.len());
-    println!("Initial: Nodes {} Edges {}", graph.base_graph.graph.node_count(), graph.base_graph.graph.edge_count());
+    println!(
+        "Initial: Nodes {} Edges {}",
+        graph.base_graph.graph.node_count(),
+        graph.base_graph.graph.edge_count()
+    );
 
     let mut graph_clone = graph.clone();
     let original_paths =
@@ -244,20 +254,46 @@ fn test_splitter_complete_cycle(strings: Vec<&str>, has_top: bool, has_bot: bool
     println!("Haplotypes {}", haplotypes.len());
     let to_split = nodes.into_iter().collect();
     let mut splitter = SharedVertexSequenceSplitter::new(&mut graph, to_split);
-    println!("Prefix {} Suffix {}", std::str::from_utf8(splitter.get_prefix().sequence.as_slice()).unwrap(), std::str::from_utf8(splitter.get_suffix().sequence.as_slice()).unwrap());
+    println!(
+        "Prefix {} Suffix {}",
+        std::str::from_utf8(splitter.get_prefix().sequence.as_slice()).unwrap(),
+        std::str::from_utf8(splitter.get_suffix().sequence.as_slice()).unwrap()
+    );
     splitter.split();
     println!("Middle {:?}", splitter.get_new_middles());
     println!("To split {:?}", &splitter.to_splits);
-    println!("Split: Nodes {} Edges {}", splitter.get_split_graph().base_graph.graph.node_count(), splitter.get_split_graph().base_graph.graph.edge_count());
-    let sources = splitter.get_split_graph().base_graph.get_sources_generic().collect::<HashSet<NodeIndex>>();
-    let sinks = splitter.get_split_graph().base_graph.get_sinks_generic().collect::<HashSet<NodeIndex>>();
+    println!(
+        "Split: Nodes {} Edges {}",
+        splitter.get_split_graph().base_graph.graph.node_count(),
+        splitter.get_split_graph().base_graph.graph.edge_count()
+    );
+    let sources = splitter
+        .get_split_graph()
+        .base_graph
+        .get_sources_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let sinks = splitter
+        .get_split_graph()
+        .base_graph
+        .get_sinks_generic()
+        .collect::<HashSet<NodeIndex>>();
     println!("Split sources {} sinks {}", sources.len(), sinks.len());
 
     splitter.update_graph(top_index, bot_index);
-    println!("Update: Nodes {} Edges {}", graph.base_graph.graph.node_count(), graph.base_graph.graph.edge_count());
+    println!(
+        "Update: Nodes {} Edges {}",
+        graph.base_graph.graph.node_count(),
+        graph.base_graph.graph.edge_count()
+    );
 
-    let sources = graph.base_graph.get_sources_generic().collect::<HashSet<NodeIndex>>();
-    let sinks = graph.base_graph.get_sinks_generic().collect::<HashSet<NodeIndex>>();
+    let sources = graph
+        .base_graph
+        .get_sources_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let sinks = graph
+        .base_graph
+        .get_sinks_generic()
+        .collect::<HashSet<NodeIndex>>();
 
     println!("{} {}", sources.len(), sinks.len());
     let split_paths = GraphBasedKBestHaplotypeFinder::new(&mut graph.base_graph, sources, sinks)

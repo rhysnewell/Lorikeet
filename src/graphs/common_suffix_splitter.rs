@@ -49,11 +49,25 @@ impl CommonSuffixSplitter {
         let suffix_v_template = Self::common_suffix(&graph, v, &to_split);
         match suffix_v_template {
             None => {
-                debug!("None {:?} -> {} [{:?}]", v, std::str::from_utf8(graph.base_graph.get_sequence_from_index(v)).unwrap(), to_split.iter().map(|ve| std::str::from_utf8(graph.base_graph.get_sequence_from_index(*ve)).unwrap()).collect::<Vec<&str>>());
-                return false
-            },
+                debug!(
+                    "None {:?} -> {} [{:?}]",
+                    v,
+                    std::str::from_utf8(graph.base_graph.get_sequence_from_index(v)).unwrap(),
+                    to_split
+                        .iter()
+                        .map(|ve| std::str::from_utf8(
+                            graph.base_graph.get_sequence_from_index(*ve)
+                        )
+                        .unwrap())
+                        .collect::<Vec<&str>>()
+                );
+                return false;
+            }
             Some(suffix_v_template) => {
-                debug!("Common {}", std::str::from_utf8(suffix_v_template.get_sequence()).unwrap());
+                debug!(
+                    "Common {}",
+                    std::str::from_utf8(suffix_v_template.get_sequence()).unwrap()
+                );
                 let mut edges_to_remove = Vec::new();
 
                 for mid in to_split.iter() {
@@ -74,7 +88,10 @@ impl CommonSuffixSplitter {
                             incoming_target = suffix_v;
                         }
                         Some(prefix_v) => {
-                            debug!("Prefix {}", std::str::from_utf8(prefix_v.get_sequence()).unwrap());
+                            debug!(
+                                "Prefix {}",
+                                std::str::from_utf8(prefix_v.get_sequence()).unwrap()
+                            );
                             let prefix_v_index = graph.base_graph.add_node(&prefix_v);
                             incoming_target = prefix_v_index;
                             let mut out_weight =

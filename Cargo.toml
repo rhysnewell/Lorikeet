@@ -34,6 +34,7 @@ compare = "0.1.0"
 coverm = {git = "https://github.com/rhysnewell/CoverM", branch = "main"}
 galah = { git = "https://github.com/wwood/galah" }
 hashlink = "^0.7"
+hts-sys = "2.0.3"
 enum-ordinalize = "^3.1"
 env_logger = "0.6"
 glob = "^0.3"
@@ -49,11 +50,13 @@ ndarray-npy = "^0.8.0"
 ndarray = {version = "^0.15.3", features = ["rayon"]}
 needletail = "^0.4.1"
 num = "0.4.0"
-openssl-sys = "0.9"
-openssl = "0.10"
+openssl-sys = "^0.9"
+openssl = {version = "^0.10", features = ["vendored"]}
 ordered-float = "1"
+parasailors = "^0.3"
+partitions = "^0.2"
 petgraph = {version = "^0.6.0", features = ["stable_graph"]}
-pyo3 = "^0.16.5"
+pyo3 = "^0.17"
 rand = "0.6"
 rayon = "^1.5.1"
 roff = "^0.2"
@@ -68,6 +71,7 @@ tempfile = "^3"
 term = "0.7.0"
 indicatif = "^0.17.1"
 scoped_threadpool = "^0.1.9"
+finch = {version = "0.4.3", default-features = false }
 
 
 [lib]

@@ -842,7 +842,9 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
     }
 
     pub fn add_vertices<'a, I>(&mut self, vertices: I) -> Vec<NodeIndex>
-    where V: BaseVertex + 'a, I: IntoIterator<Item=&'a V>
+    where
+        V: BaseVertex + 'a,
+        I: IntoIterator<Item = &'a V>,
     {
         let node_indices = vertices
             .into_iter()

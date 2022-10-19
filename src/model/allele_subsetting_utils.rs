@@ -197,8 +197,9 @@ impl AlleleSubsettingUtils {
                     )
                 });
 
-            let expected_num_likelihoods =
-                GenotypeLikelihoods::new().num_likelihoods(original_alleles.len() as i64, ploidy as i64) as usize;
+            let expected_num_likelihoods = GenotypeLikelihoods::new()
+                .num_likelihoods(original_alleles.len() as i64, ploidy as i64)
+                as usize;
 
             let mut new_likelihoods: Option<Vec<f64>> = None;
             let mut new_log10_gq = std::f64::NEG_INFINITY;
@@ -311,8 +312,11 @@ impl AlleleSubsettingUtils {
         original_alleles: &Vec<ByteArrayAllele>,
         new_alleles: &Vec<ByteArrayAllele>,
     ) -> Vec<usize> {
-        let mut result =
-            vec![0; GenotypeLikelihoods::new().num_likelihoods(new_alleles.len() as i64, ploidy as i64) as usize];
+        let mut result = vec![
+            0;
+            GenotypeLikelihoods::new().num_likelihoods(new_alleles.len() as i64, ploidy as i64)
+                as usize
+        ];
 
         let allele_permutation =
             AlleleList::new(original_alleles).permutation(AlleleList::new(new_alleles));

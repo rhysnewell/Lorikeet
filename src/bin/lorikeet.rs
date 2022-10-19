@@ -1,15 +1,31 @@
 extern crate openssl;
 extern crate openssl_sys;
 
+extern crate galah;
+use galah::PreclusterDistanceFinder;
+use galah::cluster_argument_parsing::Preclusterer;
+use galah::sorted_pair_genome_distance_cache::SortedPairGenomeDistanceCache;
+use galah::{dashing::DashingPreclusterer, finch::FinchPreclusterer};
+use galah::cluster_argument_parsing::GalahClusterer;
+
 extern crate lorikeet_genome;
-
 use lorikeet_genome::cli::*;
-
 use lorikeet_genome::external_command_checker;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use lorikeet_genome::smith_waterman::smith_waterman_aligner::SmithWatermanAligner;
+use lorikeet_genome::smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
 use lorikeet_genome::utils::utils::*;
 use lorikeet_genome::*;
 
+extern crate gkl;
+use gkl::smithwaterman::OverhangStrategy;
+
+extern crate needletail;
+use needletail::parse_fastx_file;
+
 extern crate coverm;
+use coverm::mapping_index_maintenance::generate_concatenated_fasta_file;
+
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
@@ -19,8 +35,11 @@ use coverm::*;
 extern crate bird_tool_utils;
 
 use std::env;
+use std::path;
 use std::process;
 use std::process::Stdio;
+use std::sync::{Mutex, Arc};
+use std::time::{Duration, Instant};
 
 extern crate tempfile;
 use tempfile::NamedTempFile;
@@ -37,10 +56,23 @@ use log::LevelFilter;
 extern crate env_logger;
 use env_logger::Builder;
 use lorikeet_genome::processing::lorikeet_engine::{
-    run_summarize, start_lorikeet_engine, ReadType,
+    run_summarize, start_lorikeet_engine, ReadType, Elem, LorikeetEngine,
 };
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
 use lorikeet_genome::utils::errors::BirdToolError;
+
+extern crate rayon;
+use rayon::prelude::*;
+
+extern crate indicatif;
+use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
+
+extern crate partitions;
+use partitions::partition_vec::PartitionVec;
+
+// contant variables
+// max i16 size minus 1
+const MAX_I16: i16 = 32767;
 
 fn main() {
     let mut app = build_cli();
@@ -60,8 +92,11 @@ fn main() {
         Some("pangenome") => {
             let m = matches.subcommand_matches("pangenome").unwrap();
             bird_tool_utils::clap_utils::print_full_help_if_needed(&m, summarise_full_help());
-            
-            run_pangenome(m);
+
+            match run_pangenome(m) {
+                Ok(_) => info!("Pangenome created."),
+                Err(e) => panic!("Pangenome creation failed with error: {:?}", e),
+            };
         }
         Some("genotype") => {
             let m = matches.subcommand_matches("genotype").unwrap();
@@ -70,7 +105,7 @@ fn main() {
 
             match prepare_pileup(m, mode) {
                 Ok(_) => info!("Genotype complete."),
-                Err(e) => warn!("Genotype failed with error: {:?}", e)
+                Err(e) => warn!("Genotype failed with error: {:?}", e),
             };
         }
         Some("call") => {
@@ -80,7 +115,7 @@ fn main() {
 
             match prepare_pileup(m, mode) {
                 Ok(_) => info!("Call complete."),
-                Err(e) => warn!("Call failed with error: {:?}", e)
+                Err(e) => warn!("Call failed with error: {:?}", e),
             };
         }
         Some("consensus") => {
@@ -90,7 +125,7 @@ fn main() {
 
             match prepare_pileup(m, mode) {
                 Ok(_) => info!("Consensus complete."),
-                Err(e) => warn!("Consensus failed with error: {:?}", e)
+                Err(e) => warn!("Consensus failed with error: {:?}", e),
             };
         }
         Some("shell-completion") => {
@@ -114,38 +149,253 @@ fn main() {
 }
 
 fn run_pangenome(m: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    set_log_level(m, true);
-    let threads = m.value_of("threads").unwrap().parse()?;
-    rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build_global()
-                .unwrap();
+    if !m.is_present("use-avx") {
+        external_command_checker::check_for_pggb();
+        set_log_level(m, true);
+        let threads = m.value_of("threads").unwrap().parse()?;
+        let percent_identity =
+            galah::cluster_argument_parsing::parse_percentage(m, "percent-identity")?
+                .unwrap_or(0.95);
+        let kmer_size: usize = m.value_of("kmer-size").unwrap().parse()?;
+        let segment_length: usize = m.value_of("segment-length").unwrap().parse()?;
 
-    let references = ReferenceReaderUtils::parse_references(m);
-    let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global()?;
+        debug!("Parsing references");
+        let references = ReferenceReaderUtils::parse_references(m);
+        // let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
 
-    let (concatenated_genomes, genomes_and_contigs_option) =
-        ReferenceReaderUtils::setup_genome_fasta_files(&m);
-    debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
+        debug!("Building concatenated reference");
+        let concatenated_genomes = generate_concatenated_fasta_file(&references);
+        let concat_path = concatenated_genomes.path().to_str().unwrap();
+        ReferenceReaderUtils::generate_faidx(concat_path);
 
-    let pggb_params = m.value_of("pggb-params").unwrap();
-    let output_dir = m.value_of("output").unwrap();
+        let pggb_params = m.value_of("pggb-params").unwrap();
+        let output_dir = m.value_of("output").unwrap();
+        let cmd_string = format!(
+            "pggb -i {concat_path} -n {} -t {threads} -o {output_dir} -p {percent_identity} -k {kmer_size} -s {segment_length} {pggb_params}", 
+            references.len()
+        );
 
-    match concatenated_genomes {
-        Some(concatenated_genomes) => {
-            let cmd_string = format!("pggb -i {} -n {} -t {} -o {} {}", concatenated_genomes.path().to_str().unwrap(), references.len(), threads, output_dir, pggb_params);
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&cmd_string)
-                .stdout(Stdio::piped())
-                .output()
-                .expect("Unable to execute bash");
-        },
-        _ => return Err(Box::new(BirdToolError::DebugError("No concatenated genomes file generated".to_string())))
+        info!("Running pggb.");
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&cmd_string)
+            .stdout(Stdio::piped())
+            .output()?;
+    } else {
+        // read in references and loop through entries and align entries pairwise
+        // using SmithWatermanAligner
+        set_log_level(m, true);
+        let threads = m.value_of("threads").unwrap().parse()?;
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global()?;
+        debug!("Parsing references");
+        let references = ReferenceReaderUtils::parse_references(m);
+        let references = references.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
+        debug!("Building concatenated reference");
+        // let concatenated_genomes  = generate_concatenated_fasta_file(&references);
+
+        // create GalahClusterer
+        // match preclusterer, dashing or finch
+        let mut preclusterer: Box<dyn PreclusterDistanceFinder> = 
+            match m.value_of("precluster-method").unwrap() {
+                "dashing" => {
+                    external_command_checker::check_for_dashing();
+                    Box::new(
+                        DashingPreclusterer {
+                            min_ani: galah::cluster_argument_parsing::parse_percentage(
+                                m,
+                                "precluster-identity",
+                            )?
+                            .unwrap_or(0.95),
+                            threads,
+                        })
+                }
+                "finch" => Box::new(
+                    FinchPreclusterer {
+                        min_ani: galah::cluster_argument_parsing::parse_percentage(
+                            m,
+                            "precluster-identity",
+                        )?
+                        .unwrap_or(0.95),
+                        num_kmers: 1000,
+                        kmer_length: m.value_of("kmer-size").unwrap().parse()?,
+                    }),
+                _ => unreachable!(),
+        };
+        
+        let dashing_cache = preclusterer.distances(&references);
+        info!("Preclustering with {}", m.value_of("precluster-method").unwrap());
+        let minhash_preclusters = partition_sketches(
+            &references, 
+            &dashing_cache
+        );
+        trace!("Found preclusters: {:?}", minhash_preclusters);
+
+        let all_clusters: Mutex<Vec<Vec<usize>>> = Mutex::new(vec![]);
+
+        // Convert single linkage data structure into just a list of list of indices
+        let mut clusters: Vec<Vec<usize>> = minhash_preclusters
+            .all_sets()
+            .map(|cluster| {
+                let mut indices: Vec<_> = cluster.map(|cluster_genome| *cluster_genome.1).collect();
+                indices.sort_unstable();
+                indices
+            })
+            .collect();
+
+        // Sort preclusters so bigger clusters are started before smaller
+        clusters.sort_unstable_by(|c1, c2| c2.len().cmp(&c1.len()));
+        debug!("After sorting, found preclusters {:?}", clusters);
+        info!(
+            "Found {} preclusters. The largest contained {} genomes",
+            clusters.len(),
+            clusters[0].len()
+        );
+
+        // set up ProgressBar the length of num_contigs
+        let sty_eta = ProgressStyle::default_bar().template(
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]",
+        )?;
+
+        // Set up multi progress bars
+        let multi_inner = Arc::new(MultiProgress::new());
+        let mut progress_bars = vec![
+            Elem {
+                key: "Genome clusters to align".to_string(),
+                index: 0,
+                progress_bar: ProgressBar::new(clusters.len() as u64),
+            };
+            clusters.len() + 1
+        ];
+
+        let mut progress_bar = multi_inner.add(progress_bars[0].progress_bar.clone());
+        progress_bar.set_style(sty_eta.clone());
+        progress_bar.set_message("Genome clusters to align");
+        progress_bar.enable_steady_tick(Duration::from_millis(200));
+        progress_bars[0] = Elem {
+            key: format!("Genome clusters to align"),
+            index: 0,
+            progress_bar,
+        };
+
+
+        debug!("Setting progress bar styles");
+        clusters.iter().enumerate().for_each(|(i, cluster)| {
+            
+            let mut progress_bar = multi_inner.add(ProgressBar::new(cluster.len() as u64));
+            progress_bar.set_style(sty_eta.clone());
+            progress_bar.set_message(format!("Aligning cluster {}", i));
+            progress_bars[i + 1] = Elem {
+                key: format!("Aligning cluster {}", i),
+                index: i + 1,
+                progress_bar,
+            };
+        });
+        
+        debug!("Inserting bars into tree");
+        let tree: Arc<Mutex<Vec<&Elem>>> =
+            Arc::new(Mutex::new(Vec::with_capacity(progress_bars.len())));
+        {
+            let mut tree = tree.lock().unwrap();
+            for pb in progress_bars.iter() {
+                tree.push(pb)
+            }
+        }
+        
+        // begin ticks on Elem in progress_bars
+        // debug!("Beginning ticks on progress bars");
+        // (0..clusters.len()+1).into_iter().for_each(|i| {
+        //     let elem = &progress_bars[i];
+        //     let pb = multi_inner.insert(i, elem.progress_bar.clone());
+        //     pb.enable_steady_tick(Duration::from_millis(200));
+        // });
+
+        // take indices from clusters and index into references
+        // align pairwise refrences in each cluster
+        // using SmithWatermanAligner
+        info!("Aligning genomes");
+        clusters.par_iter().enumerate().for_each(|(cluster_index, cluster)| {
+            // let aligner = SmithWatermanAligner::new();
+            // let mut alignments = Vec::new();
+            {
+                let tree = tree.lock().unwrap();
+                let elem = tree[cluster_index + 1];
+                elem.progress_bar.enable_steady_tick(Duration::from_millis(200));
+            }
+            // loop through cluster indices in parallel
+            cluster.par_iter().for_each(|i| {
+                cluster[*i+1..].par_iter().for_each(|j| {
+                    let mut ref1 = parse_fastx_file(path::Path::new(&references[*i]))
+                        .expect("Unable to open reference file");
+                    let mut ref2 = parse_fastx_file(path::Path::new(&references[*j]))
+                        .expect("Unable to open reference file");
+                    while let Some(record1) = ref1.next() {
+                        let seqrec1 = record1.expect("invalid record");
+                        let seq1 = seqrec1.seq();
+                        while let Some(record2) = ref2.next() {
+                            let seqrec2 = record2.expect("invalid record");
+                            
+                            let seq2 = seqrec2.seq();
+                            // iterate seq1 and seq2 in chunks of size MAX_I16 and align
+                            // each chunk
+                            seq1.chunks(MAX_I16 as usize).enumerate().for_each(|(i, chunk1)| {
+                                seq2.chunks(MAX_I16 as usize).enumerate().for_each(|(j, chunk2)| {
+                                    let _ = SmithWatermanAligner::align(
+                                        &chunk1,
+                                        &chunk2,
+                                        &NEW_SW_PARAMETERS,
+                                        OverhangStrategy::SoftClip,
+                                        AVXMode::detect_mode(),
+                                    );
+                                });
+                            });
+                            // alignments.push(alignment);
+                        }
+                    }
+                });
+                let mut tree = tree.lock().unwrap();
+                tree[cluster_index + 1].progress_bar.inc(1);
+            });
+            // increment top level of multi progress bar in tree
+            let mut tree = tree.lock().unwrap();
+            tree[0].progress_bar.inc(1);
+            tree[cluster_index + 1].progress_bar.finish();
+        });
+        // finish all progress bars in tree
+        let mut tree = tree.lock().unwrap();
+        tree[0].progress_bar.finish();
+        // pb.finish();
+    }
+    Ok(())
+}
+
+/// Create sub-sets by single linkage clustering
+fn partition_sketches(
+    genomes: &[&str],
+    dashing_cache: &SortedPairGenomeDistanceCache,
+) -> PartitionVec<usize> {
+    let mut to_return: PartitionVec<usize> = PartitionVec::with_capacity(genomes.len());
+    for (i, _) in genomes.iter().enumerate() {
+        to_return.push(i);
     }
 
-
-    Ok(())
+    genomes.iter().enumerate().for_each(|(i, _)| {
+        genomes[0..i].iter().enumerate().for_each(|(j, _)| {
+            trace!("Testing precluster between {} and {}", i, j);
+            if dashing_cache.contains_key(&(i, j)) {
+                debug!(
+                    "During preclustering, found a match between genomes {} and {}",
+                    i, j
+                );
+                to_return.union(i, j)
+            }
+        });
+    });
+    return to_return;
 }
 
 fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError> {
@@ -217,7 +467,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
@@ -237,7 +487,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else {
                 return run_pileup(
                     m,
@@ -249,7 +499,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             }
         } else {
             let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
@@ -268,7 +518,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
@@ -288,7 +538,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else {
                 return run_pileup(
                     m,
@@ -300,7 +550,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             }
         }
     } else {
@@ -342,7 +592,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
@@ -362,7 +612,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else {
                 return run_pileup(
                     m,
@@ -374,7 +624,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             }
         } else {
             debug!("Not filtering..");
@@ -411,7 +661,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
@@ -431,7 +681,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else {
                 return run_pileup(
                     m,
@@ -443,7 +693,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             }
         }
     }
@@ -566,7 +816,7 @@ fn run_pileup<
     genomes_and_contigs_option: Option<GenomesAndContigs>,
     tmp_bam_file_cache: Option<tempdir::TempDir>,
     concatenated_genomes: Option<NamedTempFile>,
-) -> Result<(), BirdToolError>{
+) -> Result<(), BirdToolError> {
     let genomes_and_contigs = genomes_and_contigs_option.unwrap();
 
     start_lorikeet_engine(

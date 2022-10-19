@@ -2,6 +2,7 @@ use clap::ArgMatches;
 use genotype::genotype_builder::{Genotype, GenotypeType};
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use model::allele_frequency_calculator_result::AFCalculationResult;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
@@ -10,15 +11,14 @@ use num::traits::Float;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 use statrs::function::gamma::ln_gamma;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use utils::dirichlet::Dirichlet;
 use utils::math_utils::MathUtils;
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use std::rc::Rc;
-use std::cell::RefCell;
 
-lazy_static!{
+lazy_static! {
     //from the genotype likelihoods equations assuming the SNP ref conf model with no mismatches
     //PL[2] = GQ; scaleFactor = PL[3]/GQ ~ -10 * DP * log10(P_error) / (-10 * DP * log10(1/ploidy)) where BASE_QUALITY = -10 * log10(P_error)
     static ref PLOIDY_2_HOM_VAR_SCALE_FACTOR: i64 = (AlleleFrequencyCalculator::TYPICAL_BASE_QUALITY as f64/-10.0/(0.5.log10())).round() as i64;
@@ -91,7 +91,9 @@ impl AlleleFrequencyCalculator {
 
         if g.has_likelihoods() {
             log10_likelihoods = g.get_likelihoods().get_as_vector();
-        } else if g.genotype_type == Some(GenotypeType::NoCall) || g.genotype_type == Some(GenotypeType::HomRef) {
+        } else if g.genotype_type == Some(GenotypeType::NoCall)
+            || g.genotype_type == Some(GenotypeType::HomRef)
+        {
             if g.ploidy != 2 {
                 panic!("Likelihoods are required to calculate posteriors for hom-refs with ploidy != 2");
             };
@@ -100,7 +102,8 @@ impl AlleleFrequencyCalculator {
                 //for a hom-ref, as long as we have GQ we can make a very accurate QUAL calculation
                 // since the hom-var likelihood should make a minuscule contribution
 
-                let mut per_sample_indexes_of_relevant_alleles = vec![1; log10_allele_frequencies.len()];
+                let mut per_sample_indexes_of_relevant_alleles =
+                    vec![1; log10_allele_frequencies.len()];
                 per_sample_indexes_of_relevant_alleles[0] = 0; // ref still maps to ref
 
                 let gq = g.gq;
@@ -110,7 +113,11 @@ impl AlleleFrequencyCalculator {
                 let mut approx_likelihoods = vec![0, gq, *PLOIDY_2_HOM_VAR_SCALE_FACTOR * gq];
 
                 //map likelihoods for any other alts to biallelic ref/alt likelihoods above
-                let genotype_index_map_by_ploidy = GenotypeLikelihoodCalculators::get_instance(ploidy, log10_allele_frequencies.len()).genotype_index_map(&per_sample_indexes_of_relevant_alleles);
+                let genotype_index_map_by_ploidy = GenotypeLikelihoodCalculators::get_instance(
+                    ploidy,
+                    log10_allele_frequencies.len(),
+                )
+                .genotype_index_map(&per_sample_indexes_of_relevant_alleles);
                 let mut PLs = vec![0; genotype_index_map_by_ploidy.len()];
                 for i in 0..PLs.len() {
                     PLs[i] = approx_likelihoods[genotype_index_map_by_ploidy[i]]
@@ -254,8 +261,7 @@ impl AlleleFrequencyCalculator {
         let mut log10_absent_posteriors = Rc::new(RefCell::new(vec![Vec::new(); num_alleles]));
 
         for (i, g) in vc.get_genotypes().genotypes().iter().enumerate() {
-            if !g.genotype_usable_for_af_calculation()
-            {
+            if !g.genotype_usable_for_af_calculation() {
                 continue;
             }
 
@@ -323,8 +329,7 @@ impl AlleleFrequencyCalculator {
                     .genotype_allele_counts_at(genotype)
                     .for_each_absent_allele_index(
                         |a| {
-                            let mut log10_absent_posteriors =
-                                log10_absent_posteriors.borrow_mut();
+                            let mut log10_absent_posteriors = log10_absent_posteriors.borrow_mut();
                             log10_absent_posteriors[a].push(log10_genotype_posterior)
                         },
                         num_alleles,

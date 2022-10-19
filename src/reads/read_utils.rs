@@ -1,14 +1,14 @@
+use coverm::FlagFilter;
+use num::abs;
+use processing::lorikeet_engine::ReadType;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
-use rust_htslib::bam::record::{Aux, AuxArray, Cigar, CigarString, CigarStringView};
-use std::cmp::Ordering;
-use utils::simple_interval::{Locatable, SimpleInterval};
-use rust_htslib::bam::Record;
-use coverm::FlagFilter;
-use processing::lorikeet_engine::ReadType;
-use std::ops::Deref;
-use num::abs;
 use rust_htslib::bam::ext::BamRecordExtensions;
+use rust_htslib::bam::record::{Aux, AuxArray, Cigar, CigarString, CigarStringView};
+use rust_htslib::bam::Record;
+use std::cmp::Ordering;
+use std::ops::Deref;
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 pub struct ReadUtils {}
 
@@ -28,13 +28,14 @@ impl ReadUtils {
         readtype: ReadType,
         limiting_interval: &Option<SimpleInterval>,
         minimum_long_read_size: usize,
-        minimum_long_read_average_base_qual: usize
+        minimum_long_read_average_base_qual: usize,
     ) -> bool {
-        if record.seq_len() == 0 ||
-            record.qual().len() == 0 ||
-            record.cigar_len() == 0 ||
-            record.seq().len() == 0 {
-            return true
+        if record.seq_len() == 0
+            || record.qual().len() == 0
+            || record.cigar_len() == 0
+            || record.seq().len() == 0
+        {
+            return true;
         }
 
         let cigar = record.cigar();
@@ -66,22 +67,22 @@ impl ReadUtils {
 
         result = match readtype {
             ReadType::Long => {
-                let average_base_qual: usize = record.qual().iter().map(|q| *q as usize).sum::<usize>() / record.qual().len();
+                let average_base_qual: usize =
+                    record.qual().iter().map(|q| *q as usize).sum::<usize>() / record.qual().len();
                 result
-                || record.seq_len() < minimum_long_read_size
-                || average_base_qual < minimum_long_read_average_base_qual
+                    || record.seq_len() < minimum_long_read_size
+                    || average_base_qual < minimum_long_read_average_base_qual
             }
-            _ => {
-                result
-            }
+            _ => result,
         };
 
         match limiting_interval {
             Some(interval) => {
                 result
-                    || !(record.reference_start() <= interval.end as i64 && record.reference_end() >= interval.start as i64)
-            },
-            None => result
+                    || !(record.reference_start() <= interval.end as i64
+                        && record.reference_end() >= interval.start as i64)
+            }
+            None => result,
         }
     }
 

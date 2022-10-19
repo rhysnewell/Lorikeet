@@ -7,10 +7,10 @@ use rust_htslib::bam;
 use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-use utils::errors::BirdToolError;
-use std::time::Duration;
 use std::result::Result::Err;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use utils::errors::BirdToolError;
 // use std::io::Error;
 
 /// Ensures mapping is completed for provided bams. If multiple references are provided and
@@ -22,14 +22,15 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     references: &GenomesAndContigs,
     parallel_genomes: bool,
     mapping: bool,
-) -> Result<(), BirdToolError>{
+) -> Result<(), BirdToolError> {
     let mut record: bam::Record = bam::Record::new();
 
     // progress bar
     let sty = match ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]") {
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]")
+    {
         Ok(s) => s,
-        Err(e) => return Err(BirdToolError::DebugError(e.to_string()))
+        Err(e) => return Err(BirdToolError::DebugError(e.to_string())),
     };
     let pb1 = ProgressBar::new(bams.len() as u64);
     pb1.set_style(sty);

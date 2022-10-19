@@ -7,9 +7,7 @@ pub struct PileupReadErrorCorrector {
 
 impl PileupReadErrorCorrector {
     pub fn new(log_odds_threshold: f64) -> Self {
-        Self {
-            log_odds_threshold
-        }
+        Self { log_odds_threshold }
     }
 }
 //

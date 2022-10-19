@@ -292,7 +292,7 @@ fn test_region_creation(
     start: usize,
     mut probs: Vec<bool>,
     max_region_size: usize,
-    n_parts: usize,
+    _n_parts: usize,
     force_conversion: bool,
     wait_until_end: bool,
     contig_len: usize,
@@ -317,7 +317,9 @@ fn test_region_creation(
         profile.add(state);
 
         if !wait_until_end {
-            let regions = profile.clone().pop_ready_assembly_regions(0, 1, max_region_size, false);
+            let regions = profile
+                .clone()
+                .pop_ready_assembly_regions(0, 1, max_region_size, false);
             assert_good_regions(
                 start,
                 regions,
@@ -330,7 +332,10 @@ fn test_region_creation(
     }
 
     if wait_until_end || force_conversion {
-        let regions = profile.clone().pop_ready_assembly_regions(0, 1, max_region_size, force_conversion);
+        let regions =
+            profile
+                .clone()
+                .pop_ready_assembly_regions(0, 1, max_region_size, force_conversion);
         assert_good_regions(
             start,
             regions,

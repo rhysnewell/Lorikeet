@@ -334,7 +334,6 @@ fn test_split_complex_cycle() {
     }
 }
 
-
 #[test]
 fn test_split_infinite_cycle_failure() {
     let mut original = SeqGraph::new(11);
@@ -343,38 +342,28 @@ fn test_split_infinite_cycle_failure() {
     let v3 = SeqVertex::new(b"N".to_vec());
     let v4 = SeqVertex::new(b"C".to_vec());
 
-    let node_indices = original
-        .base_graph
-        .add_vertices(vec![&v1, &v2, &v3, &v4]);
+    let node_indices = original.base_graph.add_vertices(vec![&v1, &v2, &v3, &v4]);
     original.base_graph.add_edges(
         node_indices[0],
-        vec![
-            node_indices[1]
-        ],
+        vec![node_indices[1]],
         BaseEdgeStruct::new(false, 12, 0),
     );
 
     original.base_graph.add_edges(
         node_indices[1],
-        vec![
-            node_indices[2]
-        ],
+        vec![node_indices[2]],
         BaseEdgeStruct::new(false, 23, 0),
     );
 
     original.base_graph.add_edges(
         node_indices[2],
-        vec![
-            node_indices[3]
-        ],
+        vec![node_indices[3]],
         BaseEdgeStruct::new(false, 34, 0),
     );
 
     original.base_graph.add_edges(
         node_indices[3],
-        vec![
-            node_indices[1]
-        ],
+        vec![node_indices[1]],
         BaseEdgeStruct::new(false, 42, 0),
     );
 
@@ -382,7 +371,12 @@ fn test_split_infinite_cycle_failure() {
     let success = CommonSuffixSplitter::split(&mut graph, node_indices[1]);
     assert!(success);
 
-    let vertex_set = graph.base_graph.graph.node_indices().map(|node| node.clone()).collect::<Vec<NodeIndex>>();
+    let vertex_set = graph
+        .base_graph
+        .graph
+        .node_indices()
+        .map(|node| node.clone())
+        .collect::<Vec<NodeIndex>>();
     for v in vertex_set {
         let success = CommonSuffixSplitter::split(&mut graph, v);
         assert!(!success);

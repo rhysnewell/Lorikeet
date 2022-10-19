@@ -1,6 +1,8 @@
+use annotator::variant_annotation::VariantAnnotations::AlleleCount;
 use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use haplotype::haplotype::Haplotype;
 use hashlink::linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashSet;
 use model::allele_list::AlleleList;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variants::NON_REF_ALLELE;
@@ -15,8 +17,6 @@ use std::hash::Hash;
 use test_utils::allele_list_unit_tester::AlleleListUnitTester;
 use utils::math_utils::MathUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
-use hashlink::LinkedHashSet;
-use annotator::variant_annotation::VariantAnnotations::AlleleCount;
 
 lazy_static! {
     pub static ref LOG_10_INFORMATIVE_THRESHOLD: f64 = 0.2;
@@ -170,20 +170,21 @@ impl<A: Allele> AlleleLikelihoods<A> {
 
     pub fn consume_likelihoods<B: Allele>(
         alleles: AlleleList<A>,
-        other: AlleleLikelihoods<B>
+        other: AlleleLikelihoods<B>,
     ) -> Self {
         let reference_allele_index = Self::find_reference_allele_index(&alleles);
         Self {
             evidence_by_sample_index: other.evidence_by_sample_index,
             filtered_evidence_by_sample_index: other.filtered_evidence_by_sample_index,
             values_by_sample_index: other.values_by_sample_index,
-            likelihoods_matrix_evidence_capacity_by_sample_index: other.likelihoods_matrix_evidence_capacity_by_sample_index,
+            likelihoods_matrix_evidence_capacity_by_sample_index: other
+                .likelihoods_matrix_evidence_capacity_by_sample_index,
             number_of_evidences: other.number_of_evidences,
             samples: other.samples,
             alleles,
             reference_allele_index,
             is_natural_log: other.is_natural_log,
-            subsetted_genomic_loc: other.subsetted_genomic_loc
+            subsetted_genomic_loc: other.subsetted_genomic_loc,
         }
     }
 
@@ -391,7 +392,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             if !(allele_count == 0 || allele_count == 1) {
                 for s in 0..self.values_by_sample_index.len() {
                     if !self.evidence_by_sample_index.contains_key(&s) {
-                        continue
+                        continue;
                     }
                     let evidence_count = self.evidence_by_sample_index.get(&s).unwrap().len();
                     for r in 0..evidence_count {
@@ -630,7 +631,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
     pub fn marginalize<'b, B: Allele>(
         &self,
         new_to_old_allele_map: &'b LinkedHashMap<usize, Vec<&'b A>>,
-        new_allele_list: AlleleList<B>
+        new_allele_list: AlleleList<B>,
     ) -> AlleleLikelihoods<B> {
         let new_alleles_indices = new_to_old_allele_map.keys().collect::<Vec<&usize>>();
         let old_allele_count = self.alleles.len();
@@ -638,8 +639,11 @@ impl<A: Allele> AlleleLikelihoods<A> {
 
         // we get the index correspondence between new old -> new allele, None entries mean that the old
         // allele does not map to any new; supported but typically not the case.
-        let old_to_new_allele_index_map =
-            self.old_to_new_allele_index_map(new_to_old_allele_map, old_allele_count, new_alleles_indices);
+        let old_to_new_allele_index_map = self.old_to_new_allele_index_map(
+            new_to_old_allele_map,
+            old_allele_count,
+            new_alleles_indices,
+        );
         // debug!("old to new allele map {:?}", &old_to_new_allele_index_map);
         // We calculate the marginal likelihoods.
         let new_likelihood_values = self.marginal_likelihoods(
@@ -695,12 +699,11 @@ impl<A: Allele> AlleleLikelihoods<A> {
         debug!("new allele count {}", new_allele_count);
 
         for s in 0..sample_count {
-
             let old_sample_values = &self.values_by_sample_index[s];
             // debug!("OLD: s -> {} rows -> {} cols -> {}", s, old_sample_values.nrows(), old_sample_values.ncols());
             let sample_evidence_count = std::cmp::min(
                 self.evidence_by_sample_index.get(&s).unwrap().len(),
-                old_sample_values.ncols()
+                old_sample_values.ncols(),
             );
             let mut new_sample_values = Array2::zeros((new_allele_count, sample_evidence_count));
             // We initiate all likelihoods to -Inf.
@@ -759,9 +762,15 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .filter(|(_, read)| !predicate(read, interval))
                 .map(|(idx, _)| idx)
                 .collect::<Vec<usize>>();
-            debug!("Before remove {}", self.evidence_by_sample_index.get(&s).unwrap().len());
+            debug!(
+                "Before remove {}",
+                self.evidence_by_sample_index.get(&s).unwrap().len()
+            );
             self.remove_evidence_by_index(s, remove_indices);
-            debug!("After remove {}", self.evidence_by_sample_index.get(&s).unwrap().len());
+            debug!(
+                "After remove {}",
+                self.evidence_by_sample_index.get(&s).unwrap().len()
+            );
 
             // If applicable also apply the predicate to the filters
             self.filtered_evidence_by_sample_index
@@ -788,7 +797,6 @@ impl<A: Allele> AlleleLikelihoods<A> {
             if new_sample_evidence.is_empty() {
                 continue;
             };
-
 
             let old_evidence_count = self
                 .evidence_by_sample_index
@@ -915,7 +923,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             let mut indexes_to_remove;
             {
                 if !self.evidence_by_sample_index.contains_key(&sample_index) {
-                    continue
+                    continue;
                 }
                 let sample_evidence = self.evidence_by_sample_index.get(&sample_index).unwrap();
                 let number_of_evidence = sample_evidence.len();
@@ -1055,8 +1063,11 @@ impl<A: Allele> AlleleLikelihoods<A> {
         );
 
         let evidence_count = std::cmp::min(
-            self.evidence_by_sample_index.get(&sample_index).unwrap().len(),
-            self.values_by_sample_index[sample_index].ncols()
+            self.evidence_by_sample_index
+                .get(&sample_index)
+                .unwrap()
+                .len(),
+            self.values_by_sample_index[sample_index].ncols(),
         );
 
         return (0..evidence_count)

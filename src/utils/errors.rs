@@ -1,5 +1,5 @@
-use std::fmt;
 use std::error::Error;
+use std::fmt;
 
 #[derive(Clone)]
 pub enum BirdToolError {
@@ -10,7 +10,7 @@ pub enum BirdToolError {
     SkipException(String),
     InvalidVariationEvent(String),
     ProcessPanicked(String),
-    DebugError(String)
+    DebugError(String),
 }
 
 // Implement std::fmt::Display for AppError
@@ -37,7 +37,7 @@ impl Error for BirdToolError {
             | BirdToolError::SkipException(val)
             | BirdToolError::InvalidVariationEvent(val)
             | BirdToolError::ProcessPanicked(val)
-            | BirdToolError::DebugError(val) => val
+            | BirdToolError::DebugError(val) => val,
         }
     }
 }

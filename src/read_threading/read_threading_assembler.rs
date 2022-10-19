@@ -12,13 +12,14 @@ use graphs::k_best_haplotype::KBestHaplotype;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
 use haplotype::haplotype::Haplotype;
-use hashlink::{LinkedHashSet, LinkedHashMap};
+use hashlink::{LinkedHashMap, LinkedHashSet};
 use model::byte_array_allele::Allele;
 use ordered_float::OrderedFloat;
 use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use petgraph::stable_graph::NodeIndex;
 use rayon::prelude::*;
 // use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
+use graphs::low_weight_chain_pruner::LowWeightChainPruner;
 use read_error_corrector::read_error_corrector::ReadErrorCorrector;
 use read_threading::abstract_read_threading_graph::{AbstractReadThreadingGraph, SequenceForKmers};
 use read_threading::read_threading_graph::ReadThreadingGraph;
@@ -29,7 +30,6 @@ use rust_htslib::bam::record::{Cigar, CigarString};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use utils::simple_interval::{Locatable, SimpleInterval};
-use graphs::low_weight_chain_pruner::LowWeightChainPruner;
 
 #[derive(Debug, Clone)]
 pub struct ReadThreadingAssembler {
@@ -92,19 +92,14 @@ impl ReadThreadingAssembler {
         kmer_sizes.sort_unstable();
 
         let chain_pruner = if use_adaptive_pruning {
-            ChainPruner::AdaptiveChainPruner(
-                AdaptiveChainPruner::new(
+            ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
                 initial_error_rate_for_pruning,
                 pruning_log_odds_threshold,
                 pruning_seeding_log_odds_threshold,
                 max_unpruned_variants,
             ))
         } else {
-            ChainPruner::LowWeightChainPruner(
-                LowWeightChainPruner::new(
-                    prune_factor
-                )
-            )
+            ChainPruner::LowWeightChainPruner(LowWeightChainPruner::new(prune_factor))
         };
 
         // TODO: //!use_linked_debruijn_graphs should be used for generate_seq_graph
@@ -280,7 +275,10 @@ impl ReadThreadingAssembler {
         // If we get to this point then no graph worked... thats bad and indicates something
         // horrible happened, in this case we just return a reference haplotype
         result_set.region_for_genotyping.reads = corrected_reads;
-        debug!("Found {} to compare every read against", result_set.haplotypes.len());
+        debug!(
+            "Found {} to compare every read against",
+            result_set.haplotypes.len()
+        );
         result_set
     }
 
@@ -403,7 +401,6 @@ impl ReadThreadingAssembler {
                         // pass
                     }
                     Some(assembly_result) => {
-
                         results.push(assembly_result);
                     }
                 };
@@ -950,8 +947,12 @@ impl ReadThreadingAssembler {
             1,
             true,
         );
-        debug!("1 - Graph Kmer {} Edges {} Nodes {}", kmer_size, rt_graph.base_graph.graph.edge_count(), rt_graph.base_graph.graph.node_count());
-
+        debug!(
+            "1 - Graph Kmer {} Edges {} Nodes {}",
+            kmer_size,
+            rt_graph.base_graph.graph.edge_count(),
+            rt_graph.base_graph.graph.node_count()
+        );
 
         // Next pull kmers out of every read and throw them on the graph
         debug!("1.5 - Reads {}", reads.len());
@@ -967,7 +968,12 @@ impl ReadThreadingAssembler {
         // let pending = rt_graph.get_pending(); // retrieve pending sequences and clear pending from graph
         // actually build the read threading graph
         rt_graph.build_graph_if_necessary(&mut pending);
-        debug!("2 - Graph Kmer {} Edges {} Nodes {}", kmer_size, rt_graph.base_graph.graph.edge_count(), rt_graph.base_graph.graph.node_count());
+        debug!(
+            "2 - Graph Kmer {} Edges {} Nodes {}",
+            kmer_size,
+            rt_graph.base_graph.graph.edge_count(),
+            rt_graph.base_graph.graph.node_count()
+        );
 
         if self.debug_graph_transformations {
             self.print_debug_graph_transform_abstract(
@@ -989,7 +995,12 @@ impl ReadThreadingAssembler {
             self.chain_pruner
                 .prune_low_weight_chains(rt_graph.get_base_graph_mut());
         }
-        debug!("3 - Graph Kmer {} Edges {} Nodes {}", kmer_size, rt_graph.base_graph.graph.edge_count(), rt_graph.base_graph.graph.node_count());
+        debug!(
+            "3 - Graph Kmer {} Edges {} Nodes {}",
+            kmer_size,
+            rt_graph.base_graph.graph.edge_count(),
+            rt_graph.base_graph.graph.node_count()
+        );
 
         // sanity check: make sure there are no cycles in the graph, unless we are in experimental mode
         if self.generate_seq_graph && rt_graph.has_cycles() {
@@ -1025,7 +1036,6 @@ impl ReadThreadingAssembler {
         }
 
         return Some(result);
-
     }
 
     fn get_assembly_result<A: AbstractReadThreadingGraph>(

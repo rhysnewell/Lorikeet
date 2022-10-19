@@ -226,7 +226,11 @@ impl Allele for ByteArrayAllele {
     }
 
     fn length(&self) -> usize {
-        if self.is_symbolic { 0 } else { self.len() }
+        if self.is_symbolic {
+            0
+        } else {
+            self.len()
+        }
     }
 
     fn is_symbolic(&self) -> bool {

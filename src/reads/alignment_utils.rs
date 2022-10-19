@@ -46,7 +46,8 @@ impl AlignmentUtils {
         avx_mode: AVXMode,
     ) -> BirdToolRead {
         // compute the smith-waterman alignment of read -> haplotype //TODO use more efficient than the read clipper here
-        let read_minus_soft_clips = ReadClipper::new(original_read.clone()).hard_clip_soft_clipped_bases();
+        let read_minus_soft_clips =
+            ReadClipper::new(original_read.clone()).hard_clip_soft_clipped_bases();
 
         let soft_clipped_bases = original_read.len() - read_minus_soft_clips.len();
 

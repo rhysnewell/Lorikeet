@@ -1,7 +1,6 @@
+use bird_tool_utils::external_command_checker::*;
 use std;
 use std::io::Read;
-use bird_tool_utils::external_command_checker::*;
-
 
 pub fn check_for_bwa() {
     check_for_external_command_presence("BWA", "which bwa").expect("Failed to find installed BWA");
@@ -51,4 +50,24 @@ pub fn check_for_minimap2() {
 pub fn check_for_ngmlr() {
     check_for_external_command_presence("ngmlr", "which ngmlr")
         .expect("Failed to find ngmlr installed");
+}
+
+pub fn check_for_pggb() {
+    check_for_external_command_presence("pggb", "which pggb")
+        .expect("Failed to find pggb installed");
+    info!("Valid pggb installation found")
+}
+
+pub fn check_for_fastani() {
+    check_for_external_command_presence("fastaANI", "which fastANI")
+        .expect("Failed to find installed fastANI");
+    default_version_check("fastANI", "1.31", false, None)
+        .expect("Failed to find sufficient version of fastANI");
+}
+
+pub fn check_for_dashing() {
+    check_for_external_command_presence("dashing", "which dashing")
+        .expect("Failed to find installed dashing. You may wish to use the finch precluster method if you are having problems with dashing.");
+    default_version_check("dashing", "0.4.0", true, None)
+        .expect("Failed to find sufficient version of dashing. You may wish to use the finch precluster method if you are having problems with dashing.");
 }

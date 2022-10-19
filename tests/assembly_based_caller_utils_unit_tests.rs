@@ -322,24 +322,32 @@ fn get_event_mapper_data() {
 fn test_get_variants_contexts_from_active_haplotypes(
     haplotypes: Vec<Haplotype<SimpleInterval>>,
     loc: usize,
-    expected_vcs_at_this_loc: Vec<&VariantContext>
+    expected_vcs_at_this_loc: Vec<&VariantContext>,
 ) {
-    let vcs_at_this_position = AssemblyBasedCallerUtils::get_variant_contexts_from_active_haplotypes(
-        loc,
-        &haplotypes,
-        true
-    );
+    let vcs_at_this_position =
+        AssemblyBasedCallerUtils::get_variant_contexts_from_active_haplotypes(
+            loc,
+            &haplotypes,
+            true,
+        );
 
-    assert_eq!(vcs_at_this_position.len(), expected_vcs_at_this_loc.len(), "Incorrect number of vcs returned");
+    assert_eq!(
+        vcs_at_this_position.len(),
+        expected_vcs_at_this_loc.len(),
+        "Incorrect number of vcs returned"
+    );
     for i in 0..expected_vcs_at_this_loc.len() {
         VariantContextTestUtils::assert_variant_contexts_are_equal(
             vcs_at_this_position[i],
             expected_vcs_at_this_loc[i],
             Vec::new(),
-            Vec::new()
+            Vec::new(),
         );
 
-        assert_eq!(vcs_at_this_position[i].source, expected_vcs_at_this_loc[i].source, "Sources differ {i}");
+        assert_eq!(
+            vcs_at_this_position[i].source, expected_vcs_at_this_loc[i].source,
+            "Sources differ {i}"
+        );
     }
 }
 
@@ -350,7 +358,10 @@ fn get_variant_contexts_from_active_haplotypes_data() {
     test_get_variants_contexts_from_active_haplotypes(dummy, 1000, dummy2);
 
     let mut snp_haplotype = Haplotype::new(b"ACTGGTCAACTGGTCAACTGGTCAACTGGTCA", false);
-    let snp_alleles = vec![ByteArrayAllele::new(b"A", true), ByteArrayAllele::new(b"G", false)];
+    let snp_alleles = vec![
+        ByteArrayAllele::new(b"A", true),
+        ByteArrayAllele::new(b"G", false),
+    ];
     let mut snp_vc = VariantContext::build(20, 1000, 1000, snp_alleles);
     snp_vc.source = "a".to_string();
     snp_vc.variant_type = Some(VariantType::Snp);
@@ -358,107 +369,140 @@ fn get_variant_contexts_from_active_haplotypes_data() {
 
     // this one matches above to test dup removal
     let mut snp_haplotype_duplicate = Haplotype::new(b"ACTGGTCAACTGGTCAACTGGTCAACTGGTCA", false);
-    let snp_alleles = vec![ByteArrayAllele::new(b"A", true), ByteArrayAllele::new(b"G", false)];
+    let snp_alleles = vec![
+        ByteArrayAllele::new(b"A", true),
+        ByteArrayAllele::new(b"G", false),
+    ];
     let mut snp_vc2 = VariantContext::build(20, 1000, 1000, snp_alleles);
     snp_vc2.source = "a".to_string();
     snp_vc2.variant_type = Some(VariantType::Snp);
 
-    let snp_alleles = vec![ByteArrayAllele::new(b"T", true), ByteArrayAllele::new(b"A", false)];
+    let snp_alleles = vec![
+        ByteArrayAllele::new(b"T", true),
+        ByteArrayAllele::new(b"A", false),
+    ];
     let mut snp_vc3 = VariantContext::build(20, 1020, 1020, snp_alleles);
     snp_vc3.source = "a".to_string();
     snp_vc3.variant_type = Some(VariantType::Snp);
     snp_haplotype_duplicate.set_event_map(EventMap::state_for_testing(vec![snp_vc2, snp_vc3]));
 
-
     let mut deletion_haplotype = Haplotype::new(b"ACTGGTCAGGTCAACTGGTCA", false);
-    let deletion_alleles = vec![ByteArrayAllele::new(b"ACTGGTCAACT", true), ByteArrayAllele::new(b"A", false)];
+    let deletion_alleles = vec![
+        ByteArrayAllele::new(b"ACTGGTCAACT", true),
+        ByteArrayAllele::new(b"A", false),
+    ];
     let mut deletion_vc = VariantContext::build(20, 995, 1005, deletion_alleles);
     deletion_vc.source = "a".to_string();
     deletion_vc.variant_type = Some(VariantType::Indel);
     deletion_haplotype.set_event_map(EventMap::state_for_testing(vec![deletion_vc.clone()]));
 
     let mut deletion_false_haplotype = Haplotype::new(b"ACTGGTCAGGTCAACTGGTCA", false);
-    let deletion_false_alleles = vec![ByteArrayAllele::new(b"ACTGGTCAACT", true), ByteArrayAllele::new(b"A", false)];
+    let deletion_false_alleles = vec![
+        ByteArrayAllele::new(b"ACTGGTCAACT", true),
+        ByteArrayAllele::new(b"A", false),
+    ];
     let mut deletion_false_vc = VariantContext::build(20, 998, 1008, deletion_false_alleles);
     deletion_false_vc.source = "a".to_string();
     deletion_false_vc.variant_type = Some(VariantType::Indel);
-    deletion_false_haplotype.set_event_map(EventMap::state_for_testing(vec![deletion_false_vc.clone()]));
+    deletion_false_haplotype
+        .set_event_map(EventMap::state_for_testing(vec![deletion_false_vc.clone()]));
 
     // doesn't overlap 1000
-    let mut deletion_haplotype_no_span = Haplotype::new(b"CAACTGGTCAACTGGTCAACTGGTCAACTGGTCAACTGGTCA", false);
-    let deletion_alleles_no_span = vec![ByteArrayAllele::new(b"GTCAA", true), ByteArrayAllele::new(b"G", false)];
+    let mut deletion_haplotype_no_span =
+        Haplotype::new(b"CAACTGGTCAACTGGTCAACTGGTCAACTGGTCAACTGGTCA", false);
+    let deletion_alleles_no_span = vec![
+        ByteArrayAllele::new(b"GTCAA", true),
+        ByteArrayAllele::new(b"G", false),
+    ];
     let mut deletion_vc_no_span = VariantContext::build(20, 990, 994, deletion_alleles_no_span);
     deletion_vc_no_span.source = "a".to_string();
     deletion_vc_no_span.variant_type = Some(VariantType::Indel);
-    deletion_haplotype_no_span.set_event_map(EventMap::state_for_testing(vec![deletion_vc_no_span]));
-
+    deletion_haplotype_no_span
+        .set_event_map(EventMap::state_for_testing(vec![deletion_vc_no_span]));
 
     test_get_variants_contexts_from_active_haplotypes(
-        vec![snp_haplotype.clone()], 1000, vec![&snp_vc]
+        vec![snp_haplotype.clone()],
+        1000,
+        vec![&snp_vc],
     );
     test_get_variants_contexts_from_active_haplotypes(
         vec![snp_haplotype.clone(), snp_haplotype_duplicate.clone()],
         1000,
-        vec![&snp_vc]
+        vec![&snp_vc],
     );
     test_get_variants_contexts_from_active_haplotypes(
         vec![deletion_haplotype.clone()],
         995,
-        vec![&deletion_vc]
+        vec![&deletion_vc],
     );
     test_get_variants_contexts_from_active_haplotypes(
         vec![deletion_haplotype.clone()],
         1000,
-        vec![&deletion_vc]
+        vec![&deletion_vc],
     );
     test_get_variants_contexts_from_active_haplotypes(
-        vec![deletion_haplotype.clone(), deletion_haplotype_no_span.clone()],
+        vec![
+            deletion_haplotype.clone(),
+            deletion_haplotype_no_span.clone(),
+        ],
         1000,
-        vec![&deletion_vc]
+        vec![&deletion_vc],
     );
     test_get_variants_contexts_from_active_haplotypes(
-        vec![deletion_haplotype.clone(), deletion_false_haplotype.clone(), deletion_haplotype_no_span.clone()],
+        vec![
+            deletion_haplotype.clone(),
+            deletion_false_haplotype.clone(),
+            deletion_haplotype_no_span.clone(),
+        ],
         1000,
-        vec![&deletion_vc, &deletion_false_vc]
+        vec![&deletion_vc, &deletion_false_vc],
     );
     test_get_variants_contexts_from_active_haplotypes(
         vec![deletion_haplotype.clone(), snp_haplotype.clone()],
         1000,
-        vec![&deletion_vc, &snp_vc]
+        vec![&deletion_vc, &snp_vc],
     );
 
     let mut same_loc_del1_haplotype = Haplotype::new(b"AAAAAAAGAAA", false);
-    let same_loc_del1_alleles = vec![ByteArrayAllele::new(b"GTT", true), ByteArrayAllele::new(b"G", false)];
+    let same_loc_del1_alleles = vec![
+        ByteArrayAllele::new(b"GTT", true),
+        ByteArrayAllele::new(b"G", false),
+    ];
     let mut same_loc_del1_vc = VariantContext::build(20, 10093568, 10093570, same_loc_del1_alleles);
     same_loc_del1_vc.source = "a".to_string();
     same_loc_del1_vc.variant_type = Some(VariantType::Indel);
-    same_loc_del1_haplotype.set_event_map(EventMap::state_for_testing(vec![same_loc_del1_vc.clone()]));
+    same_loc_del1_haplotype
+        .set_event_map(EventMap::state_for_testing(vec![same_loc_del1_vc.clone()]));
 
     let mut same_loc_del2_haplotype = Haplotype::new(b"AAAAAAAGTAAA", false);
-    let same_loc_del2_alleles = vec![ByteArrayAllele::new(b"GT", true), ByteArrayAllele::new(b"G", false)];
+    let same_loc_del2_alleles = vec![
+        ByteArrayAllele::new(b"GT", true),
+        ByteArrayAllele::new(b"G", false),
+    ];
     let mut same_loc_del2_vc = VariantContext::build(20, 10093568, 10093569, same_loc_del2_alleles);
     same_loc_del2_vc.source = "a".to_string();
     same_loc_del2_vc.variant_type = Some(VariantType::Indel);
-    same_loc_del2_haplotype.set_event_map(EventMap::state_for_testing(vec![same_loc_del2_vc.clone()]));
+    same_loc_del2_haplotype
+        .set_event_map(EventMap::state_for_testing(vec![same_loc_del2_vc.clone()]));
 
     let mut same_loc_ins1_haplotype = Haplotype::new(b"AAAAAAAGTTTAAA", false);
-    let same_loc_ins1_alleles = vec![ByteArrayAllele::new(b"G", true), ByteArrayAllele::new(b"GT", false)];
+    let same_loc_ins1_alleles = vec![
+        ByteArrayAllele::new(b"G", true),
+        ByteArrayAllele::new(b"GT", false),
+    ];
     let mut same_loc_ins1_vc = VariantContext::build(20, 10093568, 10093568, same_loc_ins1_alleles);
     same_loc_ins1_vc.source = "a".to_string();
     same_loc_ins1_vc.variant_type = Some(VariantType::Indel);
-    same_loc_ins1_haplotype.set_event_map(EventMap::state_for_testing(vec![same_loc_ins1_vc.clone()]));
+    same_loc_ins1_haplotype
+        .set_event_map(EventMap::state_for_testing(vec![same_loc_ins1_vc.clone()]));
 
     test_get_variants_contexts_from_active_haplotypes(
         vec![
             same_loc_del1_haplotype.clone(),
             same_loc_del2_haplotype.clone(),
-            same_loc_ins1_haplotype.clone()
+            same_loc_ins1_haplotype.clone(),
         ],
         10093568,
-        vec![
-            &same_loc_del1_vc,
-            &same_loc_del2_vc,
-            &same_loc_ins1_vc
-        ]
+        vec![&same_loc_del1_vc, &same_loc_del2_vc, &same_loc_ins1_vc],
     )
 }

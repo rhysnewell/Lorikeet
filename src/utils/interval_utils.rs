@@ -1,5 +1,5 @@
-use utils::simple_interval::SimpleInterval;
 use clap::ArgMatches;
+use utils::simple_interval::SimpleInterval;
 
 pub struct IntervalUtils {}
 
