@@ -3,10 +3,8 @@ extern crate openssl_sys;
 
 extern crate galah;
 use galah::PreclusterDistanceFinder;
-use galah::cluster_argument_parsing::Preclusterer;
 use galah::sorted_pair_genome_distance_cache::SortedPairGenomeDistanceCache;
 use galah::{dashing::DashingPreclusterer, finch::FinchPreclusterer};
-use galah::cluster_argument_parsing::GalahClusterer;
 
 extern crate lorikeet_genome;
 use lorikeet_genome::cli::*;
@@ -39,7 +37,7 @@ use std::path;
 use std::process;
 use std::process::Stdio;
 use std::sync::{Mutex, Arc};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 extern crate tempfile;
 use tempfile::NamedTempFile;
@@ -56,7 +54,7 @@ use log::LevelFilter;
 extern crate env_logger;
 use env_logger::Builder;
 use lorikeet_genome::processing::lorikeet_engine::{
-    run_summarize, start_lorikeet_engine, ReadType, Elem, LorikeetEngine,
+    run_summarize, start_lorikeet_engine, ReadType, Elem
 };
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
 use lorikeet_genome::utils::errors::BirdToolError;
@@ -200,7 +198,7 @@ fn run_pangenome(m: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>>
 
         // create GalahClusterer
         // match preclusterer, dashing or finch
-        let mut preclusterer: Box<dyn PreclusterDistanceFinder> = 
+        let preclusterer: Box<dyn PreclusterDistanceFinder> = 
             match m.value_of("precluster-method").unwrap() {
                 "dashing" => {
                     external_command_checker::check_for_dashing();
@@ -234,9 +232,6 @@ fn run_pangenome(m: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>>
             &dashing_cache
         );
         trace!("Found preclusters: {:?}", minhash_preclusters);
-
-        let all_clusters: Mutex<Vec<Vec<usize>>> = Mutex::new(vec![]);
-
         // Convert single linkage data structure into just a list of list of indices
         let mut clusters: Vec<Vec<usize>> = minhash_preclusters
             .all_sets()
@@ -272,7 +267,7 @@ fn run_pangenome(m: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>>
             clusters.len() + 1
         ];
 
-        let mut progress_bar = multi_inner.add(progress_bars[0].progress_bar.clone());
+        let progress_bar = multi_inner.add(progress_bars[0].progress_bar.clone());
         progress_bar.set_style(sty_eta.clone());
         progress_bar.set_message("Genome clusters to align");
         progress_bar.enable_steady_tick(Duration::from_millis(200));
@@ -286,7 +281,7 @@ fn run_pangenome(m: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         debug!("Setting progress bar styles");
         clusters.iter().enumerate().for_each(|(i, cluster)| {
             
-            let mut progress_bar = multi_inner.add(ProgressBar::new(cluster.len() as u64));
+            let progress_bar = multi_inner.add(ProgressBar::new(cluster.len() as u64));
             progress_bar.set_style(sty_eta.clone());
             progress_bar.set_message(format!("Aligning cluster {}", i));
             progress_bars[i + 1] = Elem {
@@ -342,8 +337,8 @@ fn run_pangenome(m: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>>
                             let seq2 = seqrec2.seq();
                             // iterate seq1 and seq2 in chunks of size MAX_I16 and align
                             // each chunk
-                            seq1.chunks(MAX_I16 as usize).enumerate().for_each(|(i, chunk1)| {
-                                seq2.chunks(MAX_I16 as usize).enumerate().for_each(|(j, chunk2)| {
+                            seq1.chunks(MAX_I16 as usize).for_each(|chunk1| {
+                                seq2.chunks(MAX_I16 as usize).for_each(|chunk2| {
                                     let _ = SmithWatermanAligner::align(
                                         &chunk1,
                                         &chunk2,
@@ -357,16 +352,16 @@ fn run_pangenome(m: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>>
                         }
                     }
                 });
-                let mut tree = tree.lock().unwrap();
+                let tree = tree.lock().unwrap();
                 tree[cluster_index + 1].progress_bar.inc(1);
             });
             // increment top level of multi progress bar in tree
-            let mut tree = tree.lock().unwrap();
+            let tree = tree.lock().unwrap();
             tree[0].progress_bar.inc(1);
             tree[cluster_index + 1].progress_bar.finish();
         });
         // finish all progress bars in tree
-        let mut tree = tree.lock().unwrap();
+        let tree = tree.lock().unwrap();
         tree[0].progress_bar.finish();
         // pb.finish();
     }
