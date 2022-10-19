@@ -2,13 +2,15 @@
 
 name = "lorikeet-genome"
 version = "0.7.3"
-authors = ["Rhys Newell <rhys.newell@hdr.qut.edu.au>"]
+authors = ["Rhys Newell <rhys.newell94@gmail.com>"]
 license = "GPL-3.0"
 description = "Strain resolver and variant caller via local reassembly for metagenomics"
 homepage = "https://rhysnewell.github.io/Lorikeet/"
 repository = "https://github.com/rhysnewell/Lorikeet"
 documentation = "https://github.com/rhysnewell/Lorikeet"
 readme = "README.md"
+keywords = ["bioinformatics", "metagenomics", "variant-calling", "strain-resolver"]
+categories = ["bioinformatics::metagenomics", "bioinformatics::variant-calling", "bioinformatics::strain-resolver"]
 exclude = [
   "tests/*"
 ]
