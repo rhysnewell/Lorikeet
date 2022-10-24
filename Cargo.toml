@@ -65,7 +65,7 @@ rust-htslib = { version="0.39.*", default-features = false }
 serde = "^1"
 serde_derive = "^1"
 strum = "^0.17.1"
-strum_macros = "^0.17.1"
+strum_macros = "^0.24.3"
 statrs = "0.13"
 tempdir = "^0.3"
 tempfile = "^3"
