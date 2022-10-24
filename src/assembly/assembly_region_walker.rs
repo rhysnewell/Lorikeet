@@ -2,7 +2,7 @@ use activity_profile::activity_profile::Profile;
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_region_iterator::AssemblyRegionIterator;
-use coverm::genomes_and_contigs::GenomesAndContigs;
+use reference::reference_reader_utils::GenomesAndContigs;
 use coverm::FlagFilter;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use itertools::Itertools;

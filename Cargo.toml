@@ -55,7 +55,6 @@ num = "0.4.0"
 openssl-sys = "^0.9"
 openssl = {version = "^0.10", features = ["vendored"]}
 ordered-float = "1"
-parasailors = "^0.3"
 partitions = "^0.2"
 petgraph = {version = "^0.6.0", features = ["stable_graph"]}
 pyo3 = "^0.17"

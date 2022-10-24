@@ -4,7 +4,7 @@ use assembly::assembly_region_walker::AssemblyRegionWalker;
 use bio::io::gff::GffType::GFF3;
 use bird_tool_utils::command::finish_command_safely;
 use coverm::bam_generator::*;
-use coverm::genomes_and_contigs::GenomesAndContigs;
+use reference::reference_reader_utils::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::FlagFilter;
 use evolve::codon_structs::{CodonTable, Translations};
@@ -181,7 +181,7 @@ impl<'a> LorikeetEngine<'a> {
                                 let mut reference_reader = ReferenceReader::new(
                                     &Some(reference_stem.to_string()),
                                     genomes_and_contigs.clone(),
-                                    genomes_and_contigs.contig_to_genome.len(),
+                                    genomes_and_contigs.contigs,
                                 );
 
                                 if self.args.is_present("calculate-fst") {
@@ -348,7 +348,7 @@ impl<'a> LorikeetEngine<'a> {
                     let mut reference_reader = ReferenceReader::new(
                         &Some(reference_stem.to_string()),
                         genomes_and_contigs.clone(),
-                        genomes_and_contigs.contig_to_genome.len(),
+                        genomes_and_contigs.contigs,
                     );
 
                     let mut per_reference_samples = 0;
@@ -986,7 +986,7 @@ impl<'a> LorikeetEngine<'a> {
         for reference in references.iter() {
             debug!(
                 "Genomes {:?} contigs {:?}",
-                &genomes_and_contigs.genomes, &genomes_and_contigs.contig_to_genome,
+                &genomes_and_contigs.genomes, &genomes_and_contigs.contigs,
             );
 
             let ref_idx = genomes_and_contigs

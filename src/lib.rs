@@ -37,6 +37,7 @@ extern crate bio;
 extern crate bio_types;
 extern crate gkl;
 extern crate rust_htslib;
+extern crate needletail;
 
 // Birds and CoverM
 extern crate bird_tool_utils;

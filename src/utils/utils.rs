@@ -23,6 +23,21 @@ pub const DEFAULT_MAPPING_SOFTWARE_ENUM: MappingProgram = MappingProgram::MINIMA
 //     if let Some(mut factorial) =
 // }
 
+/// Finds the first occurence of element in a slice
+pub fn find_first<T>(slice: &[T], element: T) -> Result<usize, &'static str>
+where
+    T: std::cmp::PartialEq<T>,
+{
+    let mut index: usize = 0;
+    for el in slice {
+        if *el == element {
+            return Ok(index);
+        }
+        index += 1;
+    }
+    return Err("Element not found in slice");
+}
+
 // pub fn finish_and_clear()
 
 /**

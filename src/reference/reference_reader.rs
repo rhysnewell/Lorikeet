@@ -1,5 +1,5 @@
 use bio::io::fasta::IndexedReader;
-use coverm::genomes_and_contigs::GenomesAndContigs;
+use reference::reference_reader_utils::GenomesAndContigs;
 use hashlink::LinkedHashSet;
 use rayon::prelude::*;
 use reference::reference_reader_utils::ReferenceReaderUtils;
@@ -194,13 +194,6 @@ impl ReferenceReader {
 
     pub fn update_current_sequence_without_capacity(&mut self) {
         self.current_sequence = Vec::new();
-    }
-
-    pub fn match_target_name_and_ref_idx(&self, ref_idx: usize, target_name: &str) -> bool {
-        match self.genomes_and_contigs.contig_to_genome.get(target_name) {
-            Some(ref_id) => *ref_id == ref_idx,
-            None => false,
-        }
     }
 
     pub fn retrieve_contig_name_from_tid(&self, tid: usize) -> Option<&Vec<u8>> {

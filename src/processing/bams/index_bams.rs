@@ -1,5 +1,5 @@
 use coverm::bam_generator::*;
-use coverm::genomes_and_contigs::GenomesAndContigs;
+use reference::reference_reader_utils::GenomesAndContigs;
 use glob::glob;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;

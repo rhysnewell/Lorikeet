@@ -11,7 +11,7 @@ use bio::stats::{LogProb, PHREDProb};
 use bio_types::sequence::SequenceRead;
 use clap::ArgMatches;
 use coverm::bam_generator::*;
-use coverm::genomes_and_contigs::GenomesAndContigs;
+use reference::reference_reader_utils::GenomesAndContigs;
 use coverm::FlagFilter;
 use genotype::genotype_builder::{Genotype, GenotypesContext};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
@@ -365,7 +365,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                             target_name.contains(&reference)
                         };
                         if target_match
-                            || reference_reader.match_target_name_and_ref_idx(ref_idx, target_name)
                         {
                             // Get contig stats
                             reference_reader.update_ref_index_tids(ref_idx, tid);
