@@ -35,7 +35,7 @@ clap_complete = "^3"
 compare = "0.1.0"
 coverm = {git = "https://github.com/rhysnewell/CoverM", branch = "main"}
 galah = { git = "https://github.com/wwood/galah" }
-hashlink = "^0.7"
+hashlink = "^0.8"
 hts-sys = "2.0.3"
 enum-ordinalize = "^3.1"
 env_logger = "0.6"
