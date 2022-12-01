@@ -38,7 +38,7 @@ galah = { git = "https://github.com/wwood/galah" }
 hashlink = "^0.7"
 hts-sys = "2.0.3"
 enum-ordinalize = "^3.1"
-env_logger = "0.6"
+env_logger = "0.10"
 glob = "^0.3"
 gkl = "^0.1.1"
 indexmap = "^1.7"
