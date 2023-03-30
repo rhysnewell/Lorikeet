@@ -19,8 +19,6 @@ extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
-#[macro_use]
-extern crate ntest;
 
 use coverm::bam_generator::generate_indexed_named_bam_readers_from_bam_files;
 use coverm::bam_generator::IndexedNamedBamReader;
@@ -39,10 +37,12 @@ fn test_fetch_coordinates() {
     let start = 1000;
     let stop = 2000;
 
-    bam_generated.fetch((
-        0, start, // fetch is possibly 1-based
-        stop,
-    ));
+    bam_generated
+        .fetch((
+            0, start, // fetch is possibly 1-based
+            stop,
+        ))
+        .expect("Unable to fetch coordinates");
 
     let mut records = Vec::new();
     let mut record = Record::new();

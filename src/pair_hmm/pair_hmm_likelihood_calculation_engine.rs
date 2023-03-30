@@ -217,10 +217,8 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
         let mut result = AlleleLikelihoods::new(haplotypes.clone(), samples, per_sample_read_list);
 
         for i in 0..sample_count {
-            if !result
-                .evidence_by_sample_index
-                .contains_key(&i) {
-                continue
+            if !result.evidence_by_sample_index.contains_key(&i) {
+                continue;
             }
             self.compute_read_likelihoods_in_matrix(i, &mut result, &mut pair_hmm);
         }
@@ -389,7 +387,8 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
                         read_del_quals,
                     )
                 } else {
-                    let maybe_unclipped = ReadClipper::new(read.clone()).hard_clip_soft_clipped_bases();
+                    let maybe_unclipped =
+                        ReadClipper::new(read.clone()).hard_clip_soft_clipped_bases();
                     let bases = maybe_unclipped.bases.as_slice();
 
                     let mut read_quals = maybe_unclipped.read.qual().to_vec();

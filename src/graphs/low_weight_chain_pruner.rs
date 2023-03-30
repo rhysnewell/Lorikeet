@@ -1,7 +1,7 @@
-use graphs::path::Path;
-use graphs::base_graph::BaseGraph;
 use graphs::base_edge::BaseEdge;
+use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
+use graphs::path::Path;
 
 /**
  * Prune all chains from this graph where all edges in the path have multiplicity < pruneFactor
@@ -13,26 +13,25 @@ use graphs::base_vertex::BaseVertex;
  */
 #[derive(Debug, Clone)]
 pub struct LowWeightChainPruner {
-    pub(crate) prune_factor: usize
+    pub(crate) prune_factor: usize,
 }
 
 impl LowWeightChainPruner {
     pub fn new(prune_factor: usize) -> Self {
-        Self {
-            prune_factor
-        }
+        Self { prune_factor }
     }
 
-    pub fn needs_pruning<
-        'a,
-        V: BaseVertex + std::marker::Sync,
-        E: BaseEdge + std::marker::Sync,
-    >(&self, graph: &BaseGraph<V, E>, chain: &Path) -> bool {
-        chain.get_edges().iter().all(|e| match graph.graph.edge_weight(*e) {
-            None => panic!("Edge index not in graph"),
-            Some(edge) => {
-                edge.get_pruning_multiplicity() < self.prune_factor && !edge.is_ref()
-            }
-        })
+    pub fn needs_pruning<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync>(
+        &self,
+        graph: &BaseGraph<V, E>,
+        chain: &Path,
+    ) -> bool {
+        chain
+            .get_edges()
+            .iter()
+            .all(|e| match graph.graph.edge_weight(*e) {
+                None => panic!("Edge index not in graph"),
+                Some(edge) => edge.get_pruning_multiplicity() < self.prune_factor && !edge.is_ref(),
+            })
     }
 }

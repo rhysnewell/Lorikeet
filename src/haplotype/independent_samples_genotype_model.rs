@@ -55,8 +55,7 @@ impl IndependentSamplesGenotypesModel {
         padded_reference: &[u8],
         offset_for_into_event: usize,
     ) -> Vec<GenotypeLikelihoods> {
-        let permutation = read_likelihoods_alleles
-            .permutation(genotyping_alleles.clone());
+        let permutation = read_likelihoods_alleles.permutation(genotyping_alleles.clone());
         let mut allele_likelihood_matrix_mapper = AlleleLikelihoodMatrixMapper::new(permutation);
 
         let sample_count = read_likelihoods.samples.len();

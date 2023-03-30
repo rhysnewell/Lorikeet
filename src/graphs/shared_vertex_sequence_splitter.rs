@@ -264,7 +264,6 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
         let need_suffix_node =
             !self.suffix_v.is_empty() || (bot.is_none() && !has_only_prefix_suffix_edges);
 
-
         let mut outer_prefix_index = None;
         if need_prefix_node {
             outer_prefix_index = Some(self.add_prefix_node_and_edges(top));

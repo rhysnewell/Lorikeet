@@ -1,321 +1,1053 @@
+use bird_tool_utils::clap_utils::{add_clap_verbosity_flags, default_roff, monospace_roff};
+use bird_tool_utils_man::prelude::{Author, Example, Flag, Manual, Opt, Section};
 use clap::*;
+use clap_complete::*;
+use galah::cluster_argument_parsing::GalahClustererCommandDefinition;
+use roff::bold as roff_bold;
+use roff::Roff;
+use utils::utils::table_roff;
+
+// See https://github.com/rust-cli/roff-rs/issues/19
+fn bold(s: &str) -> String {
+    Roff::new().text([roff_bold(s)]).to_roff()
+}
 
 const MAPPING_SOFTWARE_LIST: &[&str] = &[
     "bwa-mem",
+    "bwa-mem2",
     "minimap2-sr",
     "minimap2-ont",
     "minimap2-pb",
+    "minimap2-hifi",
     "minimap2-no-preset",
-    "ngmlr",
+    "ngmlr-ont",
+    "ngmlr-pb",
 ];
 const DEFAULT_MAPPING_SOFTWARE: &str = "minimap2-sr";
 
-const LONGREAD_MAPPING_SOFTWARE_LIST: &[&str] =
-    &["minimap2-ont", "minimap2-pb", "ngmlr-ont", "ngmlr-pb"];
+const LONGREAD_MAPPING_SOFTWARE_LIST: &[&str] = &[
+    "minimap2-ont",
+    "minimap2-pb",
+    "minimap2-hifi",
+    "ngmlr-ont",
+    "ngmlr-pb",
+];
 const DEFAULT_LONGREAD_MAPPING_SOFTWARE: &str = "minimap2-ont";
 
-const MAPPER_HELP: &str = "
-Read mapping options:
-  --mapper <NAME>                 Underlying mapping software used for short reads
-                                  (\"minimap2-sr\", \"bwa-mem\",
-                                  \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
-                                  \"minimap2-pb\", or \"minimap2-no-preset\").
-                                  minimap2 -sr, -ont, -pb, -no-preset specify
-                                  '-x' preset of minimap2 to be used
-                                  (with map-ont, map-pb for -ont, -pb).
-                                  [default: \"minimap2-sr\"] \n
-  --longread-mapper <NAME>        Underlying mapping software used for long reads
-                                  (\"minimap2-sr\", \"bwa-mem\",
-                                  \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
-                                  \"minimap2-pb\", or \"minimap2-no-preset\").
-                                  minimap2 -sr, -ont, -pb, -no-preset specify
-                                  '-x' preset of minimap2 to be used
-                                  (with map-ont, map-pb for -ont, -pb).
-                                  [default: \"minimap2-ont\"] \n
-  --minimap2-params PARAMS        Extra parameters to provide to minimap2,
-                                  both indexing command (if used) and for
-                                  mapping. Note that usage of this parameter
-                                  has security implications if untrusted input
-                                  is specified. '-a' is always specified.
-                                  [default \"\"] \n
-  --minimap2-reference-is-index   Treat reference as a minimap2 database, not
-                                  as a FASTA file.\n
-  --bwa-params PARAMS             Extra parameters to provide to BWA. Note
-                                  that usage of this parameter has security
-                                  implications if untrusted input is specified.
-                                  [default \"\"]\n
-  --ngmlr-params PARAMS           Extra parameters to provide to NGMLR.
-                                  --bam-fix, -x ont, -t are already set. Note
-                                  that usage of this parameter has security
-                                  implications if untrusted input is specified.\n";
-
-const VARIANT_CALLING_HELP: &str = "
-Variant calling options (Basic):
-  -k, --kmer-sizes <INT>                        K-mer sizes used to generate DeBruijn Graphs.
-                                                Multiple values at once are accepted and encouraged
-                                                e.g. 10 25 [default: 25] \n
-  --ploidy <INT>                                Sets the default ploidy for the analysis to N.
-                                                [default: 1]\n
-  --calculate-fst                               Calculate Fst values between samples and variants.
-  --calculate-dnds                              Calculate coding regions and perform dN/dS calculations
-                                                along them using called variants.
-                                                *Microbial only*.
-  -f, --features-vcf                            The set of alleles to force-call regardless
-                                                of evidence. Note: The sight containing these alleles
-                                                has to be called as 'active' in order for them to appear
-                                                in the final VCF. Addtionally, Provided file must be
-                                                compressed using bgzip and indexed using bcftools index. If no index
-                                                is present, and index will be attempted to be created.
-                                                If the file is not properly compressed, Lorikeet will
-                                                unfortunately SEGFAULT with no error message.
-  --qual-by-depth-filter                        The minimum QD value for a variant to have for it to be
-                                                included in the genotyping or ANI analyses. [default: 20]
-  --qual-threshold                              The PHRED-scaled quality score threshold for use
-                                                with ANI calculations. [default: 150]
-  --depth-per-sample-filter                     Minimum depth of a variant in a sample for that
-                                                sample to be included in ANI calculations for that
-                                                variant. [default: 5]
-  -q, --min-base-quality                        Minimum base quality required to consider a
-                                                base for calling. [default: 10]
-  --min-mapq                                    Minimum MAPQ score for longreads to be considered
-                                                during variant calling. [default: 60]
-  --base-quality-score-threshold                Base qualities below this threshold will
-                                                be reduced to the minimum (6). [default: 18]
-  --max-input-depth                             The maximum number of reads included within an
-                                                assembly region across all samples. Larger numbers
-                                                increase run time. If the depth of an assembly region
-                                                exceeds this value, then the reads will be filtered
-                                                by mean base quality. [default: 200000]
-  --min-contig-size                             The minimum contig size to call variants on. Smaller
-                                                contigs can often contain highly variable regions that
-                                                mostly represent noise. Call variants on them can often
-                                                be slow and not produce anything fruitful. If you
-                                                wish to call variants on all available contigs,
-                                                then set this to 0. [default: 2500]
-  --do-not-call-svs                             Opts not to use svim to call structural variants
-                                                using provided longreads. If no longreads are provided
-                                                this has no effect.
-  --min-sv-qual                                 Minimum structural variants quality returned by svim
-                                                and used by lorikeet. Not PHRED-scaled quality, value
-                                                determined by number of supporting reads. Consult
-                                                svim documentation for details. [default: 3]
-
-Variant calling options (Advanced):
-  --phred-scaled-global-read-mismapping-rate    The global assumed mismapping rate for reads. [default: 45]
-  --pair-hmm-gap-continuation-penalty           Flat gap continuation penalty for use in the Pair HMM. [default: 10]
-  --pcr-indel-model                             The PCR indel model to use. [default: conservative]
-  --heterozygosity                              Heterozygosity value used to compute prior
-                                                likelihoods for any locus. [default: 0.001]
-  --heterozygosity-stdev                        Standard deviation of heterozygosity for SNP and
-                                                indel calling. [default: 0.01]
-  --indel-heterozygosity                        Heterozygosity for indel calling. [default: 0.000125]
-  -C, --standard-min-confidence-threshold-for-calling
-                                                The minimum phred-scaled confidence threshold at
-                                                which variants should be called. [default: 30.0]
-  --use-posteriors-to-calculate-qual            if available, use the genotype posterior
-                                                probabilities to calculate the site QUAL.
-  --annotate-with-num-discovered-alleles        If provided, we will annotate records with the
-                                                number of alternate alleles that were discovered
-                                                (but not necessarily genotyped) at a given site.
-  --active-probability-threshold                Minimum probability for a locus to be
-                                                considered active. [default: 0.002]
-  --min-assembly-region-size                    Minimum size of an assembly region. [default: 50]
-  --max-assembly-region-size                    Maximum size of an assembly region. [default: 300]
-  --assembly-region-padding                     Number of additional bases of context to
-                                                include around each assembly region. [default: 100]
-  --dont-increase-kmer-sizes-for-cycles         Disable iterating over kmer sizes when
-                                                graph cycles are detected.
-  --allow-non-unique-kmers-in-ref               Allow graphs that have non-unique kmers in the reference.
-  --do-not-run-physical-phasing                 Disable physical phasing.
-  --recover-all-dangling-branches               Recover all dangling branches.
-  --min-dangling-branch-length                  Minimum length of a dangling branch to
-                                                attempt recovery. [default: 4]
-  --min-prune-factor                            Minimum support to not prune paths in the graph.
-                                                [default: 2]
-  --use-adaptive-pruning                        Use more advanced pruning algorithm to prune paths in
-                                                graph. Better suited when performing variant calling
-                                                on when depth along a genome is variable e.g. RNA
-                                                and exome data.
-  --graph-output                                Write debug assembly graph information to this file.
-  --num-pruning-samples                         Number of samples that must pass the
-                                                min_pruning threshold [default: 1]
-  --dont-use-soft-clipped-bases                 Do not analyze soft clipped bases in the reads.
-  --initial-error-rate-for-pruning              Initial base error rate estimate for adaptive
-                                                pruning. [default: 0.001]
-  --pruning-log-odds-threshold                  Likelihood ratio threshold for adaptive
-                                                pruning algorithm. This value will be converted to
-                                                log odds value. [default: 1.0]
-  --max-unpruned-variants                       Maximum number of variants in graph the
-                                                adaptive pruner will allow. [default: 100]
-  --max-prob-propagation-distance               Upper limit on how many bases away probability mass
-                                                can be moved around when calculating the boundaries
-                                                between active and inactive assembly regions. [default: 50]
-  --max-mnp-distance                            Two or more phased substitutions separated by
-                                                this distance or less are merged into MNPs. [default: 0]
-  --disable-optimizations                       Don't skip calculations in ActiveRegions with no variants
-  --disable-avx                                 Disable the use of the GKL-rs AVX acceleration components
-                                                for PairHMM and Smith-Waterman calculations.
-  --limiting-interval                           Mainly used for debugging purposes. Only call variants
-                                                within this given span on all contigs. E.g. providing
-                                                '1000-2000' would only call variants between the 1000
-                                                and 2000 bp span on each provided contig.
-  --force                                       Forcefully overwrite previous runs.\n";
-
-const ALIGNMENT_OPTIONS: &str = "
-Define mapping(s) (required):
-  Either define BAM:
-   -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
-                                         reference sorted (e.g. with samtools sort)
-                                         unless --sharded is specified, in which
-                                         case they must be read name sorted (e.g.
-                                         with samtools sort -n).
-   -l, --longread-bam-files <PATH> ..    Path to BAM files(s) generated from longreads.
-                                         Must be reference sorted.
-   --query-assembly-bam-files <PATH>     The results of mapping one or more metagenome assemblies
-                                         back on to your MAGs.
-
-  Or do mapping:
-   -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
-                                         e.g. concatenated genomes or assembly.
-                                         If multiple reference FASTA files are
-                                         provided and --sharded is specified,
-                                         then reads will be mapped to reference
-                                         separately as sharded BAMs
-   -d, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
-   -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
-                                         [default \"fna\"]
-   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
-   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
-   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
-                                         FASTA/Q files for mapping in order
-                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
-                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
-   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
-   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
-   --longreads <PATH> ..                 pacbio or oxford nanopore long reads FASTA/Q files(s).
-   --bam-file-cache-directory            Directory to store cached BAM files. BAM files are stored
-                                         in /tmp by default.
-   -o, --output-prefix <STRING>          Output directory prefix [default: output]\n
-
-
-Sharding i.e. multiple reference sets (optional):
-  --sharded                              If -b/--bam-files was used:
-                                           Input BAM files are read-sorted alignments
-                                           of a set of reads mapped to multiple
-                                           reference contig sets. Choose the best
-                                           hit for each read pair.
-
-                                         Otherwise if mapping was carried out:
-                                           Map reads to each reference, choosing the
-                                             best hit for each pair.
-
-Alignment filtering (optional):
-   -m, --method <METHOD>                 Method for calculating coverage.
-                                         One or more (space separated) of:
-                                           trimmed_mean
-                                           mean
-                                           metabat (\"MetaBAT adjusted coverage\")
-                                         A more thorough description of the different
-                                         methods is available at
-                                         https://github.com/rhysnewell/lorikeet
-   --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
-                                         aligned bases [default: 0]
-   --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
-                                         identity e.g. 0.95 for 95%. [default 0.0]
-   --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned. [default 0.0]
-   --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
-                                         aligned bases.
-                                         Require --discard-improper-pairs. [default 0.0]
-   --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
-                                         identity e.g. 0.95 for 95%.
-                                         Require --discard-improper-pairs. [default 0.0]
-   --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned.
-                                         Require --discard-improper-pairs. [default 0.0]
-   --min-covered-fraction FRACTION       Contigs with less coverage than this
-                                         reported as having zero coverage.
-                                         [default: 0.0]
-   --contig-end-exclusion                Exclude bases at the ends of reference
-                                         sequences from calculation [default: 0]
-   --trim-min FRACTION                   Remove this smallest fraction of positions
-                                         when calculating trimmed_mean
-                                         [default: 0.00]
-   --trim-max FRACTION                   Maximum fraction for trimmed_mean
-                                         calculations [default: 1.00]
-   --discard-improper-pairs              Discard improperly mapped read pairs for variant calling.
-   --discard-supplementary               Discard read alignments flagged as supplementary
-   --include-secondary                   Includes read alignments flagged as secondary
-   --discard-unmapped                    Exclude unmapped reads from cached BAM files.
-   --high-memory                         Run in high memory mode. Can be slightly faster sometimes
-                                         but consumes much more RAM than standard mode.
-   --split-bams                          Split the mapped read files up per reference.
-                                         Useful if you think run time is being hampered
-                                         by I/O. Most of the time this will not improve
-                                         performance and instead just increase disk usage.
-";
-
-const GENERAL_HELP: &str = "
-General options:
-  -t, --threads                         Maximum number of threads used. [default: 8]
-  -p, --parallel-genomes                Number of genomes to run in parallel.
-                                        Increases memory usage linearly.
-                                        Thread usage qill not exceed the value
-                                        provided by --threads [default 4]
-  -v, --verbose                         Print extra debugging information
-  -q, --quiet                           Unless there is an error, do not print
-                                        log messages
-
-Author: Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
-";
-
-pub fn genotype_full_help() -> String {
-    format!(
-        "lorikeet genotype: Resolves strain-level genotypes and abundance from metagenomes
-
-{}
-{}
-{}
-
-Genotyping arguments (optional):
-
-  --min-variant-depth-for-genotyping    The minimum total depth of a variant - across all samples -
-                                        for it to be included in the strain genotyping process.
-                                        Lower values tend to confuse and break the UMAP embedding
-                                        and strain abundance calculation. [default: 5]
-{}
-        ",
-        ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP
+fn add_mapping_options(manual: Manual) -> Manual {
+    manual.custom(
+        Section::new("Mapping algorithm options")
+            .option(Opt::new("NAME").long("--mapper").help(&format!(
+                "Underlying mapping software used for short reads {}. One of: {}",
+                default_roff("minimap2-sr"),
+                table_roff(&[
+                    &["name", "description"],
+                    &[
+                        &monospace_roff("minimap2-sr"),
+                        &format!("minimap2 with '{}' option", &monospace_roff("-x sr"))
+                    ],
+                    &[
+                        &monospace_roff("bwa-mem"),
+                        &format!("bwa mem using default parameters")
+                    ],
+                    &[
+                        &monospace_roff("bwa-mem2"),
+                        &format!("bwa-mem2 using default parameters")
+                    ],
+                    &[
+                        &monospace_roff("minimap2-ont"),
+                        &format!("minimap2 with '{}' option", &monospace_roff("-x map-ont"))
+                    ],
+                    &[
+                        &monospace_roff("minimap2-pb"),
+                        &format!("minimap2 with '{}' option", &monospace_roff("-x map-pb"))
+                    ],
+                    &[
+                        &monospace_roff("minimap2-hifi"),
+                        &format!("minimap2 with '{}' option", &monospace_roff("-x map-hifi"))
+                    ],
+                    &[
+                        &monospace_roff("minimap2-no-preset"),
+                        &format!("minimap2 with no '{}' option", &monospace_roff("-x"))
+                    ],
+                    &[
+                        &monospace_roff("ngmlr-ont"),
+                        &format!("ngmlr with '{}' option", &monospace_roff("-x ont"))
+                    ],
+                    &[
+                        &monospace_roff("ngmlr-pb"),
+                        &format!("ngmlr with '{}' option", &monospace_roff("-x pb"))
+                    ],
+                ])
+            )))
+            .option(Opt::new("NAME").long("--longread-mapper").help(&format!(
+                "Underlying mapping software used for long reads {}. One of: {}",
+                default_roff("minimap2-ont"),
+                table_roff(&[
+                    &["name", "description"],
+                    &[
+                        &monospace_roff("minimap2-ont"),
+                        &format!("minimap2 with '{}' option", &monospace_roff("-x map-ont"))
+                    ],
+                    &[
+                        &monospace_roff("minimap2-pb"),
+                        &format!("minimap2 with '{}' option", &monospace_roff("-x map-pb"))
+                    ],
+                    &[
+                        &monospace_roff("minimap2-hifi"),
+                        &format!("minimap2 with '{}' option", &monospace_roff("-x map-hifi"))
+                    ],
+                    &[
+                        &monospace_roff("minimap2-no-preset"),
+                        &format!("minimap2 with no '{}' option", &monospace_roff("-x"))
+                    ],
+                    &[
+                        &monospace_roff("ngmlr-ont"),
+                        &format!("ngmlr with '{}' option", &monospace_roff("-x ont"))
+                    ],
+                    &[
+                        &monospace_roff("ngmlr-pb"),
+                        &format!("ngmlr with '{}' option", &monospace_roff("-x pb"))
+                    ],
+                ])
+            )))
+            .option(Opt::new("PARAMS").long("--minimap2-params").help(&format!(
+                "Extra parameters to provide to minimap2, \
+        both indexing command (if used) and for \
+        mapping. Note that usage of this parameter \
+        has security implications if untrusted input \
+        is specified. '{}' is always specified to minimap2. \
+        [default: none] \n",
+                &monospace_roff("-a")
+            )))
+            .flag(Flag::new().long("--minimap2-reference-is-index").help(
+                "Treat reference as a minimap2 database, not as a FASTA file. [default: not set]",
+            ))
+            .option(Opt::new("PARAMS").long("--bwa-params").help(
+                "Extra parameters to provide to BWA or BWA-MEM2. Note \
+        that usage of this parameter has security \
+        implications if untrusted input is specified. \
+        [default: none] \n",
+            ))
+            .option(Opt::new("PARAMS").long("--ngmlr-params").help(
+                "Extra parameters to provide to NGMLR. \
+        --bam-fix, -x ont, -t are already set. Note \
+        that usage of this parameter has security \
+        implications if untrusted input is specified. \
+        [default: none] \n",
+            )),
     )
 }
 
-pub fn call_full_help() -> String {
-    format!(
-        "lorikeet call: Call variants using local reassembly across multiple genomes and samples
-
-        {}
-        {}
-        {}
-        {}",
-        ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP
+fn add_thresholding_options(manual: Manual) -> Manual {
+    manual.custom(
+        Section::new("Alignment thresholding")
+            .option(
+                Opt::new("INT")
+                    .long("--min-read-aligned-length")
+                    .help(&format!(
+                        "Exclude reads with smaller numbers of \
+        aligned bases. {} \n",
+                        default_roff("0")
+                    )),
+            )
+            .option(
+                Opt::new("FLOAT")
+                    .long("--min-read-percent-identity")
+                    .help(&format!(
+                        "Exclude reads by overall percent \
+        identity e.g. 95 for 95%. {} \n",
+                        default_roff("0")
+                    )),
+            )
+            .option(
+                Opt::new("FLOAT")
+                    .long("--min-read-aligned-percent")
+                    .help(&format!(
+                        "Exclude reads by percent aligned \
+        bases e.g. 95 means 95% of the read's \
+        bases must be aligned. {} \n",
+                        default_roff("0")
+                    )),
+            )
+            .option(
+                Opt::new("INT")
+                    .long("--min-read-aligned-length-pair")
+                    .help(&format!(
+                        "Exclude pairs with smaller numbers of \
+        aligned bases. \
+        Implies --proper-pairs-only. {} \n",
+                        default_roff("0")
+                    )),
+            )
+            .option(
+                Opt::new("FLOAT")
+                    .long("--min-read-percent-identity-pair")
+                    .help(&format!(
+                        "Exclude pairs by overall percent \
+                identity e.g. 95 for 95%. \
+                Implies --proper-pairs-only. {} \n",
+                        default_roff("0")
+                    )),
+            )
+            .option(
+                Opt::new("FLOAT")
+                    .long("--min-read-aligned-percent-pair")
+                    .help(&format!(
+                        "Exclude reads by percent aligned \
+                bases e.g. 95 means 95% of the read's \
+                bases must be aligned. \
+                Implies --proper-pairs-only. {} \n",
+                        default_roff("0")
+                    )),
+            )
+            .flag(
+                Flag::new()
+                    .long("--proper-pairs-only")
+                    .help("Require reads to be mapped as proper pairs. [default: not set] \n"),
+            )
+            .flag(
+                Flag::new()
+                    .long("--exclude-supplementary")
+                    .help("Exclude supplementary alignments. [default: not set] \n"),
+            )
+            .flag(
+                Flag::new()
+                    .long("--include-secondary")
+                    .help("Include secondary alignments. [default: not set] \n"),
+            )
+            .option(Opt::new("INT").long("--contig-end-exclusion").help(
+                "Exclude bases at the ends of reference \n
+                         sequences from calculation [default: 0]",
+            ))
+            .option(Opt::new("FLOAT").long("--trim-min").help(
+                "Remove this smallest fraction of positions \n
+                         when calculating trimmed_mean [default: 0.00]",
+            ))
+            .option(Opt::new("FLOAT").long("--trim-max").help(
+                "Maximum fraction for trimmed_mean \n
+                         calculations [default: 1.00]",
+            ))
+            .flag(Flag::new().long("--split-bams").help(
+                "Split the mapped read files up per reference.
+                         Useful if you think run time is being hampered
+                         by I/O. Most of the time this will not improve
+                         performance and instead just increase disk usage. \n",
+            )),
     )
 }
 
-pub fn consensus_full_help() -> String {
-    format!(
-        "lorikeet consensus: Generate consensus genomes for each provided sample and genome
-
-        {}
-        {}
-        {}
-        {}",
-        ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP
-    )
+fn read_mapping_params_section() -> Section {
+    Section::new("Read mapping parameters")
+        .option(
+            Opt::new("PATH ..")
+                .short("-1")
+                .help("Forward FASTA/Q file(s) for mapping. These may be gzipped or not. \n"),
+        )
+        .option(
+            Opt::new("PATH ..")
+                .short("-2")
+                .help("Reverse FASTA/Q file(s) for mapping. These may be gzipped or not. \n"),
+        )
+        .option(Opt::new("PATH ..").short("-c").long("--coupled").help(
+            "One or more pairs of forward and reverse \
+        possibly gzipped FASTA/Q files for mapping in order \
+        <sample1_R1.fq.gz> <sample1_R2.fq.gz> \
+        <sample2_R1.fq.gz> <sample2_R2.fq.gz> .. \n",
+        ))
+        .option(
+            Opt::new("PATH ..")
+                .long("--interleaved")
+                .help("Interleaved FASTA/Q files(s) for mapping. These may be gzipped or not. \n"),
+        )
+        .option(
+            Opt::new("PATH ..")
+                .long("--single")
+                .help("Unpaired FASTA/Q files(s) for mapping. These may be gzipped or not. \n"),
+        )
+        .option(
+            Opt::new("PATH ..")
+                .long("--longreads")
+                .help("Longread FASTA/Q files(s) for mapping. These may be gzipped or not. \n"),
+        )
+        .option(
+            Opt::new("PATH")
+                .short("-b")
+                .long("--bam-files")
+                .help(&format!(
+                    "Path to BAM file(s). These must be \
+                reference sorted (e.g. with samtools sort) \
+                unless {} is specified, in which \
+                case they must be read name sorted (e.g. \
+                with {}). When specified, no read mapping algorithm is undertaken. \n",
+                    monospace_roff("--sharded"),
+                    monospace_roff("samtools sort -n"),
+                )),
+        )
+        .option(
+            Opt::new("PATH")
+                .short("-l")
+                .long("--longread-bam-files")
+                .help(&format!(
+                    "Path to longread BAM file(s). These must be \
+                reference sorted (e.g. with samtools sort) \
+                unless {} is specified, in which \
+                case they must be read name sorted (e.g. \
+                with {}). When specified, no read mapping algorithm is undertaken. \n",
+                    monospace_roff("--sharded"),
+                    monospace_roff("samtools sort -n"),
+                )),
+        )
 }
 
-pub fn build_cli() -> App<'static, 'static> {
+fn reference_options() -> Section {
+    Section::new("Input reference options")
+        .option(
+            Opt::new("PATH")
+                .short("-r")
+                .long("--reference")
+                .help(&format!(
+                    "FASTA files of contigs e.g. concatenated \
+                    genomes or metagenome assembly
+                    [required unless {} is specified] \n",
+                    monospace_roff("-d/--genome-fasta-directory")
+                )),
+        )
+        .option(
+            Opt::new("PATH")
+                .short("-d")
+                .long("--genome-fasta-directory")
+                .help(&format!(
+                    "Directory containing FASTA files of contigs e.g. \
+                    genomes or metagenome assembly
+                    [required unless {} is specified] \n",
+                    monospace_roff("-r/--reference")
+                )),
+        )
+        .option(
+            Opt::new("STR")
+                .short("-x")
+                .long("--genome-fasta-extension")
+                .help(&format!(
+                    "FASTA file extension in --genome-fasta-directory \
+                        [default \"fna\"] \n"
+                )),
+        )
+}
+
+fn threads_options() -> Section {
+    Section::new("Threading options")
+        .option(
+            Opt::new("INT")
+                .long("--threads")
+                .short("-t")
+                .help("Maximum number of threads used. [default: 8] \n"),
+        )
+        .option(Opt::new("INT").long("--parallel-genomes").short("-p").help(
+            "Number of genomes to run in parallel. \
+                     Increases memory usage linearly. \
+                     Thread usage qill not exceed the value \
+                     provided by --threads [default 4] \n",
+        ))
+}
+
+fn add_help_options(manual: Manual) -> Manual {
+    manual
+        .flag(
+            Flag::new()
+                .short("-h")
+                .long("--help")
+                .help("Output a short usage message. [default: not set] \n"),
+        )
+        .flag(
+            Flag::new()
+                .long("--full-help")
+                .help("Output a full help message and display in 'man'. [default: not set] \n"),
+        )
+        .flag(Flag::new().long("--full-help-roff").help(
+            "Output a full help message in raw ROFF format for \
+        conversion to other formats. [default: not set] \n",
+        ))
+}
+
+fn add_help_options_to_section(section: Section) -> Section {
+    section
+        .flag(
+            Flag::new()
+                .short("-h")
+                .long("--help")
+                .help("Output a short usage message. [default: not set] \n"),
+        )
+        .flag(
+            Flag::new()
+                .long("--full-help")
+                .help("Output a full help message and display in 'man'. [default: not set] \n"),
+        )
+        .flag(Flag::new().long("--full-help-roff").help(
+            "Output a full help message in raw ROFF format for \
+        conversion to other formats. [default: not set] \n",
+        ))
+}
+
+fn sharding_section() -> Section {
+    Section::new("Sharding").flag(Flag::new().long("--sharded").help(&format!(
+        "If {} was used: \
+        Input BAM files are read-sorted alignments \
+        of a set of reads mapped to multiple \
+        reference contig sets. Choose the best \
+        hit for each read pair. Otherwise if mapping was carried out: \
+        Map reads to each reference, choosing the \
+        best hit for each pair. [default: not set] \n",
+        monospace_roff("-b/--bam-files")
+    )))
+}
+
+fn faq_section() -> Section {
+    Section::new("Frequently asked questions (FAQ)").paragraph(&format!(
+        "{} Lorikeet makes use of \
+        the system temporary directory (often {}) to store intermediate files. This can cause \
+        problems if the amount of storage available there is small or used by many programs. \
+        To fix, set the {} environment variable e.g. to set it to use the current directory: {}\n",
+        bold("Can the temporary directory used be changed?"),
+        monospace_roff("/tmp"),
+        monospace_roff("TMPDIR"),
+        monospace_roff("TMPDIR=. lorikeet call <etc>"),
+    ))
+}
+
+fn add_verbosity_flags(manual: Manual) -> Manual {
+    manual
+        .flag(
+            Flag::new()
+                .short("-v")
+                .long("--verbose")
+                .help("Print extra debugging information. [default: not set] \n"),
+        )
+        .flag(Flag::new().short("-q").long("--quiet").help(
+            "Unless there is an error, do not print \
+    log messages. [default: not set]",
+        ))
+}
+
+fn variant_calling_section_basic() -> Section {
+    Section::new("Variant calling options (Basic)")
+        .option(Opt::new("INT ..").long("--kmer-sizes").short("-k").help(
+            "K-mer sizes used to generate DeBruijn Graphs. \
+                     Multiple values at once are accepted and encouraged \
+                     e.g. 10 25 [default: 10 25] \n",
+        ))
+        .option(Opt::new("INT").long("--ploidy").help(
+            "Sets the default ploidy for the analysis to N. \
+                    [default: 1] \n",
+        ))
+        .flag(
+            Flag::new()
+                .long("--calculate-fst")
+                .help("Calculate Fst values between samples and variants. \n"),
+        )
+        .flag(Flag::new().long("--calculate-dnds").help(
+            "Calculate coding regions and perform dN/dS calculations \
+                    along them using called variants. *Microbial only*. \n",
+        ))
+        .option(Opt::new("PATH").short("-f").long("--features-vcf").help(
+            "The set of alleles to force-call regardless \
+                     of evidence. Note: The sight containing these alleles \
+                     has to be called as 'active' in order for them to appear \
+                     in the final VCF. Addtionally, Provided file must be \
+                     compressed using bgzip and indexed using bcftools index. If no index \
+                     is present, and index will be attempted to be created. \
+                     If the file is not properly compressed, Lorikeet will \
+                     unfortunately SEGFAULT with no error message. \n",
+        ))
+        .option(Opt::new("INT").long("--qual-by-depth-filter").help(
+            "The minimum QD value for a variant to have for it to be \
+                     included in the genotyping or ANI analyses. [default: 25] \n",
+        ))
+        .option(Opt::new("INT").long("--qual-threshold").help(
+            "The PHRED-scaled quality score threshold for use \
+                     with ANI calculations. [default: 150] \n",
+        ))
+        .option(Opt::new("INT").long("--depth-per-sample-filter").help(
+            "Minimum depth of a variant in a sample for that \
+                     sample to be included in ANI & Fst calculations for that \
+                     variant. [default: 5] \n",
+        ))
+        .option(Opt::new("INT").long("--min-long-read-size").help(
+            "The minimum size for long reads to be used for analysis \
+                    [default: 1500] \n",
+        ))
+        .option(
+            Opt::new("INT")
+                .long("--min-long-read-average-base-qual")
+                .help(
+                    "The minimum average base quality of a long read \
+                     for it to be used for analysis [default: 20] \n",
+                ),
+        )
+        .option(Opt::new("INT").short("-q").long("--min-base-quality").help(
+            "Minimum base quality required to consider a \
+                     base for calling. [default: 10] \n",
+        ))
+        .option(Opt::new("INT").long("--min-mapq").help(
+            "Minimum MAPQ score for reads to be considered \
+                     during variant calling. [default: 20] \n",
+        ))
+        .option(Opt::new("INT").long("--base-quality-score-threshold").help(
+            "Base qualities below this threshold will \
+                     be reduced to the minimum (6). [default: 18] \n",
+        ))
+        .option(Opt::new("INT").long("--max-input-depth").help(
+            "The maximum number of reads included within an \
+                     assembly region across all samples. Larger numbers \
+                     increase run time. If the depth of an assembly region \
+                     exceeds this value, then the reads will be filtered \
+                     by mean base quality. [default: 200000] \n",
+        ))
+        .option(Opt::new("INT").long("--min-contig-size").help(
+            "The minimum contig size to call variants on. Smaller \
+                    contigs can often contain highly variable regions that \
+                    mostly represent noise. Call variants on them can often \
+                    be slow and not produce anything fruitful. If you \
+                    wish to call variants on all available contigs, \
+                    then set this to 0. [default: 2500] \n",
+        ))
+        .option(Opt::new("INT").long("--min-sv-qual").help(
+            "Minimum structural variants quality returned by svim \
+                     and used by lorikeet. Not PHRED-scaled quality, value \
+                     determined by number of supporting reads. Consult \
+                     svim documentation for details. [default: 3] \n",
+        ))
+        .flag(Flag::new().long("--do-not-call-svs").help(
+            "Opts not to use svim to call structural variants \
+                     using provided longreads. If no longreads are provided \
+                     this has no effect. \n",
+        ))
+}
+
+fn variant_calling_options_advanced() -> Section {
+    Section::new("Variant calling options (Advanced)")
+        .option(
+            Opt::new("INT")
+                .long("--phred-scaled-global-read-mismapping-rate")
+                .help("The global assumed mismapping rate for reads. [default: 45] \n"),
+        )
+        .option(
+            Opt::new("INT")
+                .long("--pair-hmm-gap-continuation-penalty")
+                .help(
+                    "Flat gap continuation penalty for use in the Pair HMM. \
+                    [default: 10] \n",
+                ),
+        )
+        .option(
+            Opt::new("STR")
+                .long("--pcr-indel-model")
+                .help("The PCR indel model to use. [default: conservative] \n"),
+        )
+        .option(Opt::new("FLOAT").long("--heterozygosity").help(
+            "Heterozygosity value used to compute prior \
+                     likelihoods for any locus. [default: 0.001] \n",
+        ))
+        .option(Opt::new("FLOAT").long("--heterozygosity-stdev").help(
+            "Standard deviation of heterozygosity for SNP and \
+                     indel calling. [default: 0.01] \n",
+        ))
+        .option(
+            Opt::new("FLOAT")
+                .long("--indel-heterozygosity")
+                .help("Heterozygosity for indel calling. [default: 0.000125] \n"),
+        )
+        .option(
+            Opt::new("FLOAT")
+                .long("--standard-min-confidence-threshold-for-calling")
+                .short("-C")
+                .help(
+                    "The minimum phred-scaled confidence threshold at \
+                     which variants should be called. [default: 30.0] \n",
+                ),
+        )
+        .flag(Flag::new().long("--use-posteriors-to-calculate-qual").help(
+            "if available, use the genotype posterior \
+                     probabilities to calculate the site QUAL. \n",
+        ))
+        .flag(
+            Flag::new()
+                .long("--annotate-with-num-discovered-alleles")
+                .help(
+                    "If provided, we will annotate records with the \
+                     number of alternate alleles that were discovered \
+                     (but not necessarily genotyped) at a given site. \n",
+                ),
+        )
+        .option(
+            Opt::new("FLOAT")
+                .long("--active-probability-threshold")
+                .help(
+                    "Minimum probability for a locus to be \
+                     considered active. [default: 0.002] \n",
+                ),
+        )
+        .option(
+            Opt::new("INT")
+                .long("--min-assembly-region-size")
+                .help("Minimum size of an assembly region. [default: 50] \n"),
+        )
+        .option(
+            Opt::new("INT")
+                .long("--max-assembly-region-size")
+                .help("Maximum size of an assembly region. [default: 300] \n"),
+        )
+        .option(Opt::new("INT").long("--assembly-region-padding").help(
+            "Number of additional bases of context to \
+                     include around each assembly region. [default: 100] \n",
+        ))
+        .flag(
+            Flag::new()
+                .long("--dont-increase-kmer-sizes-for-cycles")
+                .help(
+                    "Disable iterating over kmer sizes when \
+                     graph cycles are detected. \n",
+                ),
+        )
+        .flag(
+            Flag::new()
+                .long("--allow-non-unique-kmers-in-ref")
+                .help("Allow graphs that have non-unique kmers in the reference. \n"),
+        )
+        .flag(
+            Flag::new()
+                .long("--do-not-run-physical-phasing")
+                .help("Disable physical phasing. \n"),
+        )
+        .flag(
+            Flag::new()
+                .long("--recover-all-dangling-branches")
+                .help("Recover all dangling branches. \n"),
+        )
+        .option(Opt::new("INT").long("--min-dangling-branch-length").help(
+            "Minimum length of a dangling branch to \
+                     attempt recovery. [default: 4] \n",
+        ))
+        .option(Opt::new("INT").long("--min-prune-factor").help(
+            "Minimum support to not prune paths in the graph. \
+                     [default: 2] \n",
+        ))
+        .flag(Flag::new().long("--use-adaptive-pruning").help(
+            "Use more advanced pruning algorithm to prune paths in
+                     graph. Better suited when performing variant calling
+                     on when depth along a genome is variable e.g. RNA
+                     and exome data. \n",
+        ))
+        .option(Opt::new("INT").long("--num-pruning-samples").help(
+            "Number of samples that must pass the \
+                     min_pruning threshold [default: 1] \n",
+        ))
+        .option(
+            Opt::new("PATH")
+                .long("--graph-output")
+                .help("Write debug assembly graph information to this file. \n"),
+        )
+        .flag(
+            Flag::new()
+                .long("--dont-use-soft-clipped-bases")
+                .help("Do not analyse soft clipped bases in the reads. \n"),
+        )
+        .option(
+            Opt::new("FLOAT")
+                .long("--initial-error-rate-for-pruning")
+                .help(
+                    "Initial base error rate estimate for adaptive \
+                     pruning. [default: 0.001] \n",
+                ),
+        )
+        .option(Opt::new("FLOAT").long("--pruning-log-odds-threshold").help(
+            "Likelihood ratio threshold for adaptive \
+                     pruning algorithm. This value will be converted to \
+                     log odds value. [default: 1.0] \n",
+        ))
+        .option(Opt::new("INT").long("--max-unpruned-variants").help(
+            "Maximum number of variants in graph the \
+                     adaptive pruner will allow. [default: 100] \n",
+        ))
+        .option(
+            Opt::new("INT")
+                .long("--max-prob-propagation-distance")
+                .help(
+                    "Upper limit on how many bases away probability mass \
+                     can be moved around when calculating the boundaries \
+                     between active and inactive assembly regions. [default: 50] \n",
+                ),
+        )
+        .option(Opt::new("INT").long("--max-mnp-distance").help(
+            "Two or more phased substitutions separated by \
+                     this distance or less are merged into MNPs. [default: 0] \n",
+        ))
+        .flag(
+            Flag::new()
+                .long("--disable-optimizations")
+                .help("Don't skip calculations in ActiveRegions with no variants \n"),
+        )
+        .flag(Flag::new().long("--disable-avx").help(
+            "Disable the use of the GKL-rs AVX acceleration components \
+                     for PairHMM and Smith-Waterman calculations. \n",
+        ))
+        .option(Opt::new("STR").long("--limiting-interval").help(
+            "Mainly used for debugging purposes. Only call variants \
+                     within this given span on all contigs. E.g. providing \
+                     '1000-2000' would only call variants between the 1000 \
+                     and 2000 bp span on each provided contig. \n",
+        ))
+        .flag(
+            Flag::new()
+                .long("--force")
+                .help("Forcefully overwrite previous runs. \n"),
+        )
+}
+
+fn add_verbosity_flags_to_section(section: Section) -> Section {
+    section
+        .flag(
+            Flag::new()
+                .short("-v")
+                .long("--verbose")
+                .help("Print extra debugging information. [default: not set]"),
+        )
+        .flag(Flag::new().short("-q").long("--quiet").help(
+            "Unless there is an error, do not print \
+    log messages. [default: not set] \n",
+        ))
+}
+
+pub fn genotype_full_help() -> Manual {
+    let mut manual = Manual::new("lorikeet genotype")
+        .about(
+            &format!(
+                "Call variants and cluster into potential strain haplotypes (version {})",
+                crate_version!()
+            )
+        )
+        .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
+        .description(
+            "
+            ======= EXPERIMENTAL =======\n
+            lorikeet genotype discovers variants within a given set of reads and genomes and \n
+            clusters the variants into candidate strain haplotypes. Lorikeet uses UMAP and HDBSCAN \n
+            to cluster variants and an Expectation-Maximization algorithm to determine strain \n
+            haplotype abudnances within each samples. Additionally, calculate strain \n
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst\n
+            \n
+            This process can be undertaken in several ways, for instance by specifying BAM files \n
+            or raw reads as input, using different mapping programs, thresholding read alignments \n
+            ============================\
+            "
+        );
+
+    manual = manual.custom(threads_options());
+    manual = manual.custom(reference_options());
+    manual = manual.custom(read_mapping_params_section());
+    manual = manual.custom(sharding_section());
+    manual = add_mapping_options(manual);
+    manual = add_thresholding_options(manual);
+    manual = manual.custom(variant_calling_section_basic());
+    manual = manual.custom(variant_calling_options_advanced());
+    manual = manual.custom(
+        Section::new("Output options")
+            .option(
+                Opt::new("DIRECTORY")
+                    .short("-o")
+                    .long("--output-directory")
+                    .help(
+                        "Output directory. Folder will contain subfolders for each input genome \n
+                [default: ./]",
+                    ),
+            )
+            .option(
+                Opt::new("DIRECTORY")
+                    .long("--bam-file-cache-directory")
+                    .help(
+                        "Output BAM files generated during \
+                alignment to this directory. The directory may or may not exist. Note that \
+                BAM files in this directory contain all mappings, including those that later \
+                are excluded by alignment thresholding (e.g. --min-read-percent-identity) or \
+                genome-wise thresholding (e.g. --min-covered-fraction). \
+                [default: not used] \n",
+                    ),
+            )
+            .flag(
+                Flag::new()
+                    .long("--discard-unmapped")
+                    .help("Exclude unmapped reads from cached BAM files. [default: not set] \n"),
+            ),
+    );
+
+    manual = manual.example(
+        Example::new()
+            .text("Map paired reads to a reference and generate genotypes")
+            .command(
+                "lorikeet genotype --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 10 25 51",
+            ),
+    );
+    manual = manual.example(
+        Example::new()
+            .text(
+                "Generate strain-level genotypes from read mappings compared to reference from a sorted BAM file and plots the results",
+            )
+            .command(
+                "lorikeet genotype --bam-files my.bam --longread-bam-files my-longread.bam \
+                --genome-fasta-directory genomes/ -x fna --bam-file-cache-directory saved_bam_files \
+                --output-directory lorikeet_out/ --threads 10",
+            ),
+    );
+
+    manual = add_verbosity_flags(manual);
+
+    manual = manual.custom(faq_section());
+
+    return manual;
+}
+
+pub fn call_full_help() -> Manual {
+    let mut manual = Manual::new("lorikeet call")
+        .about(
+            &format!(
+                "Call variants within a given set of genomes and samples using local reassembly (version {})",
+                crate_version!()
+            )
+        )
+        .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
+        .description(
+            "
+            ===========================\n
+            lorikeet call discovers variants within a given set of reads and genomes using a local \n
+            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \n
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \n\
+            \n
+            This process can be undertaken in several ways, for instance by specifying BAM files \n
+            or raw reads as input, using different mapping programs, thresholding read alignments \n
+            ============================\n
+            "
+        );
+
+    manual = manual.custom(threads_options());
+    manual = manual.custom(reference_options());
+    manual = manual.custom(read_mapping_params_section());
+    manual = manual.custom(sharding_section());
+    manual = add_mapping_options(manual);
+    manual = add_thresholding_options(manual);
+    manual = manual.custom(variant_calling_section_basic());
+    manual = manual.custom(variant_calling_options_advanced());
+    manual = manual.custom(
+        Section::new("Output options")
+            .option(
+                Opt::new("DIRECTORY")
+                    .short("-o")
+                    .long("--output-directory")
+                    .help(
+                        "Output directory. Folder will contain subfolders for each input genome \n
+                [default: ./]",
+                    ),
+            )
+            .option(
+                Opt::new("DIRECTORY")
+                    .long("--bam-file-cache-directory")
+                    .help(
+                        "Output BAM files generated during \
+                alignment to this directory. The directory may or may not exist. Note that \
+                BAM files in this directory contain all mappings, including those that later \
+                are excluded by alignment thresholding (e.g. --min-read-percent-identity) or \
+                genome-wise thresholding (e.g. --min-covered-fraction). \
+                [default: not used] \n",
+                    ),
+            )
+            .flag(
+                Flag::new()
+                    .long("--discard-unmapped")
+                    .help("Exclude unmapped reads from cached BAM files. [default: not set]"),
+            ),
+    );
+
+    manual = manual.example(
+        Example::new()
+            .text("Map paired reads to a reference call variants and calculate Fst")
+            .command(
+                "lorikeet call --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 10 25 51 --calculate-fst",
+            ),
+    );
+    manual = manual.example(
+        Example::new()
+            .text(
+                "Call variants from read mappings compared to reference from a sorted BAM file and plots the results",
+            )
+            .command(
+                "lorikeet call --bam-files my.bam --longread-bam-files my-longread.bam \
+                --genome-fasta-directory genomes/ -x fna --bam-file-cache-directory saved_bam_files \
+                --output-directory lorikeet_out/ --threads 10",
+            ),
+    );
+
+    manual = add_verbosity_flags(manual);
+
+    manual = manual.custom(faq_section());
+
+    return manual;
+}
+
+pub fn consensus_full_help() -> Manual {
+    let mut manual = Manual::new("lorikeet consensus")
+        .about(
+            &format!(
+                "Call variants within a given set of genomes and samples using local reassembly (version {})",
+                crate_version!()
+            )
+        )
+        .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
+        .description(
+            "
+            ===========================\n
+            lorikeet consensus discovers variants within a given set of reads and genomes using a local \n
+            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \n
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \n\
+            \n\
+            Lorikeet consensus also generates the consensus strain haplotypes for each sample and prints \
+            them as a FASTA file for each input genome in the output directory. \n\
+            \n\
+            This process can be undertaken in several ways, for instance by specifying BAM files \n
+            or raw reads as input, using different mapping programs, thresholding read alignments \n
+            ============================\
+            "
+        );
+
+    manual = manual.custom(threads_options());
+    manual = manual.custom(reference_options());
+    manual = manual.custom(read_mapping_params_section());
+    manual = manual.custom(sharding_section());
+    manual = add_mapping_options(manual);
+    manual = add_thresholding_options(manual);
+    manual = manual.custom(variant_calling_section_basic());
+    manual = manual.custom(variant_calling_options_advanced());
+    manual = manual.custom(
+        Section::new("Output options")
+            .option(
+                Opt::new("DIRECTORY")
+                    .short("-o")
+                    .long("--output-directory")
+                    .help(
+                        "Output directory. Folder will contain subfolders for each input genome \n
+                [default: ./] \n",
+                    ),
+            )
+            .option(
+                Opt::new("DIRECTORY")
+                    .long("--bam-file-cache-directory")
+                    .help(
+                        "Output BAM files generated during \
+                alignment to this directory. The directory may or may not exist. Note that \
+                BAM files in this directory contain all mappings, including those that later \
+                are excluded by alignment thresholding (e.g. --min-read-percent-identity) or \
+                genome-wise thresholding (e.g. --min-covered-fraction). \
+                [default: not used] \n",
+                    ),
+            )
+            .flag(
+                Flag::new()
+                    .long("--discard-unmapped")
+                    .help("Exclude unmapped reads from cached BAM files. [default: not set]"),
+            ),
+    );
+
+    manual = manual.example(
+        Example::new()
+            .text("Map paired reads to a reference call variants and calculate Fst")
+            .command(
+                "lorikeet consensus --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 10 25 51 --calculate-fst",
+            ),
+    );
+    manual = manual.example(
+        Example::new()
+            .text(
+                "Call variants from read mappings compared to reference from a sorted BAM file and plots the results",
+            )
+            .command(
+                "lorikeet consensus --bam-files my.bam --longread-bam-files my-longread.bam \
+                --genome-fasta-directory genomes/ -x fna --bam-file-cache-directory saved_bam_files \
+                --output-directory lorikeet_out/ --threads 10",
+            ),
+    );
+
+    manual = add_verbosity_flags(manual);
+
+    manual = manual.custom(faq_section());
+
+    return manual;
+}
+
+pub fn summarise_full_help() -> Manual {
+    let mut manual = Manual::new("lorikeet summarise")
+        .about(
+            &format!(
+                "Calculate ANI and Fst metrics on a given set of VCF files (version {})",
+                crate_version!()
+            )
+        )
+        .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
+        .description(
+            "
+            ===========================\n
+            lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI,
+            subpopANI, and Fst metrics for the variants in each file. \n
+            \n
+            ANI metrics require coverage information to determine the number of shared bases
+            in each sample. VCF files do not provide this information, so the shared base size is just
+            the total size of the genome. In our experience, this doesn't really matter that much as
+            the ANI metrics are quite insensitive when provided low coverage samples anyway.
+            Fst tends to perform better for low and high coverage samples and does not require whole
+            genome coverage information.
+            ============================\n
+            "
+        );
+
+    manual = manual
+        .option(
+            Opt::new("PATH ..")
+                .short("-i")
+                .long("--vcfs")
+                .help("Paths to input VCF files. Can provide one or more. \n"),
+        )
+        .option(
+            Opt::new("DIRECTORY")
+                .short("-i")
+                .long("--vcfs")
+                .help("Paths to input VCF files. Can provide one or more. \n"),
+        )
+        .option(Opt::new("DIRECTORY").short("-o").long("--output").help(
+            "Output directory. Folder will contain subfolders for each input VCF \n
+             [default: ./] \n",
+        ))
+        .option(
+            Opt::new("INT")
+                .long("--threads")
+                .short("-t")
+                .help("Maximum number of threads used. [default: 8] \n"),
+        )
+        .option(Opt::new("INT").long("--qual-by-depth-filter").help(
+            "The minimum QD value for a variant to have for it to be \
+                     included in the genotyping or ANI analyses. [default: 25] \n",
+        ))
+        .option(Opt::new("INT").long("--qual-threshold").help(
+            "The PHRED-scaled quality score threshold for use \
+                     with ANI calculations. [default: 150] \n",
+        ))
+        .option(Opt::new("INT").long("--depth-per-sample-filter").help(
+            "Minimum depth of a variant in a sample for that \
+                     sample to be included in ANI & Fst calculations for that \
+                     variant. [default: 5] \n",
+        ));
+
+    manual = add_verbosity_flags(manual);
+    return manual;
+}
+
+pub fn build_cli() -> Command<'static> {
     // specify _2 lazily because need to define it at runtime.
     lazy_static! {
         static ref CONSENSUS_HELP: String = format!(
@@ -379,17 +1111,17 @@ See lorikeet evolve --full-help for further options and further detail.
 
 {}
 
-  lorikeet summarize --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --window-size 1
+  lorikeet summarise --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --window-size 1
 
 {}
 
-  lorikeet summarize --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
+  lorikeet summarise --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
     --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10
 
-See lorikeet summarize --full-help for further options and further detail.
+See lorikeet summarise --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "lorikeet summarize"),
+                "lorikeet summarise"),
             ansi_term::Colour::Green.paint(
                 "Summarizes contigs stats across given window size"),
             ansi_term::Colour::Purple.paint(
@@ -453,7 +1185,7 @@ See lorikeet genotype --full-help for further options and further detail.
 
     return App::new("lorikeet")
         .version(crate_version!())
-        .author("Rhys J.P. Newell <rhys.newell near hdr.qut.edu.au>")
+        .author(crate::AUTHOR_AND_EMAIL)
         .about("Variant analysis of metagenomic datasets")
         .args_from_usage(
             "-v, --verbose       'Print extra debug logging information'
@@ -467,8 +1199,14 @@ Usage: lorikeet <subcommand> ...
 
 Main subcommands:
 \tcall      \tPerforms variant calling on the provides genomes
-\tgenotype  \tReport strain-level genotypes and abundances from metagenomes (*experimental*)
 \tconsensus \tCreates consensus genomes for each input reference and for each sample
+
+Utility subcommands:
+\tsummarise \tCalculate microdiversity statistics for a given set of VCF files
+\tshell-completion  \tGenerate shell completion scripts
+
+Experimental subcommands:
+\tgenotype  \tReport strain-level genotypes and abundances from metagenomes
 
 Other options:
 \t-V, --version\tPrint version information
@@ -482,9 +1220,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .about("Perform variant calling analysis and then binning")
                 .help(GENOTYPE_HELP.as_str())
                 .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(Arg::with_name("full-help-roff").long("full-help-roff"))
                 .arg(
                     Arg::with_name("bam-files")
-                        .short("b")
+                        .short('b')
                         .long("bam-files")
                         .multiple(true)
                         .takes_value(true)
@@ -494,13 +1233,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
                     Arg::with_name("read1")
-                        .short("1")
+                        .short('1')
                         .multiple(true)
                         .takes_value(true)
                         .requires("read2")
@@ -509,13 +1250,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("read2")
-                        .short("2")
+                        .short('2')
                         .multiple(true)
                         .takes_value(true)
                         .requires("read1")
@@ -524,13 +1267,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("coupled")
-                        .short("c")
+                        .short('c')
                         .long("coupled")
                         .multiple(true)
                         .takes_value(true)
@@ -539,7 +1284,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -553,7 +1300,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -567,7 +1316,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -576,38 +1327,54 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("longreads")
                         .multiple(true)
                         .takes_value(true)
-                        .required(false)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help", "full-help-roff",
+                            "longread-bam-files"
+                        ])
                         .conflicts_with_all(&["longread-bam-files"]),
                 )
                 .arg(
                     Arg::with_name("longread-bam-files")
-                        .short("l")
+                        .short('l')
                         .long("longread-bam-files")
                         .multiple(true)
                         .takes_value(true)
-                        .required(false)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                        ])
                         .conflicts_with_all(&["longreads"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-files")
-                        .short("r")
+                        .short('r')
                         .long("reference")
                         .alias("genome-fasta-files")
                         .takes_value(true)
                         .multiple(true)
-                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
+                        .required_unless_one(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-directory")
                         .long("genome-fasta-directory")
-                        .short("d")
+                        .short('d')
                         .takes_value(true)
-                        .required_unless_one(&["reference", "genome-fasta-files", "full-help"]),
+                        .required_unless_one(&["genome-fasta-files", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-extension")
                         .long("genome-fasta-extension")
-                        .short("x")
+                        .short('x')
                         .takes_value(true)
                         .default_value("fna"),
                 )
@@ -619,26 +1386,26 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("output-directory")
                         .long("output-directory")
-                        .short("o")
+                        .short('o')
                         .default_value("./"),
                 )
                 .arg(
                     Arg::with_name("features-vcf")
                         .long("features-vcf")
-                        .short("f")
+                        .short('f')
                         .takes_value(true)
                         .required(false),
                 )
                 .arg(
                     Arg::with_name("threads")
-                        .short("t")
+                        .short('t')
                         .long("threads")
                         .default_value("8")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("parallel-genomes")
-                        .short("p")
+                        .short('p')
                         .long("parallel-genomes")
                         .default_value("4")
                         .takes_value(true),
@@ -664,30 +1431,26 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("minimap2-reference-is-index")
-                        .long("minimap2-reference-is-index")
-                        .requires("reference"),
+                        .long("minimap2-reference-is-index"),
                 )
                 .arg(
                     Arg::with_name("bwa-params")
                         .long("bwa-params")
                         .long("bwa-parameters")
                         .takes_value(true)
-                        .allow_hyphen_values(true)
-                        .requires("reference"),
+                        .allow_hyphen_values(true),
                 )
                 .arg(
                     Arg::with_name("high-memory")
                         .long("high-memory")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
                 )
-                .arg(
-                    Arg::with_name("split-bams")
-                        .long("split-bams")
-                )
+                .arg(Arg::with_name("split-bams").long("split-bams"))
                 .arg(
                     Arg::with_name("min-read-aligned-length")
                         .long("min-read-aligned-length")
@@ -708,23 +1471,23 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("method")
-                        .short("m")
+                        .short('m')
                         .long("method")
                         .takes_value(true)
                         .possible_values(&["trimmed_mean", "mean", "metabat"])
@@ -787,7 +1550,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("standard-min-confidence-threshold-for-calling")
                         .long("standard-min-confidence-threshold-for-calling")
-                        .short("C")
+                        .short('C')
                         .default_value("30.0"),
                 )
                 .arg(
@@ -828,9 +1591,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("kmer-sizes")
                         .long("kmer-sizes")
-                        .short("k")
+                        .short('k')
+                        .takes_value(true)
                         .multiple(true)
-                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
@@ -889,12 +1653,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
-                        .default_value("2")
+                        .default_value("2"),
                 )
-                .arg(
-                    Arg::with_name("use-adaptive-pruning")
-                        .long("use-adaptive-pruning")
-                )
+                .arg(Arg::with_name("use-adaptive-pruning").long("use-adaptive-pruning"))
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
                         .long("dont-use-soft-clipped-bases"),
@@ -923,7 +1684,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
-                        .short("i")
+                        .short('i')
                         .takes_value(true)
                         .default_value("200000"),
                 )
@@ -1030,19 +1791,26 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-sv-qual")
                         .default_value("3"),
                 )
-                .arg(
-                    Arg::with_name("do-not-call-svs")
-                        .long("do-not-call-svs"),
-                )
+                .arg(Arg::with_name("do-not-call-svs").long("do-not-call-svs"))
                 .arg(
                     Arg::with_name("min-mapq")
                         .long("min-mapq")
-                        .default_value("60"),
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-size")
+                        .long("min-long-read-size")
+                        .default_value("1500"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-average-base-qual")
+                        .long("min-long-read-average-base-qual")
+                        .default_value("20"),
                 )
                 .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
-                        .short("q")
+                        .short('q')
                         .default_value("10"),
                 )
                 .arg(
@@ -1058,12 +1826,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
-                        .default_value("150")
+                        .default_value("150"),
                 )
                 .arg(
                     Arg::with_name("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .default_value("5")
+                        .default_value("5"),
                 )
                 .arg(
                     Arg::with_name("min-variant-depth-for-genotyping")
@@ -1111,9 +1879,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("discard-supplementary").long("discard-supplementary"))
+                .arg(Arg::with_name("exclude-supplementary").long("exclude-supplementary"))
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
@@ -1123,18 +1891,18 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("calculate-dnds")
                         .long("calculate-dnds")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("calculate-fst")
                         .long("calculate-fst")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("prodigal-params")
                         .long("prodigal-params")
                         .takes_value(true)
-                        .default_value("-p meta")
+                        .default_value("-p meta"),
                 )
                 .arg(
                     Arg::with_name("limiting-interval")
@@ -1143,7 +1911,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(true),
                 )
                 .arg(Arg::with_name("force").long("force"))
-                .arg(Arg::with_name("verbose").short("v").long("verbose"))
+                .arg(Arg::with_name("verbose").short('v').long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
         )
         .subcommand(
@@ -1151,10 +1919,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .about("Perform variant calling across the given genomes and samples")
                 .help(CALL_HELP.as_str())
                 .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(Arg::with_name("full-help-roff").long("full-help-roff"))
                 .arg(
                     Arg::with_name("bam-files")
-                        .short("b")
-                        .long("bam-files")
+                        .short('b').long("bam-files")
                         .multiple(true)
                         .takes_value(true)
                         .required_unless_one(&[
@@ -1163,13 +1931,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
                     Arg::with_name("read1")
-                        .short("1")
+                        .short('1')
                         .multiple(true)
                         .takes_value(true)
                         .requires("read2")
@@ -1178,13 +1948,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("read2")
-                        .short("2")
+                        .short('2')
                         .multiple(true)
                         .takes_value(true)
                         .requires("read1")
@@ -1193,14 +1965,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("coupled")
-                        .short("c")
-                        .long("coupled")
+                        .short('c').long("coupled")
                         .multiple(true)
                         .takes_value(true)
                         .required_unless_one(&[
@@ -1208,7 +1981,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -1222,7 +1997,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -1236,7 +2013,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -1245,38 +2024,52 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("longreads")
                         .multiple(true)
                         .takes_value(true)
-                        .required(false)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help", "full-help-roff",
+                            "longread-bam-files"
+                        ])
                         .conflicts_with_all(&["longread-bam-files"]),
                 )
                 .arg(
                     Arg::with_name("longread-bam-files")
-                        .short("l")
-                        .long("longread-bam-files")
+                        .short('l').long("longread-bam-files")
                         .multiple(true)
                         .takes_value(true)
-                        .required(false)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                        ])
                         .conflicts_with_all(&["longreads"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-files")
-                        .short("r")
-                        .long("reference")
+                        .short('r').long("reference")
                         .alias("genome-fasta-files")
                         .takes_value(true)
                         .multiple(true)
-                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
+                        .required_unless_one(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-directory")
                         .long("genome-fasta-directory")
-                        .short("d")
+                        .short('d')
                         .takes_value(true)
-                        .required_unless_one(&["reference", "genome-fasta-files", "full-help"]),
+                        .required_unless_one(&["genome-fasta-files", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-extension")
                         .long("genome-fasta-extension")
-                        .short("x")
+                        .short('x')
                         .takes_value(true)
                         .default_value("fna"),
                 )
@@ -1288,27 +2081,25 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("output-directory")
                         .long("output-directory")
-                        .short("o")
+                        .short('o')
                         .default_value("./"),
                 )
                 .arg(
                     Arg::with_name("features-vcf")
                         .long("features-vcf")
-                        .short("f")
+                        .short('f')
                         .takes_value(true)
                         .required(false),
                 )
                 .arg(
                     Arg::with_name("threads")
-                        .short("t")
-                        .long("threads")
+                        .short('t').long("threads")
                         .default_value("8")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("parallel-genomes")
-                        .short("p")
-                        .long("parallel-genomes")
+                        .short('p').long("parallel-genomes")
                         .default_value("4")
                         .takes_value(true),
                 )
@@ -1333,30 +2124,26 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("minimap2-reference-is-index")
-                        .long("minimap2-reference-is-index")
-                        .requires("reference"),
+                        .long("minimap2-reference-is-index"),
                 )
                 .arg(
                     Arg::with_name("bwa-params")
                         .long("bwa-params")
                         .long("bwa-parameters")
                         .takes_value(true)
-                        .allow_hyphen_values(true)
-                        .requires("reference"),
+                        .allow_hyphen_values(true),
                 )
                 .arg(
                     Arg::with_name("high-memory")
                         .long("high-memory")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
                 )
-                .arg(
-                    Arg::with_name("split-bams")
-                        .long("split-bams")
-                )
+                .arg(Arg::with_name("split-bams").long("split-bams"))
                 .arg(
                     Arg::with_name("min-read-aligned-length")
                         .long("min-read-aligned-length")
@@ -1377,24 +2164,23 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("method")
-                        .short("m")
-                        .long("method")
+                        .short('m').long("method")
                         .takes_value(true)
                         .possible_values(&["trimmed_mean", "mean", "metabat"])
                         .default_value("trimmed_mean")
@@ -1457,7 +2243,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("standard-min-confidence-threshold-for-calling")
                         .long("standard-min-confidence-threshold-for-calling")
-                        .short("C")
+                        .short('C')
                         .default_value("30.0"),
                 )
                 .arg(
@@ -1498,9 +2284,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("kmer-sizes")
                         .long("kmer-sizes")
-                        .short("k")
+                        .short('k')
+                        .takes_value(true)
                         .multiple(true)
-                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
@@ -1559,12 +2346,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
-                        .default_value("2")
+                        .default_value("2"),
                 )
-                .arg(
-                    Arg::with_name("use-adaptive-pruning")
-                        .long("use-adaptive-pruning")
-                )
+                .arg(Arg::with_name("use-adaptive-pruning").long("use-adaptive-pruning"))
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
                         .long("dont-use-soft-clipped-bases"),
@@ -1593,7 +2377,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
-                        .short("i")
+                        .short('i')
                         .takes_value(true)
                         .default_value("200000"),
                 )
@@ -1705,19 +2489,26 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-sv-qual")
                         .default_value("3"),
                 )
-                .arg(
-                    Arg::with_name("do-not-call-svs")
-                        .long("do-not-call-svs"),
-                )
+                .arg(Arg::with_name("do-not-call-svs").long("do-not-call-svs"))
                 .arg(
                     Arg::with_name("min-mapq")
                         .long("min-mapq")
-                        .default_value("60"),
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-size")
+                        .long("min-long-read-size")
+                        .default_value("1500"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-average-base-qual")
+                        .long("min-long-read-average-base-qual")
+                        .default_value("20"),
                 )
                 .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
-                        .short("q")
+                        .short('q')
                         .default_value("10"),
                 )
                 .arg(
@@ -1733,12 +2524,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
-                        .default_value("150")
+                        .default_value("150"),
                 )
                 .arg(
                     Arg::with_name("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .default_value("5")
+                        .default_value("5"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
@@ -1781,9 +2572,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("discard-supplementary").long("discard-supplementary"))
+                .arg(Arg::with_name("exclude-supplementary").long("exclude-supplementary"))
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
@@ -1793,18 +2584,18 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("calculate-dnds")
                         .long("calculate-dnds")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("calculate-fst")
                         .long("calculate-fst")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("prodigal-params")
                         .long("prodigal-params")
                         .default_value("-p meta")
-                        .takes_value(true)
+                        .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("limiting-interval")
@@ -1813,7 +2604,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(true),
                 )
                 .arg(Arg::with_name("force").long("force"))
-                .arg(Arg::with_name("verbose").short("v").long("verbose"))
+                .arg(Arg::with_name("verbose").short('v').long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
         )
         .subcommand(
@@ -1821,9 +2612,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .about("Generate consensus genomes across all provided samples")
                 .help(CONSENSUS_HELP.as_str())
                 .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(Arg::with_name("full-help-roff").long("full-help-roff"))
                 .arg(
                     Arg::with_name("bam-files")
-                        .short("b")
+                        .short('b')
                         .long("bam-files")
                         .multiple(true)
                         .takes_value(true)
@@ -1833,13 +2625,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
                     Arg::with_name("read1")
-                        .short("1")
+                        .short('1')
                         .multiple(true)
                         .takes_value(true)
                         .requires("read2")
@@ -1848,13 +2642,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("read2")
-                        .short("2")
+                        .short('2')
                         .multiple(true)
                         .takes_value(true)
                         .requires("read1")
@@ -1863,13 +2659,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("coupled")
-                        .short("c")
+                        .short('c')
                         .long("coupled")
                         .multiple(true)
                         .takes_value(true)
@@ -1878,7 +2676,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -1892,7 +2692,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -1906,7 +2708,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                            "longread-bam-files"
                         ])
                         .conflicts_with("bam-files"),
                 )
@@ -1915,38 +2719,54 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("longreads")
                         .multiple(true)
                         .takes_value(true)
-                        .required(false)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help", "full-help-roff",
+                            "longread-bam-files"
+                        ])
                         .conflicts_with_all(&["longread-bam-files"]),
                 )
                 .arg(
                     Arg::with_name("longread-bam-files")
-                        .short("l")
+                        .short('l')
                         .long("longread-bam-files")
                         .multiple(true)
                         .takes_value(true)
-                        .required(false)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help", "full-help-roff",
+                            "longreads",
+                        ])
                         .conflicts_with_all(&["longreads"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-files")
-                        .short("r")
+                        .short('r')
                         .long("reference")
                         .alias("genome-fasta-files")
                         .takes_value(true)
                         .multiple(true)
-                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
+                        .required_unless_one(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-directory")
                         .long("genome-fasta-directory")
-                        .short("d")
+                        .short('d')
                         .takes_value(true)
-                        .required_unless_one(&["reference", "genome-fasta-files", "full-help"]),
+                        .required_unless_one(&["genome-fasta-files", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-extension")
                         .long("genome-fasta-extension")
-                        .short("x")
+                        .short('x')
                         .takes_value(true)
                         .default_value("fna"),
                 )
@@ -1958,26 +2778,26 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("output-directory")
                         .long("output-directory")
-                        .short("o")
+                        .short('o')
                         .default_value("./"),
                 )
                 .arg(
                     Arg::with_name("features-vcf")
                         .long("features-vcf")
-                        .short("f")
+                        .short('f')
                         .takes_value(true)
                         .required(false),
                 )
                 .arg(
                     Arg::with_name("threads")
-                        .short("t")
+                        .short('t')
                         .long("threads")
                         .default_value("8")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("parallel-genomes")
-                        .short("p")
+                        .short('p')
                         .long("parallel-genomes")
                         .default_value("4")
                         .takes_value(true),
@@ -2003,30 +2823,26 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("minimap2-reference-is-index")
-                        .long("minimap2-reference-is-index")
-                        .requires("reference"),
+                        .long("minimap2-reference-is-index"),
                 )
                 .arg(
                     Arg::with_name("bwa-params")
                         .long("bwa-params")
                         .long("bwa-parameters")
                         .takes_value(true)
-                        .allow_hyphen_values(true)
-                        .requires("reference"),
+                        .allow_hyphen_values(true),
                 )
                 .arg(
                     Arg::with_name("high-memory")
                         .long("high-memory")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
                 )
-                .arg(
-                    Arg::with_name("split-bams")
-                        .long("split-bams")
-                )
+                .arg(Arg::with_name("split-bams").long("split-bams"))
                 .arg(
                     Arg::with_name("min-read-aligned-length")
                         .long("min-read-aligned-length")
@@ -2047,23 +2863,23 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("method")
-                        .short("m")
+                        .short('m')
                         .long("method")
                         .takes_value(true)
                         .possible_values(&["trimmed_mean", "mean", "metabat"])
@@ -2127,7 +2943,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("standard-min-confidence-threshold-for-calling")
                         .long("standard-min-confidence-threshold-for-calling")
-                        .short("C")
+                        .short('C')
                         .default_value("30.0"),
                 )
                 .arg(
@@ -2168,9 +2984,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("kmer-sizes")
                         .long("kmer-sizes")
-                        .short("k")
+                        .short('k')
+                        .takes_value(true)
                         .multiple(true)
-                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
@@ -2229,12 +3046,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
-                        .default_value("2")
+                        .default_value("2"),
                 )
-                .arg(
-                    Arg::with_name("use-adaptive-pruning")
-                        .long("use-adaptive-pruning")
-                )
+                .arg(Arg::with_name("use-adaptive-pruning").long("use-adaptive-pruning"))
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
                         .long("dont-use-soft-clipped-bases"),
@@ -2263,7 +3077,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
-                        .short("i")
+                        .short('i')
                         .takes_value(true)
                         .default_value("200000"),
                 )
@@ -2370,19 +3184,26 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-sv-qual")
                         .default_value("3"),
                 )
-                .arg(
-                    Arg::with_name("do-not-call-svs")
-                        .long("do-not-call-svs"),
-                )
+                .arg(Arg::with_name("do-not-call-svs").long("do-not-call-svs"))
                 .arg(
                     Arg::with_name("min-mapq")
                         .long("min-mapq")
-                        .default_value("60"),
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-size")
+                        .long("min-long-read-size")
+                        .default_value("1500"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-average-base-qual")
+                        .long("min-long-read-average-base-qual")
+                        .default_value("20"),
                 )
                 .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
-                        .short("q")
+                        .short('q')
                         .default_value("10"),
                 )
                 .arg(
@@ -2398,12 +3219,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
-                        .default_value("150")
+                        .default_value("150"),
                 )
                 .arg(
                     Arg::with_name("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .default_value("5")
+                        .default_value("5"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
@@ -2446,9 +3267,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("discard-supplementary").long("discard-supplementary"))
+                .arg(Arg::with_name("exclude-supplementary").long("exclude-supplementary"))
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
@@ -2458,18 +3279,18 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("calculate-dnds")
                         .long("calculate-dnds")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("calculate-fst")
                         .long("calculate-fst")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("prodigal-params")
                         .long("prodigal-params")
                         .takes_value(true)
-                        .default_value("-p meta")
+                        .default_value("-p meta"),
                 )
                 .arg(
                     Arg::with_name("limiting-interval")
@@ -2478,31 +3299,33 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(true),
                 )
                 .arg(Arg::with_name("force").long("force"))
-                .arg(Arg::with_name("verbose").short("v").long("verbose"))
+                .arg(Arg::with_name("verbose").short('v').long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
         )
         .subcommand(
-            SubCommand::with_name("summarize")
+            SubCommand::with_name("summarise")
                 .about("Summarizes ANI values of a given set of VCF files")
+                .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(Arg::with_name("full-help-roff").long("full-help-roff"))
                 .arg(
                     Arg::with_name("vcfs")
                         .long("vcfs")
-                        .short("i")
+                        .short('i')
                         .takes_value(true)
                         .multiple(true)
-                        .required(true)
+                        .required_unless_one(&["full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("output")
                         .long("output")
-                        .short("o")
-                        .default_value("./")
+                        .short('o')
+                        .default_value("./"),
                 )
                 .arg(
                     Arg::with_name("threads")
                         .long("threads")
-                        .short("t")
-                        .default_value("8")
+                        .short('t')
+                        .default_value("8"),
                 )
                 .arg(
                     Arg::with_name("qual-by-depth-filter")
@@ -2512,13 +3335,124 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
-                        .default_value("150")
+                        .default_value("150"),
                 )
                 .arg(
                     Arg::with_name("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .default_value("5")
+                        .default_value("5"),
                 )
-                .arg(Arg::with_name("verbose").short("v").long("verbose"))
+                .arg(Arg::with_name("verbose").short('v').long("verbose")),
+        )
+        .subcommand(
+            add_clap_verbosity_flags(Command::new("pangenome"))
+                .about("From a set of given input MAGs generate a pangenome")
+                .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(Arg::with_name("full-help-roff").long("full-help-roff"))
+                .arg(
+                    Arg::with_name("genome-fasta-files")
+                        .short('r')
+                        .long("reference")
+                        .alias("genome-fasta-files")
+                        .takes_value(true)
+                        .multiple(true)
+                        .required_unless_one(&["genome-fasta-directory", "full-help", "full-help-roff"]),
+                )
+                .arg(
+                    Arg::with_name("genome-fasta-directory")
+                        .long("genome-fasta-directory")
+                        .short('d')
+                        .takes_value(true)
+                        .required_unless_one(&["genome-fasta-files", "full-help", "full-help-roff"]),
+                )
+                .arg(
+                    Arg::with_name("genome-fasta-extension")
+                        .long("genome-fasta-extension")
+                        .short('x')
+                        .takes_value(true)
+                        .default_value("fna"),
+                )
+                .arg(
+                    Arg::with_name("output")
+                        .long("output")
+                        .short('o')
+                        .default_value("./"),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .long("threads")
+                        .short('t')
+                        .default_value("8"),
+                )
+                .arg(
+                    Arg::with_name("cluster-identity")
+                         .long("cluster-identity")
+                         .short('c')
+                         .default_value("99")
+                )
+                .arg(
+                    Arg::with_name("precluster-identity")
+                         .long("precluster-identity")
+                         .short('p')
+                         .default_value("95")
+                )
+                .arg(
+                    Arg::with_name("min-aligned-fraction")
+                        .long("min-aligned-fraction")
+                        .short('f')
+                        .help("Min aligned fraction of two genomes for clustering")
+                        .takes_value(true)
+                        .default_value("50")
+                )
+                .arg(
+                    Arg::with_name("precluster-method")
+                        .long("precluster-method")
+                        .help("method of calculating rough ANI. 'dashing' for HyperLogLog, 'finch' for finch MinHash")
+                        .possible_values(&["dashing","finch"])
+                        .default_value("dashing")
+                        .takes_value(true)
+                    )
+                .arg(
+                    Arg::with_name("segment-length")
+                         .long("segment-length")
+                         .short('s')
+                         .default_value("10000")
+                )
+                .arg(
+                    Arg::with_name("kmer-size")
+                        .long("kmer-size")
+                        .short('k')
+                        .default_value("79")
+                )
+                .arg(
+                    Arg::with_name("use-avx")
+                        .long("use-avx")
+                        .short('a')
+                        .takes_value(false)
+                )
+                .arg(
+                    Arg::with_name("pggb-params")
+                        .long("pggb-params")
+                        .default_value("-p 98 -k 79 -s 5k")
+                ),
+        )
+        .subcommand(
+            add_clap_verbosity_flags(Command::new("shell-completion"))
+                .about("Generate a shell completion script for lorikeet")
+                .arg(
+                    Arg::new("output-file")
+                        .short('o')
+                        .long("output-file")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::new("shell")
+                        .long("shell")
+                        .takes_value(true)
+                        .required(true)
+                        .allow_invalid_utf8(true)
+                        .value_parser(value_parser!(Shell)),
+                ),
         );
 }

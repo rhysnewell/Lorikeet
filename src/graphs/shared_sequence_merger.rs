@@ -80,7 +80,12 @@ impl SharedSequenceMerger {
                 );
             }
 
-            debug!("Vertices to remove {} + {:?} edges to remove {}", prevs.len(), &v, edges_to_remove.len());
+            debug!(
+                "Vertices to remove {} + {:?} edges to remove {}",
+                prevs.len(),
+                &v,
+                edges_to_remove.len()
+            );
             graph.base_graph.remove_all_vertices(&prevs);
             graph.base_graph.graph.remove_node(v);
             graph.base_graph.remove_all_edges(&edges_to_remove);
@@ -110,17 +115,55 @@ impl SharedSequenceMerger {
         let mut count = 0;
         for prev in incoming_vertices {
             count += 1;
-            debug!("{count} {} -> {}",
-                   std::str::from_utf8(graph.base_graph.graph.node_weight(*first).unwrap().sequence.as_slice()).unwrap(),
-                   std::str::from_utf8(graph.base_graph.graph.node_weight(*prev).unwrap().sequence.as_slice()).unwrap());
+            debug!(
+                "{count} {} -> {}",
+                std::str::from_utf8(
+                    graph
+                        .base_graph
+                        .graph
+                        .node_weight(*first)
+                        .unwrap()
+                        .sequence
+                        .as_slice()
+                )
+                .unwrap(),
+                std::str::from_utf8(
+                    graph
+                        .base_graph
+                        .graph
+                        .node_weight(*prev)
+                        .unwrap()
+                        .sequence
+                        .as_slice()
+                )
+                .unwrap()
+            );
             if graph.base_graph.graph.node_weight(*prev).unwrap().sequence
                 != graph.base_graph.graph.node_weight(*first).unwrap().sequence
             {
                 debug!(
                     "1 {}: {} -> {}",
                     count,
-                    std::str::from_utf8(graph.base_graph.graph.node_weight(*first).unwrap().sequence.as_slice()).unwrap(),
-                    std::str::from_utf8(graph.base_graph.graph.node_weight(*prev).unwrap().sequence.as_slice()).unwrap()
+                    std::str::from_utf8(
+                        graph
+                            .base_graph
+                            .graph
+                            .node_weight(*first)
+                            .unwrap()
+                            .sequence
+                            .as_slice()
+                    )
+                    .unwrap(),
+                    std::str::from_utf8(
+                        graph
+                            .base_graph
+                            .graph
+                            .node_weight(*prev)
+                            .unwrap()
+                            .sequence
+                            .as_slice()
+                    )
+                    .unwrap()
                 );
                 return false;
             }

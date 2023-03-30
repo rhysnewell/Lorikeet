@@ -85,7 +85,6 @@ Once you have created the conda environment download and install the latest rele
 wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.1.tar.gz;
 tar -xvzf lorikeet-x86_64-unknown-linux-musl-v*.tar.gz;
 cp release/lorikeet $CONDA_PREFIX/bin;
-cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
 ```
 
 ## Usage
@@ -117,6 +116,24 @@ Call variants from bam:
 Call variants from short reads and longread bam files:
 
 `lorikeet call -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam`
+
+
+## Shell completion
+
+Completion scripts for various shells e.g. BASH can be generated. For example, to install the bash completion script system-wide (this requires root privileges):
+
+```
+lorikeet shell-completion --output-file lorikeet --shell bash
+mv lorikeet /etc/bash_completion.d/
+```
+
+It can also be installed into a user's home directory (root privileges not required):
+
+```
+lorikeet shell-completion --shell bash --output-file /dev/stdout >>~/.bash_completion
+```
+
+In both cases, to take effect, the terminal will likely need to be restarted. To test, type `lorikeet ca` and it should complete after pressing the TAB key.
 
 ## License
 

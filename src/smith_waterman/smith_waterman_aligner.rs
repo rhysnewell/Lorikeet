@@ -11,7 +11,7 @@ use std::convert::TryFrom;
 lazy_static! {
     pub static ref ORIGINAL_DEFAULT: Parameters = Parameters::new(3, -1, -4, -3);
     pub static ref STANDARD_NGS: Parameters = Parameters::new(25, -50, -110, -6);
-        // FROM GATK COMMENTS:
+    // FROM GATK COMMENTS:
     // used in the bubble state machine to apply Smith-Waterman to the bubble sequence
     // these values were chosen via optimization against the NA12878 knowledge base
     pub static ref NEW_SW_PARAMETERS: Parameters = Parameters::new(200, -150, -260, -11);

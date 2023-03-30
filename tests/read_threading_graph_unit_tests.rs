@@ -14,13 +14,11 @@ extern crate lazy_static;
 #[macro_use]
 extern crate approx;
 extern crate bio;
+extern crate gkl;
 extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
-#[macro_use]
-extern crate ntest;
-extern crate gkl;
 
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use itertools::Itertools;

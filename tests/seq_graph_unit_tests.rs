@@ -18,8 +18,6 @@ extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
-#[macro_use]
-extern crate ntest;
 
 use lorikeet_genome::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use lorikeet_genome::graphs::base_graph::{BaseGraph, TestGraph};

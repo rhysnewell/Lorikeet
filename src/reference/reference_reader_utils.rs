@@ -1,17 +1,17 @@
 use bio::io::fasta::IndexedReader;
-use clap::ArgMatches;
-use coverm::genomes_and_contigs::GenomesAndContigs;
-use coverm::genomes_and_contigs::*;
 use external_command_checker;
 use galah::cluster_argument_parsing::GalahClustererCommandDefinition;
 use glob::glob;
+use needletail::parse_fastx_file;
 use process::Stdio;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Write, BufRead};
 use std::path::Path;
 use std::process;
 use tempfile::NamedTempFile;
+
+use crate::utils::utils::find_first;
 
 lazy_static! {
     static ref GALAH_COMMAND_DEFINITION: GalahClustererCommandDefinition = {
@@ -56,56 +56,6 @@ impl ReferenceReaderUtils {
         return &target_name[(0..offset)];
     }
 
-    // pub fn get_reference_path(args: &Vec<&str>, genomes_and_contigs: &GenomesAndContigs, ref_idx: usize) -> String {
-    //     let ref_stub = &genomes_and_contigs.genomes[ref_idx];
-    //
-    // }
-
-    pub fn retrieve_genome_from_contig<'a>(
-        target_name: &'a [u8],
-        genomes_and_contigs: &'a GenomesAndContigs,
-        reference_map: &'a HashMap<usize, String>,
-    ) -> (String, usize) {
-        let genome_from_contig = || -> &'a String {
-            genomes_and_contigs
-                .genome_of_contig(&std::str::from_utf8(&target_name).unwrap().to_string())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Found invalid contig in bam, {:?}. \
-                Please provide corresponding reference genomes",
-                        std::str::from_utf8(&target_name).unwrap()
-                    )
-                })
-        };
-
-        // Concatenated references have the reference file name in front of the contig name
-        // separated by the "~" symbol by default.
-        // TODO: Parse as a separator value to this function
-        let reference_stem = match std::str::from_utf8(&target_name)
-            .unwrap()
-            .splitn(2, '~')
-            .next()
-        {
-            Some(ref_stem) => ref_stem,
-            None => genome_from_contig(),
-        };
-
-        debug!("possible reference stem {:?}", reference_stem);
-        let ref_idx = match genomes_and_contigs.genome_index(&reference_stem.to_string()) {
-            Some(idx) => idx,
-            None => genomes_and_contigs
-                .genome_index(genome_from_contig())
-                .expect("Unable to parse genome name"),
-        };
-        debug!("Actual reference idx {:?}", ref_idx);
-
-        let reference = reference_map
-            .get(&ref_idx)
-            .expect("Unable to retrieve reference path")
-            .clone();
-        (reference, ref_idx)
-    }
-
     // Splits a contig name based on the ~
     pub fn split_contig_name(target_name: &Vec<u8>) -> String {
         String::from_utf8(target_name.clone())
@@ -116,25 +66,8 @@ impl ReferenceReaderUtils {
             .to_string()
     }
 
-    pub fn retrieve_reference_index_from_contig(
-        target_name: &Vec<u8>,
-        genomes_and_contigs: &GenomesAndContigs,
-    ) -> usize {
-        let target_name_str = String::from_utf8(target_name.clone()).unwrap();
-
-        match genomes_and_contigs.genome_index_of_contig(&target_name_str) {
-            Some(idx) => idx,
-            None => {
-                let split_name = Self::split_contig_name(target_name);
-                genomes_and_contigs
-                    .genome_index_of_contig(&split_name)
-                    .unwrap()
-            }
-        }
-    }
-
     pub fn setup_genome_fasta_files(
-        m: &ArgMatches,
+        m: &clap::ArgMatches,
     ) -> (Option<NamedTempFile>, Option<GenomesAndContigs>) {
         let genome_fasta_files_opt = {
             match bird_tool_utils::clap_utils::parse_list_of_genome_fasta_files(m, false) {
@@ -225,7 +158,7 @@ impl ReferenceReaderUtils {
         return (concatenated_genomes, genomes_and_contigs_option);
     }
 
-    pub fn parse_references(m: &ArgMatches) -> Vec<String> {
+    pub fn parse_references(m: &clap::ArgMatches) -> Vec<String> {
         let references = match m.values_of("genome-fasta-files") {
             Some(vec) => {
                 let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
@@ -255,16 +188,16 @@ impl ReferenceReaderUtils {
     }
 
     pub fn extract_genomes_and_contigs_option(
-        m: &ArgMatches,
+        m: &clap::ArgMatches,
         genome_fasta_files: &Vec<&str>,
     ) -> Option<GenomesAndContigs> {
         match m.is_present("genome-definition") {
-            true => Some(coverm::genome_parsing::read_genome_definition_file(
+            true => Some(read_genome_definition_file(
                 m.value_of("genome-definition").unwrap(),
             )),
-            false => Some(coverm::genome_parsing::read_genome_fasta_files(
+            false => Some(read_genome_fasta_files(
                 &genome_fasta_files,
-                false
+                false,
             )),
         }
     }
@@ -340,4 +273,142 @@ impl ReferenceReaderUtils {
         }
         reps
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct GenomesAndContigs {
+    pub genomes: Vec<String>,
+    pub contigs: usize,
+}
+
+impl GenomesAndContigs {
+    pub fn new() -> Self {
+        GenomesAndContigs {
+            genomes: Vec::new(),
+            contigs: 0,
+        }
+    }
+
+    pub fn establish_genome(&mut self, genome_name: String) -> usize {
+        let index = self.genomes.len();
+        self.genomes.push(genome_name);
+        return index;
+    }
+
+    pub fn genome_index(&self, genome_name: &String) -> Option<usize> {
+        match find_first(self.genomes.as_slice(), genome_name.to_string()) {
+            Ok(index) => Some(index),
+            Err(_) => None,
+        }
+    }
+}
+
+pub fn read_genome_fasta_files(
+    fasta_file_paths: &Vec<&str>,
+    use_full_sequence_name: bool,
+) -> GenomesAndContigs {
+    let mut contig_to_genome = GenomesAndContigs::new();
+
+    // NOTE: A lot of this code is shared with mapping_index_maintenance.rs#generate_concatenated_fasta_file
+    for file in fasta_file_paths {
+        let path = Path::new(file);
+        let mut reader =
+            parse_fastx_file(path).expect(&format!("Unable to read fasta file {}", file));
+
+        // Remove .gz .bz .xz from file names if present
+        let mut genome_name1 =
+            String::from(path.to_str().expect("File name string conversion problem"));
+        if let Some(i) = genome_name1.rfind(".gz") {
+            genome_name1.truncate(i);
+        } else if let Some(i) = genome_name1.rfind(".bz") {
+            genome_name1.truncate(i);
+        } else if let Some(i) = genome_name1.rfind(".xz") {
+            genome_name1.truncate(i);
+        }
+        let path1 = Path::new(&genome_name1);
+
+        let genome_name = String::from(
+            path1
+                .file_stem()
+                .expect("Problem while determining file stem")
+                .to_str()
+                .expect("File name string conversion problem"),
+        );
+        if contig_to_genome.genome_index(&genome_name).is_some() {
+            error!("The genome name {} was derived from >1 file", genome_name);
+            process::exit(1);
+        }
+        let genome_index = contig_to_genome.establish_genome(genome_name);
+        while let Some(record) = reader.next() {
+            let record_expected =
+                record.expect(&format!("Failed to parse record in fasta file {:?}", path));
+
+            if record_expected.format() != needletail::parser::Format::Fasta {
+                panic!(
+                    "File {:?} is not a fasta file, but a {:?}",
+                    path,
+                    record_expected.format()
+                );
+            }
+
+            contig_to_genome.contigs += 1;
+        }
+    }
+    return contig_to_genome;
+}
+
+pub fn read_genome_definition_file(definition_file_path: &str) -> GenomesAndContigs {
+    let f = std::fs::File::open(definition_file_path).expect(&format!(
+        "Unable to find/read genome definition file {}",
+        definition_file_path
+    ));
+    let file = std::io::BufReader::new(&f);
+    let mut genome_to_contig: HashMap<String, Vec<String>> = HashMap::new();
+    // Maintain the same order as the input file.
+    let mut genome_order: Vec<String> = vec![];
+    let mut contig_to_genome = GenomesAndContigs::new();
+    for line_res in file.lines() {
+        let line = line_res.expect("Read error on genome definition file");
+        let v: Vec<&str> = line.split("\t").collect();
+        if v.len() == 2 {
+            let genome = v[0].trim();
+            let contig = v[1]
+                .split_ascii_whitespace()
+                .next()
+                .expect("Failed to split contig name by whitespace in genome definition file");
+            contig_to_genome.contigs += 1;
+
+            if genome_to_contig.contains_key(genome) {
+                genome_to_contig
+                    .get_mut(genome)
+                    .unwrap()
+                    .push(contig.to_string());
+            } else {
+                genome_to_contig.insert(genome.to_string(), vec![contig.to_string()]);
+                genome_order.push(genome.to_string());
+            }
+        } else if v.len() == 0 {
+            continue;
+        } else {
+            error!(
+                "The line \"{}\" in the genome definition file is not a \
+                    genome name and contig name separated by a tab",
+                line
+            );
+            process::exit(1);
+        }
+    }
+
+    info!(
+        "Found {} contigs assigned to {} different genomes from \
+           the genome definition file",
+        contig_to_genome.contigs,
+        genome_to_contig.len()
+    );
+
+    for genome in genome_order {
+        let contigs = &genome_to_contig[&genome];
+        let genome_index = contig_to_genome.establish_genome(genome);
+    }
+    return contig_to_genome;
 }

@@ -14,13 +14,11 @@ extern crate lazy_static;
 #[macro_use]
 extern crate approx;
 extern crate bio;
+extern crate gkl;
 extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
-#[macro_use]
-extern crate ntest;
-extern crate gkl;
 
 use gkl::smithwaterman::Parameters;
 use lorikeet_genome::graphs::base_edge::BaseEdge;
@@ -54,7 +52,7 @@ fn test_score() {
     let v4 = SeqVertex::new(b"T".to_vec());
     let v5 = SeqVertex::new(b"A".to_vec());
 
-    let nodes = g.base_graph.add_vertices(vec![v1, v2, v3, v4, v5]);
+    let nodes = g.base_graph.add_vertices(vec![&v1, &v2, &v3, &v4, &v5]);
     g.base_graph
         .graph
         .add_edge(nodes[0], nodes[1], BaseEdgeStruct::new(false, 1, 0));
@@ -104,7 +102,7 @@ fn test_cycle_remove() {
     let v3 = SeqVertex::new(b"G".to_vec());
     let v4 = SeqVertex::new(b"T".to_vec());
 
-    let nodes = g.base_graph.add_vertices(vec![v1, v2, v3, v4]);
+    let nodes = g.base_graph.add_vertices(vec![&v1, &v2, &v3, &v4]);
     g.base_graph
         .graph
         .add_edge(nodes[0], nodes[1], BaseEdgeStruct::new(false, 1, 0));
@@ -137,7 +135,7 @@ fn test_no_source_or_sink() {
     let v1 = SeqVertex::new(b"A".to_vec());
     let v2 = SeqVertex::new(b"C".to_vec());
 
-    let nodes = g.base_graph.add_vertices(vec![v1, v2]);
+    let nodes = g.base_graph.add_vertices(vec![&v1, &v2]);
     g.base_graph
         .graph
         .add_edge(nodes[0], nodes[1], BaseEdgeStruct::new(false, 1, 0));
@@ -174,7 +172,7 @@ fn test_dead_node() {
     let v4 = SeqVertex::new(b"T".to_vec());
     let v5 = SeqVertex::new(b"A".to_vec());
 
-    let nodes = g.base_graph.add_vertices(vec![v1, v2, v3, v4, v5]);
+    let nodes = g.base_graph.add_vertices(vec![&v1, &v2, &v3, &v4, &v5]);
     g.base_graph
         .graph
         .add_edge(nodes[0], nodes[1], BaseEdgeStruct::new(false, 1, 0));
@@ -218,7 +216,7 @@ fn test_basic_path_finding(n_start_nodes: usize, n_branches_per_bubble: usize, n
     let mut weight = 1;
     let source_sink = graph
         .base_graph
-        .add_vertices(vec![middle_top, middle_bottom]);
+        .add_vertices(vec![&middle_top, &middle_bottom]);
     let starts = create_vertices(
         &mut graph,
         n_start_nodes,
@@ -261,7 +259,7 @@ fn create_vertices(
     let mut vertices = HashSet::new();
     for i in 0..n {
         let mut v = SeqVertex::new(seqs[i].clone());
-        let node = graph.base_graph.add_node(v);
+        let node = graph.base_graph.add_node(&v);
         vertices.insert(node);
         match source {
             None => {
@@ -323,7 +321,7 @@ fn test_basic_bubble_data(ref_bubble_length: usize, alt_bubble_length: usize) {
 
     let v_indices = graph
         .base_graph
-        .add_vertices(vec![v, v2_ref.clone(), v2_alt.clone(), v3]);
+        .add_vertices(vec![&v, &v2_ref, &v2_alt, &v3]);
     graph.base_graph.add_or_update_edge(
         v_indices[0],
         v_indices[1],
@@ -438,18 +436,18 @@ fn test_triple_bubble_data(
         post_ref
     );
 
-    let pre_v_i = graph.base_graph.add_node(pre_v);
-    let v_i = graph.base_graph.add_node(v);
-    let v2_ref_i = graph.base_graph.add_node(v2_ref);
-    let v2_alt_i = graph.base_graph.add_node(v2_alt);
-    let v3_i = graph.base_graph.add_node(v3);
-    let v4_ref_i = graph.base_graph.add_node(v4_ref);
-    let v4_alt_i = graph.base_graph.add_node(v4_alt);
-    let v5_i = graph.base_graph.add_node(v5);
-    let v6_ref_i = graph.base_graph.add_node(v6_ref);
-    let v6_alt_i = graph.base_graph.add_node(v6_alt);
-    let v7_i = graph.base_graph.add_node(v7);
-    let post_v_i = graph.base_graph.add_node(post_v);
+    let pre_v_i = graph.base_graph.add_node(&pre_v);
+    let v_i = graph.base_graph.add_node(&v);
+    let v2_ref_i = graph.base_graph.add_node(&v2_ref);
+    let v2_alt_i = graph.base_graph.add_node(&v2_alt);
+    let v3_i = graph.base_graph.add_node(&v3);
+    let v4_ref_i = graph.base_graph.add_node(&v4_ref);
+    let v4_alt_i = graph.base_graph.add_node(&v4_alt);
+    let v5_i = graph.base_graph.add_node(&v5);
+    let v6_ref_i = graph.base_graph.add_node(&v6_ref);
+    let v6_alt_i = graph.base_graph.add_node(&v6_alt);
+    let v7_i = graph.base_graph.add_node(&v7);
+    let post_v_i = graph.base_graph.add_node(&post_v);
 
     let p1_i = graph
         .base_graph
@@ -597,12 +595,9 @@ fn test_intra_node_insertion_deletion() {
     let alternate = SeqVertex::new(b"AAACCCCC".to_vec());
     let reference = SeqVertex::new(b"CCCCCGGG".to_vec());
 
-    let nodes = graph.base_graph.add_vertices(vec![
-        top.clone(),
-        bot.clone(),
-        alternate.clone(),
-        reference.clone(),
-    ]);
+    let nodes = graph
+        .base_graph
+        .add_vertices(vec![&top, &bot, &alternate, &reference]);
     graph.base_graph.add_edges(
         nodes[0],
         vec![nodes[3], nodes[1]],

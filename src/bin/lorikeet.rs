@@ -2,37 +2,41 @@ extern crate openssl;
 extern crate openssl_sys;
 
 extern crate lorikeet_genome;
-
 use lorikeet_genome::cli::*;
-
 use lorikeet_genome::external_command_checker;
+use reference::reference_reader_utils::GenomesAndContigs;
 use lorikeet_genome::utils::utils::*;
 use lorikeet_genome::*;
 
 extern crate coverm;
 use coverm::bam_generator::*;
-use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use coverm::*;
 
+extern crate bird_tool_utils;
+
 use std::env;
 use std::process;
-use std::str;
-
-extern crate tempdir;
 extern crate tempfile;
 use tempfile::NamedTempFile;
+
 extern crate clap;
 use clap::*;
+
+extern crate clap_complete;
+use clap_complete::{generate, Shell};
 
 #[macro_use]
 extern crate log;
 use log::LevelFilter;
 extern crate env_logger;
 use env_logger::Builder;
-use lorikeet_genome::processing::lorikeet_engine::{start_lorikeet_engine, ReadType, run_summarize};
+use lorikeet_genome::processing::lorikeet_engine::{
+    run_summarize, start_lorikeet_engine, ReadType
+};
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
+use lorikeet_genome::utils::errors::BirdToolError;
 
 fn main() {
     let mut app = build_cli();
@@ -40,9 +44,9 @@ fn main() {
     set_log_level(&matches, false);
 
     match matches.subcommand_name() {
-        Some("summarize") => {
-            let m = matches.subcommand_matches("summarize").unwrap();
-
+        Some("summarise") => {
+            let m = matches.subcommand_matches("summarise").unwrap();
+            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, summarise_full_help());
             rayon::ThreadPoolBuilder::new()
                 .num_threads(m.value_of("threads").unwrap().parse().unwrap())
                 .build_global()
@@ -51,30 +55,46 @@ fn main() {
         }
         Some("genotype") => {
             let m = matches.subcommand_matches("genotype").unwrap();
+            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, genotype_full_help());
             let mode = "genotype";
-            if m.is_present("full-help") {
-                println!("{}", genotype_full_help());
-                process::exit(1);
-            }
-            prepare_pileup(m, mode);
+
+            match prepare_pileup(m, mode) {
+                Ok(_) => info!("Genotype complete."),
+                Err(e) => warn!("Genotype failed with error: {:?}", e),
+            };
         }
         Some("call") => {
             let m = matches.subcommand_matches("call").unwrap();
+            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, call_full_help());
             let mode = "call";
-            if m.is_present("full-help") {
-                println!("{}", call_full_help());
-                process::exit(1);
-            }
-            prepare_pileup(m, mode);
+
+            match prepare_pileup(m, mode) {
+                Ok(_) => info!("Call complete."),
+                Err(e) => warn!("Call failed with error: {:?}", e),
+            };
         }
         Some("consensus") => {
             let m = matches.subcommand_matches("consensus").unwrap();
+            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, consensus_full_help());
             let mode = "consensus";
-            if m.is_present("full-help") {
-                println!("{}", consensus_full_help());
-                process::exit(1);
+
+            match prepare_pileup(m, mode) {
+                Ok(_) => info!("Consensus complete."),
+                Err(e) => warn!("Consensus failed with error: {:?}", e),
+            };
+        }
+        Some("shell-completion") => {
+            let m = matches.subcommand_matches("shell-completion").unwrap();
+            set_log_level(m, true);
+            let mut file = std::fs::File::create(m.value_of("output-file").unwrap())
+                .expect("failed to open output file");
+
+            if let Some(generator) = m.get_one::<Shell>("shell").copied() {
+                let mut cmd = build_cli();
+                info!("Generating completion script for shell {}", generator);
+                let name = cmd.get_name().to_string();
+                generate(generator, &mut cmd, name, &mut file);
             }
-            prepare_pileup(m, mode);
         }
         _ => {
             app.print_help().unwrap();
@@ -83,7 +103,7 @@ fn main() {
     }
 }
 
-fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
+fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError> {
     // This function is amazingly painful. It handles every combination of longread and short read
     // mapping or bam file reading. Could not make it smaller using dynamic or static dispatch
     set_log_level(m, true);
@@ -142,7 +162,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
                 let long_readers =
                     bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -152,17 +172,17 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let long_generators = long_generator_setup(
+                let (long_generators, _indices) = long_generator_setup(
                     &m,
                     &concatenated_genomes,
                     &Some(references.clone()),
                     &tmp_dir,
                 );
 
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -172,9 +192,9 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else {
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -184,7 +204,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             }
         } else {
             let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
@@ -193,7 +213,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
                 let long_readers =
                     bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -203,17 +223,17 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let long_generators = long_generator_setup(
+                let (long_generators, _indices) = long_generator_setup(
                     &m,
                     &concatenated_genomes,
                     &Some(references.clone()),
                     &tmp_dir,
                 );
 
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -223,9 +243,9 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else {
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -235,7 +255,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             }
         }
     } else {
@@ -267,7 +287,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
                 let long_readers =
                     bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -277,17 +297,17 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let long_generators = long_generator_setup(
+                let (long_generators, _indices) = long_generator_setup(
                     &m,
                     &concatenated_genomes,
                     &Some(references.clone()),
                     &tmp_dir,
                 );
 
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -297,9 +317,9 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else {
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -309,7 +329,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             }
         } else {
             debug!("Not filtering..");
@@ -330,12 +350,13 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     all_generators.push(g)
                 }
             }
+
             if m.is_present("longread-bam-files") {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
                 let long_readers =
                     bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
 
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -345,17 +366,17 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let long_generators = long_generator_setup(
+                let (long_generators, _indices) = long_generator_setup(
                     &m,
                     &concatenated_genomes,
                     &Some(references.clone()),
                     &tmp_dir,
                 );
 
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -365,9 +386,9 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             } else {
-                run_pileup(
+                return run_pileup(
                     m,
                     mode,
                     &mut estimators,
@@ -377,7 +398,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                )
+                );
             }
         }
     }
@@ -500,7 +521,7 @@ fn run_pileup<
     genomes_and_contigs_option: Option<GenomesAndContigs>,
     tmp_bam_file_cache: Option<tempdir::TempDir>,
     concatenated_genomes: Option<NamedTempFile>,
-) {
+) -> Result<(), BirdToolError> {
     let genomes_and_contigs = genomes_and_contigs_option.unwrap();
 
     start_lorikeet_engine(
@@ -513,7 +534,8 @@ fn run_pileup<
         genomes_and_contigs,
         tmp_bam_file_cache,
         concatenated_genomes,
-    );
+    )?;
+    Ok(())
 }
 
 fn set_log_level(matches: &clap::ArgMatches, is_last: bool) {

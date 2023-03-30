@@ -87,9 +87,8 @@ impl ReadClipper {
                     ref_stop + 1,
                 );
             } else if alignment_start < ref_start {
-                return ReadClipper::new(read).hard_clip_by_reference_coordinates_left_tail(
-                    ref_start.saturating_sub(1),
-                );
+                return ReadClipper::new(read)
+                    .hard_clip_by_reference_coordinates_left_tail(ref_start.saturating_sub(1));
             } else if alignment_stop > ref_stop {
                 return ReadClipper::new(read)
                     .hard_clip_by_reference_coordinates_right_tail(ref_stop + 1);
@@ -426,10 +425,7 @@ impl ReadClipper {
 
         // It is extremely important that we cut the end first otherwise the read coordinates change.
         if cut_right >= 0 {
-            self.add_op(ClippingOp::new(
-                cut_right as usize,
-                self.read.bases.len(),
-            ));
+            self.add_op(ClippingOp::new(cut_right as usize, self.read.bases.len()));
         }
 
         if cut_left >= 0 {
@@ -513,7 +509,7 @@ impl ReadClipper {
         while right_clip_index > 0 && read_quals[right_clip_index] <= low_qual {
             right_clip_index = match right_clip_index.checked_sub(1) {
                 Some(r) => r,
-                None => break
+                None => break,
             };
         }
         while left_clip_index < read_length && read_quals[left_clip_index] <= low_qual {

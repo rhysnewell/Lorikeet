@@ -1,6 +1,6 @@
 use reads::bird_tool_reads::BirdToolRead;
-use utils::simple_interval::Locatable;
 use std::collections::HashMap;
+use utils::simple_interval::Locatable;
 
 /**
  * Represents the results of the reads -> fragment calculation.
@@ -10,14 +10,17 @@ use std::collections::HashMap;
  */
 pub struct FragmentCollection {
     singletons: Vec<BirdToolRead>,
-    overlapping_pairs: Vec<(BirdToolRead, BirdToolRead)>
+    overlapping_pairs: Vec<(BirdToolRead, BirdToolRead)>,
 }
 
 impl FragmentCollection {
-    pub fn new(singletons: Vec<BirdToolRead>, overlapping_pairs: Vec<(BirdToolRead, BirdToolRead)>) -> Self {
+    pub fn new(
+        singletons: Vec<BirdToolRead>,
+        overlapping_pairs: Vec<(BirdToolRead, BirdToolRead)>,
+    ) -> Self {
         Self {
             singletons,
-            overlapping_pairs
+            overlapping_pairs,
         }
     }
 
@@ -28,7 +31,8 @@ impl FragmentCollection {
     pub fn create(read_containing_objects: Vec<BirdToolRead>) -> Self {
         let mut singletons = Vec::with_capacity(read_containing_objects.len());
         let mut overlapping = Vec::with_capacity(read_containing_objects.len());
-        let mut name_map: HashMap<Vec<u8>, BirdToolRead> = HashMap::with_capacity(read_containing_objects.len());
+        let mut name_map: HashMap<Vec<u8>, BirdToolRead> =
+            HashMap::with_capacity(read_containing_objects.len());
 
         let mut last_start = -1;
         for read in read_containing_objects {
@@ -39,8 +43,11 @@ impl FragmentCollection {
             };
             last_start = read.get_start() as i64;
 
-            if !read.read.is_paired() || read.read.is_mate_unmapped()
-                || read.read.mpos() == -1 || read.read.mpos() > read.get_end() as i64 {
+            if !read.read.is_paired()
+                || read.read.is_mate_unmapped()
+                || read.read.mpos() == -1
+                || read.read.mpos() > read.get_end() as i64
+            {
                 // if we know that this read won't overlap its mate, or doesn't have one, jump out early
                 singletons.push(read);
             } else {
@@ -50,7 +57,7 @@ impl FragmentCollection {
                     Some(pe1) => {
                         // assumes we have at most 2 reads per fragment
                         overlapping.push((pe1, read));
-                    },
+                    }
                     None => {
                         name_map.insert(read_name, read);
                     }

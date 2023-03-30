@@ -53,7 +53,7 @@ impl AlleleListUnitTester {
             let expected_allele = expected[i];
             let actual_allele = match actual.get_allele(i) {
                 Some(actual_allele) => actual_allele,
-                None => panic!("Can't retrieve actual allele {}", i)
+                None => panic!("Can't retrieve actual allele {}", i),
             };
             assert!(!expected_allele_set.contains(actual_allele));
             assert_eq!(actual_allele, expected_allele);

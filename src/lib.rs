@@ -14,8 +14,8 @@ pub mod ani_calculator;
 pub mod annotator;
 pub mod assembly;
 pub mod cli;
-pub mod external_command_checker;
 pub mod evolve;
+pub mod external_command_checker;
 pub mod genotype;
 pub mod graphs;
 pub mod haplotype;
@@ -37,10 +37,11 @@ extern crate bio;
 extern crate bio_types;
 extern crate gkl;
 extern crate rust_htslib;
-extern crate seq_io;
+extern crate needletail;
 
 // Birds and CoverM
 extern crate bird_tool_utils;
+extern crate bird_tool_utils_man;
 extern crate coverm;
 extern crate galah;
 
@@ -57,8 +58,10 @@ extern crate statrs;
 extern crate approx;
 extern crate bstr;
 extern crate clap;
+extern crate clap_complete;
 extern crate compare;
-extern crate csv;
+#[macro_use]
+extern crate enum_ordinalize;
 extern crate env_logger;
 extern crate glob;
 extern crate hashlink;
@@ -66,11 +69,10 @@ extern crate indexmap;
 extern crate itertools;
 extern crate libm;
 extern crate multimap;
-extern crate nix;
 extern crate num;
 extern crate ordered_float;
-extern crate pyo3;
 extern crate petgraph;
+extern crate pyo3;
 extern crate rand;
 extern crate rayon;
 extern crate scoped_threadpool;
@@ -80,24 +82,26 @@ extern crate tempfile;
 
 #[macro_use]
 extern crate log;
-extern crate derive_builder;
 extern crate indicatif;
 extern crate strum_macros;
 #[macro_use]
+extern crate lazy_static;
+extern crate roff;
+extern crate serde;
+#[macro_use]
 extern crate serde_derive;
 #[macro_use]
-extern crate lazy_static;
-extern crate derive_new;
-extern crate pest_derive;
-#[macro_use]
-extern crate enum_ordinalize;
 extern crate term;
 extern crate core;
 
-use clap::*;
 use std::process;
 
-pub fn parse_percentage(m: &ArgMatches, parameter: &str) -> f32 {
+pub const AUTHOR: &str =
+    "Rhys J. P. Newell, Centre for Microbiome Research, School of Biomedical Sciences, Faculty of Health, Queensland University of Technology";
+pub const AUTHOR_AND_EMAIL: &str =
+    "Rhys J. P. Newell, Centre for Microbiome Research, School of Biomedical Sciences, Faculty of Health, Queensland University of Technology <rhys.newell94 near gmail.com>";
+
+pub fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
     match m.is_present(parameter) {
         true => {
             let mut percentage: f32 = m.value_of(parameter).unwrap().parse().unwrap();

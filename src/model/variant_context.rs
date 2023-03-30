@@ -1,13 +1,13 @@
 use annotator::variant_annotation::VariantAnnotations;
 use external_command_checker::check_for_bcftools;
 use genotype::genotype_builder::{
-    AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext, GenotypeType
+    AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypeType, GenotypesContext,
 };
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use hashlink::{LinkedHashMap, LinkedHashSet};
-use itertools::{Itertools};
+use itertools::Itertools;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variants::{Filter, Variant, NON_REF_ALLELE};
 use ordered_float::OrderedFloat;
@@ -17,14 +17,15 @@ use reference::reference_reader::ReferenceReader;
 use rust_htslib::bcf::header::HeaderView;
 use rust_htslib::bcf::record::{GenotypeAllele, Numeric};
 use rust_htslib::bcf::{IndexedReader, Read, Reader, Record, Writer};
-use std::cmp::{Ordering, max, min};
+use std::cmp::{max, min, Ordering};
 use std::collections::{HashMap, HashSet};
+use std::fmt::Error;
 use std::hash::{Hash, Hasher};
-use std::ops::Range;
+use std::ops::{Deref, Range};
+use std::path::Path;
 use utils::math_utils::MathUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
-use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct VariantContext {
@@ -68,13 +69,10 @@ impl VariantType {
 // instead of a max-heap.
 impl Ord for VariantContext {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.loc.tid
+        self.loc
+            .tid
             .cmp(&other.loc.tid)
-            .then_with(|| {
-                self
-                    .loc.start
-                    .cmp(&other.loc.start)
-            })
+            .then_with(|| self.loc.start.cmp(&other.loc.start))
             .then_with(|| {
                 self.get_reference()
                     .length()
@@ -130,7 +128,11 @@ impl VariantContext {
         end: usize,
         alleles: Vec<ByteArrayAllele>,
     ) -> VariantContext {
-        let alleles = Self::make_alleles(alleles.into_iter().collect::<LinkedHashSet<ByteArrayAllele>>());
+        let alleles = Self::make_alleles(
+            alleles
+                .into_iter()
+                .collect::<LinkedHashSet<ByteArrayAllele>>(),
+        );
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles,
@@ -144,7 +146,12 @@ impl VariantContext {
     }
 
     pub fn build_from_vc(vc: &VariantContext) -> VariantContext {
-        let alleles = Self::make_alleles(vc.alleles.iter().cloned().collect::<LinkedHashSet<ByteArrayAllele>>());
+        let alleles = Self::make_alleles(
+            vc.alleles
+                .iter()
+                .cloned()
+                .collect::<LinkedHashSet<ByteArrayAllele>>(),
+        );
         VariantContext {
             loc: vc.loc.clone(),
             alleles,
@@ -721,8 +728,8 @@ impl VariantContext {
         match IndexedReader::from_path(file) {
             Ok(vcf_reader) => {
                 debug!("Found readable VCF file");
-                return vcf_reader
-            },
+                return vcf_reader;
+            }
             Err(_e) => {
                 // vcf file likely not indexed
                 Self::generate_vcf_index(file)
@@ -766,48 +773,64 @@ impl VariantContext {
     pub fn from_vcf_record(record: &mut Record, with_depths: bool) -> Option<VariantContext> {
         debug!("Found VCF record with {:?} alleles", record.allele_count());
         let variants = Self::collect_variants(record, false, false, None);
-        if variants.len() > 0 {
-            // Get elements from record
+        if variants.len() == 0 {
+            return None;
+        }
 
-            let mut vc = Self::build(
-                record.rid().unwrap() as usize,
-                record.pos() as usize,
-                record.pos() as usize,
-                variants,
+        // Get elements from record
+        let mut vc = Self::build(
+            record.rid().unwrap() as usize,
+            record.pos() as usize,
+            record.pos() as usize,
+            variants,
+        );
+        if with_depths {
+            let allele_depths = record.format(b"AD").integer().unwrap();
+            let genotype_tags = record.format(b"GT").string().unwrap();
+            let ploidy = genotype_tags
+                .as_slice()
+                .iter()
+                .map(|g| g.len())
+                .max()
+                .unwrap();
+            debug!(
+                "Allele depths {:?} {:?}",
+                &allele_depths,
+                record.format(b"AD").integer().unwrap()
             );
-            if with_depths {
-                let allele_depths = record.format(b"AD").integer().unwrap();
-                debug!("Allele depths {:?} {:?}", &allele_depths, record.format(b"AD").integer().unwrap());
-                let mut genotypes = allele_depths.iter().map(|depths| {
+            let mut genotypes = allele_depths
+                .iter()
+                .map(|depths| {
                     let mut depths = depths.into_iter().map(|d| *d as i64).collect::<Vec<i64>>();
                     if depths.len() == 1 {
                         depths = vec![0; vc.alleles.len()];
                     };
                     // println!("Depths {:?}", &depths);
-                    Genotype::build_from_ads(depths)
-                }).collect::<Vec<Genotype>>();
+                    Genotype::build_from_ads(ploidy, depths)
+                })
+                .collect::<Vec<Genotype>>();
 
-                let genotype_context = GenotypesContext::new(genotypes);
-                vc.genotypes = genotype_context;
+            let genotype_context = GenotypesContext::new(genotypes);
+            vc.genotypes = genotype_context;
 
-                let qd = record.info(b"QD").float().unwrap();
-                vc.attributes.insert(VariantAnnotations::QualByDepth.to_key().to_string(), AttributeObject::f64(qd.unwrap()[0] as f64));
-            }
-            vc.log10_p_error((record.qual() as f64) / -10.0);
-
-            // Separate filters into hashset of filter struct
-            let filters = record.filters();
-            let header = record.header();
-            for filter in filters {
-                vc.filter(Filter::from_result(std::str::from_utf8(
-                    &header.id_to_name(filter)[..],
-                )));
-            }
-            debug!("VC {:?}", &vc);
-            Some(vc)
-        } else {
-            None
+            let qd = record.info(b"QD").float().unwrap();
+            vc.attributes.insert(
+                VariantAnnotations::QualByDepth.to_key().to_string(),
+                AttributeObject::f64(qd.unwrap()[0] as f64),
+            );
         }
+        vc.log10_p_error((record.qual() as f64) / -10.0);
+
+        // Separate filters into hashset of filter struct
+        let filters = record.filters();
+        let header = record.header();
+        for filter in filters {
+            vc.filter(Filter::from_result(std::str::from_utf8(
+                &header.id_to_name(filter)[..],
+            )));
+        }
+        debug!("VC {:?}", &vc);
+        Some(vc)
     }
 
     /// Collect variants from a given ´bcf::Record`.
@@ -903,7 +926,6 @@ impl VariantContext {
                     // TODO Catch <DUP> structural variants here
                     // skip any other special alleles
                     // variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
-
                 } else if alt_allele.len() == 1 && ref_allele.len() == 1 {
                     // SNV
                     if omit_snvs {
@@ -949,15 +971,18 @@ impl VariantContext {
             Ok(rid) => Some(rid),
             Err(_) => {
                 // Remove leading reference stem
-                debug!("Attempting to find {:?}", std::str::from_utf8(ReferenceReader::split_contig_name(contig_name, '~' as u8)));
+                debug!(
+                    "Attempting to find {:?}",
+                    std::str::from_utf8(ReferenceReader::split_contig_name(contig_name, '~' as u8))
+                );
                 match vcf_header
                     .name2rid(ReferenceReader::split_contig_name(contig_name, '~' as u8))
                 {
                     Ok(rid) => Some(rid),
                     Err(_) => match vcf_header.name2rid(contig_name) {
                         Ok(rid) => Some(rid),
-                        Err(_) => None
-                    }
+                        Err(_) => None,
+                    },
                 }
             }
         }
@@ -1053,14 +1078,13 @@ impl VariantContext {
         let mut n = 0;
         let mut genotypes = self.get_genotypes();
 
-
         for g in genotypes.genotypes() {
             for a in g.alleles.iter() {
                 if !a.is_no_call() {
                     n += 1;
                 }
-            };
-        };
+            }
+        }
 
         n
     }
@@ -1071,7 +1095,7 @@ impl VariantContext {
 
         for g in genotypes.genotypes() {
             n += g.count_allele(a);
-        };
+        }
 
         n
     }
@@ -1382,22 +1406,32 @@ impl VariantContext {
                 ads.push(genotype.ad_str());
                 dps.push(0);
                 gqs.push(0);
-                continue
+                continue;
             };
 
             let mut phased = vec![GenotypeAllele::Unphased(0); genotype.ploidy];
             // let n_alleles = genotype.alleles.len();
-            let pls_index = genotype.pl.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap();
+            let pls_index = genotype
+                .pl
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap();
 
-            let genotype_tag_vals = Self::calculate_genotype_tag(pls_index, genotype.ploidy, genotype.alleles.len());
+            let genotype_tag_vals =
+                Self::calculate_genotype_tag(pls_index, genotype.ploidy, genotype.alleles.len());
 
-            genotype_tag_vals.into_iter().enumerate().for_each(|(i, tag_val)| {
-                if genotype.is_phased && i != 0 {
-                    phased[i] = GenotypeAllele::Phased(tag_val)
-                } else {
-                    phased[i] = GenotypeAllele::Unphased(tag_val)
-                }
-            });
+            genotype_tag_vals
+                .into_iter()
+                .enumerate()
+                .for_each(|(i, tag_val)| {
+                    if genotype.is_phased && i != 0 {
+                        phased[i] = GenotypeAllele::Phased(tag_val)
+                    } else {
+                        phased[i] = GenotypeAllele::Unphased(tag_val)
+                    }
+                });
 
             phases.extend(phased);
 
@@ -1451,7 +1485,7 @@ impl VariantContext {
     pub fn calculate_genotype_tag(pls_index: usize, ploidy: usize, n_alleles: usize) -> Vec<i32> {
         let mut genotype_tag_vals = vec![0; ploidy];
         if pls_index == 0 {
-            return genotype_tag_vals // easy homozygous ref result
+            return genotype_tag_vals; // easy homozygous ref result
         }
         let mut ploidy_index = ploidy.saturating_sub(1); // start from back of tag
 
@@ -1460,8 +1494,8 @@ impl VariantContext {
         let mut rounds = 0;
         let mut max_allele_allowed = 1;
         for tag_index in 0..pls_index {
-
-            if ploidy_index == 0 && genotype_tag_vals[ploidy_index] == max_allele_allowed { // reached end of round
+            if ploidy_index == 0 && genotype_tag_vals[ploidy_index] == max_allele_allowed {
+                // reached end of round
                 rounds += 1;
                 ploidy_index = ploidy.saturating_sub(1); // reset ploidy index
                 genotype_tag_vals.fill(0);

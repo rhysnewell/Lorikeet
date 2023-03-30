@@ -1,12 +1,14 @@
+use annotator::variant_annotation::{Annotation, VariantAnnotations};
+use genotype::genotype_builder::AttributeObject;
 use itertools::Itertools;
+use mathru::algebra::abstr::Sign;
 use model::variant_context::VariantContext;
+use model::variant_context_utils::VariantContextUtils;
 use ndarray::Array2;
+use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use genotype::genotype_builder::AttributeObject;
-use annotator::variant_annotation::{Annotation, VariantAnnotations};
-use model::variant_context_utils::VariantContextUtils;
 // use polars;
 
 /// Holds the population and consensus ANI & Fst arrays
@@ -59,12 +61,22 @@ impl ANICalculator {
         sample_names: &[&str],
         reference_name: &str,
         genome_size: u64,
+        passing_sites: Option<Vec<Vec<i32>>>,
         qual_by_depth_filter: f64,
         qual_threshold: f64,
-        depth_per_sample_filter: i64
+        depth_per_sample_filter: i64,
     ) {
+        let compared_bases =
+            self.calculate_compared_bases(passing_sites, genome_size, sample_names.len());
+
+        debug!("Comparable bases \n{:?}", &compared_bases);
         self.calculate_from_contexts(
-            contexts, genome_size, qual_by_depth_filter, qual_threshold, depth_per_sample_filter
+            contexts,
+            genome_size,
+            qual_by_depth_filter,
+            qual_threshold,
+            depth_per_sample_filter,
+            compared_bases,
         );
 
         Self::write_ani_tables(
@@ -90,6 +102,76 @@ impl ANICalculator {
         );
     }
 
+    fn calculate_compared_bases(
+        &mut self,
+        passing_sites: Option<Vec<Vec<i32>>>,
+        genome_size: u64,
+        n_samples: usize,
+    ) -> Array2<f64> {
+        let mut compared_bases = Array2::default((n_samples, n_samples));
+        match passing_sites {
+            Some(passing_sites) => {
+                for s1_ind in 0..passing_sites.len() {
+                    let s1 = &passing_sites[s1_ind];
+                    for s2_ind in (s1_ind + 1)..passing_sites.len() {
+                        let s2 = &passing_sites[s2_ind];
+
+                        let mut i1 = 0; // index in each sample array
+                        let mut i2 = 0;
+
+                        let mut used1 = 0; // a buffer containing the number of used bases at the current index
+                        let mut used2 = 0;
+                        let mut differing_bases = 0; // number of bases found to be incomparable
+
+                        while i1 < s1.len() && i2 < s2.len() {
+                            // the current values
+                            let val1 = s1[i1];
+                            let val2 = s2[i2];
+
+                            let abs1 = val1.abs() - used1;
+                            let abs2 = val2.abs() - used2;
+
+                            // check if either val is negative. i.e. non-comparable
+                            if val1.is_negative() || val2.is_negative() {
+                                // for differing states use val1.sign() != val2.sign()
+                                differing_bases += min(abs1, abs2);
+                            }
+                            used1 += min(abs1, abs2);
+                            used2 += min(abs1, abs2);
+
+                            if used1 >= val1.abs() && used2 >= val2.abs() {
+                                i1 += 1;
+                                i2 += 2;
+                                used1 -= val1.abs();
+                                used2 -= val2.abs();
+                            } else if used1 >= val1.abs() {
+                                i1 += 1;
+                                used1 -= val1.abs();
+                            } else {
+                                i2 += 1;
+                                used2 -= val2.abs();
+                            }
+                        }
+
+                        let comparable_bases = (genome_size - differing_bases as u64) as f64;
+                        compared_bases[[s1_ind, s2_ind]] = comparable_bases;
+                        compared_bases[[s2_ind, s1_ind]] = comparable_bases;
+                    }
+                    let comparable_bases_to_ref = (genome_size as i32
+                        + s1.into_iter().filter(|x| x.is_negative()).sum::<i32>())
+                        as f64;
+                    compared_bases[[s1_ind, s1_ind]] = comparable_bases_to_ref;
+                }
+            }
+            _ => {
+                compared_bases.iter_mut().for_each(|val| {
+                    *val = genome_size as f64;
+                });
+            }
+        }
+        compared_bases
+    }
+
     /// Takes refernce to a vec of variant contexts and compares the consensus and population
     /// ANI between each sample. The input contexts need to be non split i.e. prior to being
     /// put through genotyping pipeline
@@ -99,7 +181,8 @@ impl ANICalculator {
         genome_size: u64,
         qual_by_depth_filter: f64,
         qual_threshold: f64,
-        depth_per_sample_filter: i64
+        depth_per_sample_filter: i64,
+        compared_bases: Array2<f64>,
     ) {
         let n_samples = self.conANI.ncols();
 
@@ -109,9 +192,11 @@ impl ANICalculator {
             let mut consenus_allele_indices = Vec::with_capacity(n_samples);
             let mut present_alleles = Vec::with_capacity(n_samples);
             if !VariantContextUtils::passes_thresholds(
-                context, qual_by_depth_filter, qual_threshold
+                context,
+                qual_by_depth_filter,
+                qual_threshold,
             ) {
-                continue
+                continue;
             }
 
             // println!("Context passes {} {}", context.log10_p_error, context.get_dp());
@@ -135,7 +220,7 @@ impl ANICalculator {
                     continue; // nothing present here
                 }
 
-                for sample_idx_2 in 0..n_samples {
+                for sample_idx_2 in sample_idx_1..n_samples {
                     if consenus_allele_indices.len() == sample_idx_2 {
                         // get consensus of first sample, default to ref
                         consenus_allele_indices.push(
@@ -144,8 +229,8 @@ impl ANICalculator {
                                 .unwrap_or_default(),
                         );
                         // which alleles are present in first sample with at least two supporting reads
-                        let mut which_are_present =
-                            context.alleles_present_in_sample(sample_idx_2, depth_per_sample_filter);
+                        let mut which_are_present = context
+                            .alleles_present_in_sample(sample_idx_2, depth_per_sample_filter);
                         present_alleles.push(which_are_present);
                     }
 
@@ -164,13 +249,14 @@ impl ANICalculator {
                             if context.alleles[*consensus_1].len() > 1
                                 || context.alleles[*consensus_2].len() > 1
                             {
-                                let bases_different = (context.alleles[*consensus_1].len()
-                                    as f64
+                                let bases_different = (context.alleles[*consensus_1].len() as f64
                                     - context.alleles[*consensus_2].len() as f64)
                                     .abs();
                                 self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                                self.conANI[[sample_idx_2, sample_idx_1]] += bases_different;
                             } else {
                                 self.conANI[[sample_idx_1, sample_idx_2]] += 1.0;
+                                self.conANI[[sample_idx_2, sample_idx_1]] += 1.0;
                             }
                         }
 
@@ -198,10 +284,12 @@ impl ANICalculator {
                             // if they share ANY alleles, then popANI does not change
 
                             self.popANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                            self.popANI[[sample_idx_2, sample_idx_1]] += bases_different;
                         }
 
                         if allele_present_1 != allele_present_2 {
                             self.subpopANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                            self.subpopANI[[sample_idx_2, sample_idx_1]] += bases_different;
                         }
                     } else {
                         let consensus_1 = &consenus_allele_indices[sample_idx_1];
@@ -211,8 +299,7 @@ impl ANICalculator {
                             if context.alleles[*consensus_1].len() > 1
                                 || context.alleles[0].len() > 1
                             {
-                                let bases_different = (context.alleles[*consensus_1].len()
-                                    as f64
+                                let bases_different = (context.alleles[*consensus_1].len() as f64
                                     - context.alleles[0].len() as f64)
                                     .abs();
                                 self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
@@ -242,18 +329,27 @@ impl ANICalculator {
             }
         }
 
-        let length = genome_size as f64;
-        self.popANI.iter_mut().for_each(|val| {
-            *val = 1.0 - (*val / length);
-        });
+        // let length = genome_size as f64;
+        self.popANI
+            .iter_mut()
+            .zip(compared_bases.iter())
+            .for_each(|(val, length)| {
+                *val = 1.0 - (*val / length);
+            });
 
-        self.subpopANI.iter_mut().for_each(|val| {
-            *val = 1.0 - (*val / length);
-        });
+        self.subpopANI
+            .iter_mut()
+            .zip(compared_bases.iter())
+            .for_each(|(val, length)| {
+                *val = 1.0 - (*val / length);
+            });
 
-        self.conANI.iter_mut().for_each(|val| {
-            *val = 1.0 - (*val / length);
-        })
+        self.conANI
+            .iter_mut()
+            .zip(compared_bases.iter())
+            .for_each(|(val, length)| {
+                *val = 1.0 - (*val / length);
+            })
     }
 
     fn write_ani_tables(

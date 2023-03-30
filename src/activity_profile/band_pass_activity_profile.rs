@@ -184,8 +184,7 @@ impl Profile for BandPassActivityProfile {
     }
 
     fn get_end(&self) -> Option<usize> {
-        self.activity_profile
-            .get_end()
+        self.activity_profile.get_end()
     }
 
     /**
@@ -252,7 +251,8 @@ impl Profile for BandPassActivityProfile {
                     match loc {
                         Some(loc) => {
                             let new_prob = super_state.is_active_prob()
-                                * self.gaussian_kernel[(i + self.filter_size as i64) as usize] as f32;
+                                * self.gaussian_kernel[(i + self.filter_size as i64) as usize]
+                                    as f32;
                             states.push(ActivityProfileState::new(loc, new_prob, Type::None))
                         }
                         None => continue,

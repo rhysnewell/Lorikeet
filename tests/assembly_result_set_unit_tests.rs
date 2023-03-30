@@ -50,7 +50,6 @@ use std::collections::HashMap;
 //     assert_eq!(subject.get_haplotypes().len(), 1);
 // }
 
-
 fn test_trim_to(
     haplotype_and_result_sets: HashMap<
         Haplotype<SimpleInterval>,

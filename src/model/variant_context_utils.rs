@@ -78,69 +78,67 @@ impl VariantContextUtils {
     pub fn passes_thresholds(
         context: &mut VariantContext,
         qual_by_depth_filter: f64,
-        qual_threshold: f64
+        qual_threshold: f64,
     ) -> bool {
         match context.attributes.get("QF").cloned() {
-            Some(attribute) => {
-                match attribute {
-                    AttributeObject::String(passes) => {
-                        match passes.as_str() {
-                            "true" => true,
-                            "false" => false,
-                            _ => Self::check_thresholds(
-                                context,
-                                qual_by_depth_filter,
-                                qual_threshold
-                            ),
-                        }
-                    },
-                    _ => Self::check_thresholds(
-                            context,
-                            qual_by_depth_filter,
-                            qual_threshold
-                        ),
-                }
+            Some(attribute) => match attribute {
+                AttributeObject::String(passes) => match passes.as_str() {
+                    "true" => true,
+                    "false" => false,
+                    _ => Self::check_thresholds(context, qual_by_depth_filter, qual_threshold),
+                },
+                _ => Self::check_thresholds(context, qual_by_depth_filter, qual_threshold),
             },
-            None => Self::check_thresholds(
-                context,
-                qual_by_depth_filter,
-                qual_threshold
-            ),
+            None => Self::check_thresholds(context, qual_by_depth_filter, qual_threshold),
         }
     }
 
     fn check_thresholds(
         context: &mut VariantContext,
         qual_by_depth_filter: f64,
-        qual_threshold: f64
+        qual_threshold: f64,
     ) -> bool {
         match context.attributes.get("QD").cloned() {
-            Some(attribute) => {
-                match attribute {
-                    AttributeObject::f64(val) => {
-                        let result = val >= qual_by_depth_filter && context.log10_p_error <= qual_threshold;
-                        context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+            Some(attribute) => match attribute {
+                AttributeObject::f64(val) => {
+                    let result =
+                        val >= qual_by_depth_filter && context.log10_p_error <= qual_threshold;
+                    context.attributes.insert(
+                        VariantAnnotations::Qualified.to_key().to_string(),
+                        AttributeObject::String(format!("{}", result)),
+                    );
+                    result
+                }
+                _ => {
+                    if context.has_log10_p_error() {
+                        let result = context.log10_p_error <= qual_threshold;
+                        context.attributes.insert(
+                            VariantAnnotations::Qualified.to_key().to_string(),
+                            AttributeObject::String(format!("{}", result)),
+                        );
                         result
-                    },
-                    _ => {
-                        if context.has_log10_p_error() {
-                            let result = context.log10_p_error <= qual_threshold;
-                            context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
-                            result
-                        } else {
-                            context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String("false".to_string()));
-                            false
-                        }
+                    } else {
+                        context.attributes.insert(
+                            VariantAnnotations::Qualified.to_key().to_string(),
+                            AttributeObject::String("false".to_string()),
+                        );
+                        false
                     }
                 }
             },
             None => {
                 if context.has_log10_p_error() {
                     let result = context.log10_p_error <= qual_threshold;
-                    context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                    context.attributes.insert(
+                        VariantAnnotations::Qualified.to_key().to_string(),
+                        AttributeObject::String(format!("{}", result)),
+                    );
                     result
                 } else {
-                    context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String("false".to_string()));
+                    context.attributes.insert(
+                        VariantAnnotations::Qualified.to_key().to_string(),
+                        AttributeObject::String("false".to_string()),
+                    );
                     false
                 }
             }
@@ -551,7 +549,11 @@ impl VariantContextUtils {
         return Some(builder);
     }
 
-    pub fn calculate_chromosome_counts(vc: &mut VariantContext, attributes: &mut LinkedHashMap<String, AttributeObject>, remove_stale_values: bool) {
+    pub fn calculate_chromosome_counts(
+        vc: &mut VariantContext,
+        attributes: &mut LinkedHashMap<String, AttributeObject>,
+        remove_stale_values: bool,
+    ) {
         let AN = vc.get_called_chr_count();
         if AN == 0 && remove_stale_values {
             if attributes.contains_key("AC") {
@@ -607,12 +609,19 @@ impl VariantContextUtils {
         let mut split_vcs = Vec::new();
         let mut filtered_vcs = Vec::new();
         for mut vc in vcs {
-            match vc.attributes.get(VariantAnnotations::QualByDepth.to_key()).clone() {
+            match vc
+                .attributes
+                .get(VariantAnnotations::QualByDepth.to_key())
+                .clone()
+            {
                 Some(qbd) => {
                     if let &AttributeObject::f64(qbd) = qbd {
                         // Filter by qbd value
                         let result = qbd >= min_qual_by_depth && vc.log10_p_error <= -15.0;
-                        vc.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                        vc.attributes.insert(
+                            VariantAnnotations::Qualified.to_key().to_string(),
+                            AttributeObject::String(format!("{}", result)),
+                        );
                         if qbd >= min_qual_by_depth && vc.log10_p_error <= -15.0 {
                             let n_alts = vc.get_alternate_alleles().len();
                             if n_alts == 1 {
@@ -704,9 +713,7 @@ impl VariantContextUtils {
                         }
                     }
                 }
-                None => {
-                    filtered_vcs.push(vc)
-                },
+                None => filtered_vcs.push(vc),
             }
         }
 
@@ -944,7 +951,12 @@ impl VariantContextUtils {
         trim_forward: bool,
         trim_reverse: bool,
     ) -> VariantContext {
-        if input_vc.get_n_alleles() <= 1 || input_vc.get_alleles().iter().any(|a| a.len() == 1 && !a.is_symbolic) {
+        if input_vc.get_n_alleles() <= 1
+            || input_vc
+                .get_alleles()
+                .iter()
+                .any(|a| a.len() == 1 && !a.is_symbolic)
+        {
             return input_vc.clone();
         }
 

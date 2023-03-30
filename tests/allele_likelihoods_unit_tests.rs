@@ -24,6 +24,7 @@ use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikeliho
 use lorikeet_genome::haplotype::haplotype_caller_genotyping_engine::HaplotypeCallerGenotypingEngine;
 use lorikeet_genome::model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
 use lorikeet_genome::model::allele_likelihoods::{AlleleLikelihoods, LOG_10_INFORMATIVE_THRESHOLD};
+use lorikeet_genome::model::allele_list::AlleleList;
 use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
@@ -46,7 +47,6 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Mutex;
-use lorikeet_genome::model::allele_list::AlleleList;
 
 lazy_static! {
     static ref READ_COUNTS: Vec<Vec<usize>> = vec![
@@ -182,7 +182,7 @@ fn test_likelihood_matrix_queries(
 ) {
     let dummy = Array2::zeros((0, 0));
     for sample in samples.iter() {
-        let index_of_sample = result.index_of_sample(sample);
+        let index_of_sample = result.index_of_sample(sample).unwrap();
         let sample_read_count = result.sample_evidence_count(index_of_sample);
         let number_of_alleles = result.number_of_alleles();
         assert_eq!(result.number_of_alleles(), number_of_alleles);
@@ -245,7 +245,7 @@ fn test_sample_queries(
 ) {
     let mut sample_ids = HashSet::new();
     for (idx, sample) in samples.iter().enumerate() {
-        let index_of_sample = result.index_of_sample(sample);
+        let index_of_sample = result.index_of_sample(sample).unwrap();
         assert!(index_of_sample >= 0);
         assert!(!sample_ids.contains(&index_of_sample));
         sample_ids.insert(index_of_sample);
@@ -283,7 +283,13 @@ fn test_best_alleles<A: Allele>(
     let number_of_alleles = alleles.len();
     let ref_index = original.alleles().index_of_reference();
     let ref_allele = if ref_index.is_some() {
-        Some(original.alleles().get_allele(ref_index.unwrap()).unwrap().clone())
+        Some(
+            original
+                .alleles()
+                .get_allele(ref_index.unwrap())
+                .unwrap()
+                .clone(),
+        )
     } else {
         None
     };
@@ -369,7 +375,9 @@ fn test_best_alleles<A: Allele>(
                         alleles[best_index_array[read_index]].clone()
                     };
                     assert_eq!(
-                        original_alleles.get_allele(best_allele.allele_index.unwrap()).unwrap(),
+                        original_alleles
+                            .get_allele(best_allele.allele_index.unwrap())
+                            .unwrap(),
                         &new_ref_allele
                     );
 
@@ -632,7 +640,8 @@ fn test_marginalization_with_overlap(
     let even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
     fill_with_random_likelihoods(&samples, &alleles, &mut original);
 
-    let mut marginalized = original.marginalize(&new_to_old_allele_mapping);
+    let mut marginalized =
+        original.marginalize(&new_to_old_allele_mapping, AlleleList::new(&to_alleles));
     let read_qualifies_for_genotyping_predicate =
         HaplotypeCallerGenotypingEngine::compose_read_qualifies_for_genotyping_predicate();
 
@@ -698,7 +707,8 @@ fn test_marginalization(
         "onew to old allele mapping {:?}",
         &new_to_old_allele_mapping
     );
-    let mut marginalized = original.marginalize(&new_to_old_allele_mapping, AlleleList::new(&to_alleles));
+    let mut marginalized =
+        original.marginalize(&new_to_old_allele_mapping, AlleleList::new(&to_alleles));
 
     assert_eq!(
         new_to_old_allele_mapping.len(),

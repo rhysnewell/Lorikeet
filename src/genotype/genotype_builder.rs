@@ -1,5 +1,5 @@
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use model::byte_array_allele::{ByteArrayAllele, Allele};
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -116,10 +116,10 @@ impl Genotype {
         }
     }
 
-    pub fn build_from_ads(ad: Vec<i64>) -> Genotype {
+    pub fn build_from_ads(ploidy: usize, ad: Vec<i64>) -> Genotype {
         let dp = ad.iter().sum();
         Genotype {
-            ploidy: 2,
+            ploidy,
             alleles: Vec::new(),
             ad,
             pl: Vec::new(),
@@ -128,7 +128,7 @@ impl Genotype {
             is_phased: false,
             sample_name: "".to_string(),
             attributes: HashMap::new(),
-            genotype_type: None
+            genotype_type: None,
         }
     }
 
@@ -180,7 +180,7 @@ impl Genotype {
             if allele == a {
                 c += 1;
             };
-        };
+        }
 
         c
     }
@@ -230,7 +230,12 @@ impl Genotype {
     }
 
     pub fn genotype_usable_for_af_calculation(&self) -> bool {
-        self.has_likelihoods() || self.has_gq() || self.alleles.iter().any(|a| a.is_called() && !a.is_ref && !a.is_symbolic)
+        self.has_likelihoods()
+            || self.has_gq()
+            || self
+                .alleles
+                .iter()
+                .any(|a| a.is_called() && !a.is_ref && !a.is_symbolic)
     }
 
     pub fn pl(&mut self, pl: Vec<i64>) {
@@ -279,7 +284,7 @@ impl Genotype {
 
     pub fn af(&self) -> Vec<f32> {
         let sum = self.ad.iter().sum::<i64>() as f32;
-        let mut afs: Vec<f32> = self.ad.iter().map(|i| (*i as f32) / sum ).collect();
+        let mut afs: Vec<f32> = self.ad.iter().map(|i| (*i as f32) / sum).collect();
 
         afs
     }
@@ -360,7 +365,9 @@ impl Genotype {
         return self.get_type() == &GenotypeType::HomRef;
     }
 
-    pub fn is_no_call(&mut self) -> bool { return self.get_type() == &GenotypeType::NoCall; }
+    pub fn is_no_call(&mut self) -> bool {
+        return self.get_type() == &GenotypeType::NoCall;
+    }
 
     /**
      * @return true if all observed alleles are alt; if any alleles are no-calls, this method will return false.

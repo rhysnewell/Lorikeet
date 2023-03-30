@@ -102,49 +102,49 @@ fn test_trim_leading_and_trailing_insertions(
 fn test_consolidate_cigar() {
     assert_eq!(
         make_hcf_for_cigar("AGCT", "4M")
-            .get_consolidated_padded_ciagr(0)
+            .get_consolidated_padded_cigar(0)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder")),
         CigarString::try_from("4M").unwrap()
     );
     assert_eq!(
         make_hcf_for_cigar("AGCT", "4M")
-            .get_consolidated_padded_ciagr(1)
+            .get_consolidated_padded_cigar(1)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder")),
         CigarString::try_from("5M").unwrap()
     );
     assert_eq!(
         make_hcf_for_cigar("AGCT", "1M1I1I1M")
-            .get_consolidated_padded_ciagr(0)
+            .get_consolidated_padded_cigar(0)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder")),
         CigarString::try_from("1M2I1M").unwrap()
     );
     assert_eq!(
         make_hcf_for_cigar("AGCT", "1M1I1I1M")
-            .get_consolidated_padded_ciagr(1)
+            .get_consolidated_padded_cigar(1)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder")),
         CigarString::try_from("1M2I2M").unwrap()
     );
     assert_eq!(
         make_hcf_for_cigar("AGCT", "1M1I1I1M")
-            .get_consolidated_padded_ciagr(2)
+            .get_consolidated_padded_cigar(2)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder")),
         CigarString::try_from("1M2I3M").unwrap()
     );
     assert_eq!(
         make_hcf_for_cigar("AGCT", "1M1I1I1I")
-            .get_consolidated_padded_ciagr(0)
+            .get_consolidated_padded_cigar(0)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder")),
         CigarString::try_from("1M3I").unwrap()
     );
     assert_eq!(
         make_hcf_for_cigar("AGCT", "1M1I1I1I")
-            .get_consolidated_padded_ciagr(1)
+            .get_consolidated_padded_cigar(1)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder")),
         CigarString::try_from("1M3I1M").unwrap()
     );
     assert_eq!(
         make_hcf_for_cigar("AGCT", "1M1I1I1I")
-            .get_consolidated_padded_ciagr(2)
+            .get_consolidated_padded_cigar(2)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder")),
         CigarString::try_from("1M3I2M").unwrap()
     );

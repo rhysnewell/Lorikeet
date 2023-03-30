@@ -148,7 +148,12 @@ impl GenotypingEngine {
 
         // Add 0.0 removes -0.0 occurrences.
         // if log10_confidence.is_finite() {
-        debug!("pos {} log10 {} phred {}", vc.loc.start, log10_confidence, (-10.0 * log10_confidence) + 0.0);
+        debug!(
+            "pos {} log10 {} phred {}",
+            vc.loc.start,
+            log10_confidence,
+            (-10.0 * log10_confidence) + 0.0
+        );
         // }
         let phred_scaled_confidence = (-10.0 * log10_confidence) + 0.0;
 
@@ -162,7 +167,10 @@ impl GenotypingEngine {
             &output_alternative_alleles.alleles,
         ) && given_alleles_empty
         {
-            debug!("Did not pass emit threshold {} {}", phred_scaled_confidence, stand_min_conf);
+            debug!(
+                "Did not pass emit threshold {} {}",
+                phred_scaled_confidence, stand_min_conf
+            );
             return None;
         }
 
@@ -321,18 +329,16 @@ impl GenotypingEngine {
      * @param emittedAlleles    The subset of the variant's alt alleles that are actually emitted
      */
     fn record_deletions(&mut self, vc: &VariantContext, emitted_alleles: &Vec<ByteArrayAllele>) {
-        while !self.upstream_deletions_loc.is_empty()
-        {
+        while !self.upstream_deletions_loc.is_empty() {
             let mut condition_met = false;
             match self.upstream_deletions_loc.peek() {
                 Some(upstream) => {
-                    if !upstream.contigs_match(&vc.loc) ||
-                        upstream.get_end() < vc.loc.get_start() {
+                    if !upstream.contigs_match(&vc.loc) || upstream.get_end() < vc.loc.get_start() {
                         condition_met = true
                     } else {
-                        break
+                        break;
                     }
-                },
+                }
                 None => break,
             }
             if condition_met {
@@ -341,8 +347,7 @@ impl GenotypingEngine {
         }
 
         for allele in emitted_alleles.iter() {
-
-            let deletion_size = if !allele.is_symbolic  {
+            let deletion_size = if !allele.is_symbolic {
                 vc.get_reference().length() - allele.length()
             } else {
                 0
@@ -403,9 +408,17 @@ impl GenotypingEngine {
                 let is_non_ref_which_is_lone_alt_allele =
                     alternative_allele_count == 1 && allele.eq(&*NON_REF_ALLELE);
 
-                debug!("is non ref which is lone alt_allele {}", is_non_ref_which_is_lone_alt_allele);
+                debug!(
+                    "is non ref which is lone alt_allele {}",
+                    is_non_ref_which_is_lone_alt_allele
+                );
                 let is_plausible = af_calculation_result.passes_threshold(allele, stand_min_conf);
-                debug!("plausible {} {} {}", is_plausible, af_calculation_result.get_log10_posterior_of_allele_absent(allele), QualityUtils::qual_to_error_prob_log10(stand_min_conf as u8));
+                debug!(
+                    "plausible {} {} {}",
+                    is_plausible,
+                    af_calculation_result.get_log10_posterior_of_allele_absent(allele),
+                    QualityUtils::qual_to_error_prob_log10(stand_min_conf as u8)
+                );
 
                 //it's possible that the upstream deletion that spanned this site was not emitted, mooting the symbolic spanning deletion allele
                 let is_spurious_spanning_deletion = VCFConstants::is_spanning_deletion(allele)

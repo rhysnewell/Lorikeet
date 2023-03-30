@@ -14,14 +14,14 @@ extern crate lazy_static;
 #[macro_use]
 extern crate approx;
 extern crate bio;
+extern crate hashlink;
 extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
-#[macro_use]
-extern crate ntest;
 
 use bio::io::fasta::IndexedReader;
+use hashlink::LinkedHashMap;
 use itertools::Itertools;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::assembly::assembly_result_set::AssemblyResultSet;
@@ -43,9 +43,6 @@ use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
 use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMInputScoreImputator;
-use lorikeet_genome::read_error_corrector::nearby_kmer_error_corrector::{
-    CorrectionSet, NearbyKmerErrorCorrector,
-};
 use lorikeet_genome::read_error_corrector::read_error_corrector::ReadErrorCorrector;
 use lorikeet_genome::read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use lorikeet_genome::read_threading::read_threading_assembler::ReadThreadingAssembler;
@@ -142,10 +139,7 @@ fn make_prune_chains_data() {
                     edge_weight, prune_factor, is_ref
                 );
                 let mut graph = SeqGraph::new(11);
-                let new_nodes =
-                    graph
-                        .base_graph
-                        .add_vertices(vec![&v1, &v2, &v3]);
+                let new_nodes = graph.base_graph.add_vertices(vec![&v1, &v2, &v3]);
                 graph.base_graph.add_edges(
                     new_nodes[0],
                     new_nodes[1..].to_vec(),
@@ -188,14 +182,9 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
     for variant_present in vec![false, true] {
         let mut graph = SeqGraph::new(20);
 
-        let node_indices = graph.base_graph.add_vertices(vec![
-            source.clone(),
-            A.clone(),
-            B.clone(),
-            C.clone(),
-            D.clone(),
-            sink.clone(),
-        ]);
+        let node_indices = graph
+            .base_graph
+            .add_vertices(vec![&source, &A, &B, &C, &D, &sink]);
         graph.base_graph.add_edges(
             NodeIndex::new(0),
             vec![
@@ -218,7 +207,7 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
         );
 
         if variant_present {
-            graph.base_graph.add_vertices(vec![E.clone()]);
+            graph.base_graph.add_vertices(vec![&E]);
             graph.base_graph.add_edges(
                 NodeIndex::new(1),
                 vec![NodeIndex::new(6), NodeIndex::new(2)],
@@ -226,8 +215,12 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
             );
         };
 
-        let mut pruner = ChainPruner::AdaptiveChainPruner(
-            AdaptiveChainPruner::new(0.01, 2.0, MathUtils::log10_to_log(4.0), 50));
+        let mut pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
+            0.01,
+            2.0,
+            MathUtils::log10_to_log(4.0),
+            50,
+        ));
         pruner.prune_low_weight_chains(&mut graph.base_graph);
 
         assert!(!graph.base_graph.graph.contains_node(NodeIndex::new(4)));
@@ -263,17 +256,9 @@ fn test_adaptive_chain_pruning_with_bad_bubble() {
 
     for variant_present in vec![true, false] {
         let mut graph = SeqGraph::new(20);
-        let node_indices = graph.base_graph.add_vertices(vec![
-            source.clone(),
-            A.clone(),
-            B.clone(),
-            C.clone(),
-            D.clone(),
-            E.clone(),
-            F.clone(),
-            G.clone(),
-            sink.clone(),
-        ]);
+        let node_indices = graph
+            .base_graph
+            .add_vertices(vec![&source, &A, &B, &C, &D, &E, &F, &G, &sink]);
         graph.base_graph.add_edges(
             node_indices[0],
             vec![
@@ -307,7 +292,7 @@ fn test_adaptive_chain_pruning_with_bad_bubble() {
 
         let mut h_index = NodeIndex::new(0);
         if variant_present {
-            h_index = graph.base_graph.add_node(H.clone());
+            h_index = graph.base_graph.add_node(&H);
             graph.base_graph.add_edges(
                 node_indices[1],
                 vec![h_index, node_indices[3]],
@@ -352,10 +337,12 @@ fn test_adaptive_pruning(
 ) {
     let mut rng = ThreadRng::default();
     let mut graph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
+    let mut pending = LinkedHashMap::new();
     graph.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        reference.to_vec(),
+        reference,
         0,
         reference.len(),
         1,
@@ -383,13 +370,23 @@ fn test_adaptive_pruning(
         .flat_map(|s| s)
         .collect::<Vec<Vec<u8>>>();
 
-    reads.into_iter().for_each(|r| {
-        graph.add_sequence("anonymous".to_string(), 0, r.to_vec(), 0, r.len(), 1, false)
+    let mut pending = LinkedHashMap::new();
+    reads.iter().for_each(|r| {
+        graph.add_sequence(
+            &mut pending,
+            "anonymous".to_string(),
+            0,
+            r,
+            0,
+            r.len(),
+            1,
+            false,
+        )
     });
     println!("Reads added");
 
     // note: these are the steps in ReadThreadingAssembler::createGraph
-    graph.build_graph_if_necessary();
+    graph.build_graph_if_necessary(&mut pending);
     println!(
         "Graph nodes {} edges {}",
         graph.get_base_graph().graph.node_indices().count(),
@@ -405,9 +402,12 @@ fn test_adaptive_pruning(
             .count()
     );
 
-    let mut pruner =
-        ChainPruner::AdaptiveChainPruner(
-            AdaptiveChainPruner::new(0.001, log_odds_threshold, MathUtils::log10_to_log(4.0), 50));
+    let mut pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
+        0.001,
+        log_odds_threshold,
+        MathUtils::log10_to_log(4.0),
+        50,
+    ));
     pruner.prune_low_weight_chains(graph.get_base_graph_mut());
     println!("Low weight chains pruned",);
     println!(

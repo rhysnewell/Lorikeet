@@ -140,7 +140,8 @@ fn test_subset_permutation(alleles1: &Vec<ByteArrayAllele>) {
         for i in 0..target_random_allele_list.number_of_alleles() {
             assert_eq!(
                 Some(subset.from_index(i)),
-                original_allele_list.index_of_allele(target_random_allele_list.get_allele(i).unwrap())
+                original_allele_list
+                    .index_of_allele(target_random_allele_list.get_allele(i).unwrap())
             );
         }
 

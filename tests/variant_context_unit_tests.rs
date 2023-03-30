@@ -264,48 +264,147 @@ fn test_creating_snp_variant_context() {
     assert_eq!(vc.get_alternate_alleles()[0], &vc_unit_test.T)
 }
 
-
 #[test]
 fn test_genotype_tag_calc() {
     let pls = vec![0, 1, 2];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 2), vec![0, 0]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            2,
+            2
+        ),
+        vec![0, 0]
+    );
 
     let pls = vec![1, 0, 2];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 2), vec![0, 1]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            2,
+            2
+        ),
+        vec![0, 1]
+    );
 
     let pls = vec![1, 1, 0];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 2), vec![1, 1]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            2,
+            2
+        ),
+        vec![1, 1]
+    );
 
     let pls = vec![1, 1, 0, 1, 1, 1];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 3), vec![1, 1]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            2,
+            3
+        ),
+        vec![1, 1]
+    );
 
     let pls = vec![1, 1, 1, 0, 1, 1];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 3), vec![0, 2]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            2,
+            3
+        ),
+        vec![0, 2]
+    );
 
     let pls = vec![1, 1, 1, 1, 1, 0];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 3), vec![2, 2]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            2,
+            3
+        ),
+        vec![2, 2]
+    );
 
     let pls = vec![0, 1, 2, 3];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 3, 2), vec![0, 0, 0]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            3,
+            2
+        ),
+        vec![0, 0, 0]
+    );
 
     let pls = vec![1, 0, 2, 3];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 3, 2), vec![0, 0, 1]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            3,
+            2
+        ),
+        vec![0, 0, 1]
+    );
 
     let pls = vec![1, 1, 0, 3];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 3, 2), vec![0, 1, 1]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            3,
+            2
+        ),
+        vec![0, 1, 1]
+    );
 
     let pls = vec![1, 2, 2, 0];
-    assert_eq!(VariantContext::calculate_genotype_tag(
-        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 3, 2), vec![1, 1, 1]);
+    assert_eq!(
+        VariantContext::calculate_genotype_tag(
+            pls.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .map(|(index, _)| index)
+                .unwrap(),
+            3,
+            2
+        ),
+        vec![1, 1, 1]
+    );
 
     for ploidy in 1..=5 {
         for alleles in 1..=5 {

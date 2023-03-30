@@ -4,6 +4,7 @@ use graphs::base_edge::BaseEdgeStruct;
 use graphs::base_graph::BaseGraph;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use graphs::seq_graph::SeqGraph;
+use hashlink::LinkedHashMap;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::Direction;
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
@@ -12,7 +13,6 @@ use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::fmt::Debug;
 use utils::simple_interval::Locatable;
-use hashlink::LinkedHashMap;
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
@@ -138,7 +138,13 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      *
      * @param read a non-null read
      */
-    fn add_read<'a>(&mut self, read: &'a BirdToolRead, sample_names: &[String], count: &mut usize, pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>);
+    fn add_read<'a>(
+        &mut self,
+        read: &'a BirdToolRead,
+        sample_names: &[String],
+        count: &mut usize,
+        pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>,
+    );
 
     // only add the new kmer to the map if it exists and isn't in our non-unique kmer list
     fn track_kmer(&mut self, kmer: Kmer, new_vertex: NodeIndex);
@@ -162,7 +168,10 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      * Build the read threaded assembly graph if it hasn't already been constructed from the sequences that have
      * been added to the graph.
      */
-    fn build_graph_if_necessary<'a>(&mut self, pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>);
+    fn build_graph_if_necessary<'a>(
+        &mut self,
+        pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>,
+    );
 
     /**
      * Thread sequence seqForKmers through the current graph, updating the graph as appropriate

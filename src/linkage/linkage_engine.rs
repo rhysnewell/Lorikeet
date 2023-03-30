@@ -10,12 +10,12 @@ use model::byte_array_allele::Allele;
 use model::variant_context::VariantContext;
 use ndarray::{Array1, Array2};
 use ordered_float::OrderedFloat;
-use petgraph::algo::{all_simple_paths, min_spanning_tree, tarjan_scc, astar::astar};
+use petgraph::algo::{all_simple_paths, astar::astar, min_spanning_tree, tarjan_scc};
 use petgraph::data::{Element, FromElements};
 use petgraph::dot::Dot;
 use petgraph::graph::EdgeIndex;
-use petgraph::prelude::{EdgeRef, NodeIndex, Graph, StableGraph};
-use petgraph::{Direction, Directed};
+use petgraph::prelude::{EdgeRef, Graph, NodeIndex, StableGraph};
+use petgraph::{Directed, Direction};
 use rayon::prelude::*;
 use rust_htslib::bam::Record;
 use std::cmp::Reverse;
@@ -157,7 +157,8 @@ impl<'a> LinkageEngine<'a> {
 
             // sorted list of sink nodes i.e. nodes with no outgoing edges
             // These should be the highest depth nodes
-            let mut end_nodes_vec = mst.externals(Direction::Outgoing)
+            let mut end_nodes_vec = mst
+                .externals(Direction::Outgoing)
                 .map(|node| {
                     (
                         Reverse(OrderedFloat(
@@ -178,7 +179,8 @@ impl<'a> LinkageEngine<'a> {
             // with the highest depth compared to all other tips
             let highest_depth_node = end_nodes_vec.first().unwrap().clone().1;
 
-            let mut starting_nodes_vec = mst.externals(Direction::Incoming)
+            let mut starting_nodes_vec = mst
+                .externals(Direction::Incoming)
                 .map(|node| {
                     (
                         OrderedFloat(
@@ -233,7 +235,7 @@ impl<'a> LinkageEngine<'a> {
                 let mut end_nodes_iter = end_nodes_vec.iter();
                 if !mst.contains_node(current_node) {
                     debug!("Node {:?} already pruned, skipping...", current_node);
-                    continue
+                    continue;
                 }
 
                 let mut cost = 0.0;
@@ -241,7 +243,6 @@ impl<'a> LinkageEngine<'a> {
                 let mut closest_node = current_node;
 
                 for end_node in end_nodes_vec.iter() {
-
                     let (mut new_cost, mut potential_paths) = match astar(
                         &mst,
                         current_node,
@@ -250,10 +251,10 @@ impl<'a> LinkageEngine<'a> {
                         |_| 0.0,
                     ) {
                         Some(result) => result,
-                        None => continue
+                        None => continue,
                     };
                     if potential_paths.len() == 0 {
-                        continue
+                        continue;
                     }
                     new_cost = new_cost / potential_paths.len() as f64;
 
@@ -323,9 +324,7 @@ impl<'a> LinkageEngine<'a> {
                             // flooding
                             let groups_at_capacity = consumed_nodes
                                 .iter()
-                                .map(|consumed_node| {
-                                    *mst.node_weight(*consumed_node).unwrap()
-                                })
+                                .map(|consumed_node| *mst.node_weight(*consumed_node).unwrap())
                                 .collect::<Vec<i32>>();
                             self.merge_paths(
                                 &mut strains,
@@ -341,7 +340,6 @@ impl<'a> LinkageEngine<'a> {
                             );
                         }
                     }
-
                 } else {
                     debug!("Node below the water. Update cumulative depths...");
                     if current_node != highest_depth_node {
@@ -370,7 +368,8 @@ impl<'a> LinkageEngine<'a> {
                             // };
 
                             mst.remove_node(current_node);
-                            let mut starting_nodes_vec = mst.externals(Direction::Incoming)
+                            let mut starting_nodes_vec = mst
+                                .externals(Direction::Incoming)
                                 .map(|node| {
                                     (
                                         OrderedFloat(
@@ -1033,7 +1032,6 @@ impl<'a> LinkageEngine<'a> {
         all_grouped_reads
     }
 
-
     /// Builds a variant group graph. This graph is directed by read depth.
     /// Nodes with lower mean read depth are connected to high read depth nodes via incoming edges.
     /// Thus, low depth nodes are sinks, high depth are sources
@@ -1124,7 +1122,6 @@ impl<'a> LinkageEngine<'a> {
                             } else {
                                 graph.add_edge(node2, node1, weight);
                             }
-
                         } else if under_sep_thresh {
                             let mut weight = self.cluster_separations[[ind1, ind2]];
                             debug!(

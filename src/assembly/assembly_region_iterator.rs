@@ -10,11 +10,11 @@ use reads::bird_tool_reads::BirdToolRead;
 use std::cmp::Reverse;
 use std::fs::File;
 
-use rust_htslib::bam::Record;
-use reads::cigar_utils::CigarUtils;
-use std::ops::Deref;
 use reads::alignment_utils::AlignmentUtils;
+use reads::cigar_utils::CigarUtils;
 use reads::read_utils::ReadUtils;
+use rust_htslib::bam::Record;
+use std::ops::Deref;
 use utils::interval_utils::IntervalUtils;
 use utils::simple_interval::SimpleInterval;
 
@@ -64,9 +64,20 @@ impl<'a> AssemblyRegionIterator<'a> {
         args: &clap::ArgMatches,
     ) {
         // We don't need to check previous region reads as the implementation of fetch we have
-        // should retrieve all reads regardles of if they have been seen before
+        // should retrieve all reads regardless of if they have been seen before
 
         let min_mapq = args.value_of("min-mapq").unwrap().parse::<u8>().unwrap();
+        let min_long_read_size = args
+            .value_of("min-long-read-size")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+        let min_long_read_average_base_qual = args
+            .value_of("min-long-read-average-base-qual")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+
         let limiting_interval = IntervalUtils::parse_limiting_interval(args);
 
         let mut records: Vec<BirdToolRead> = self
@@ -81,7 +92,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                 };
 
                 match read_type {
-                    ReadType::Short => {
+                    ReadType::Short | ReadType::Long => {
                         let mut record = Record::new(); // Empty bam record
                         let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
                             vec![&bam_generator],
@@ -106,7 +117,15 @@ impl<'a> AssemblyRegionIterator<'a> {
                         let mut records = Vec::new(); // container for the records to be collected
 
                         while bam_generated.read(&mut record) == true {
-                            if ReadUtils::read_is_filtered(&record, flag_filters, 20, read_type, &Self::DUMMY_LIMITING_INTERVAL)
+                            if ReadUtils::read_is_filtered(
+                                &record,
+                                flag_filters,
+                                min_mapq,
+                                read_type,
+                                &Self::DUMMY_LIMITING_INTERVAL,
+                                min_long_read_size,
+                                min_long_read_average_base_qual,
+                            )
                             // Check against filter flags and current sample type
                             {
                                 continue;
@@ -137,7 +156,11 @@ impl<'a> AssemblyRegionIterator<'a> {
             records = records.into_iter().take(max_input_depth).collect();
         }
 
-        debug!("Region {:?} No. reads {}", &region.padded_span, records.len());
+        debug!(
+            "Region {:?} No. reads {}",
+            &region.padded_span,
+            records.len()
+        );
         records.par_sort_unstable();
         region.add_all(records);
     }
