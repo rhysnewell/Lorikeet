@@ -1,5 +1,6 @@
 use ordered_float::OrderedFloat;
-use utils::simple_interval::SimpleInterval;
+
+use crate::utils::simple_interval::SimpleInterval;
 
 /**
  * Holds information about a genotype call of a single sample reference vs. any non-ref event

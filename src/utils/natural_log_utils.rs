@@ -1,7 +1,7 @@
-use libm;
 use num::traits::Float;
-use rayon::prelude::*;
-use utils::quality_utils::QualityUtils;
+use libm;
+
+use crate::utils::quality_utils::QualityUtils;
 
 lazy_static! {
     pub static ref LOG_ONE_HALF: f64 = 0.5.ln();

@@ -2,9 +2,9 @@ use ndarray::parallel::prelude::*;
 use ndarray::{Array2, ArrayViewMut1, Axis};
 use num::traits::real::Real;
 use ordered_float::OrderedFloat;
-use rayon::prelude::*;
-use utils::math_utils::MathUtils;
-use utils::quality_utils::QualityUtils;
+
+use crate::utils::math_utils::MathUtils;
+use crate::utils::quality_utils::QualityUtils;
 
 lazy_static! {
     /**
@@ -440,8 +440,8 @@ impl PairHMMModel {
      * @return a value between 0 and 1.
      */
     pub fn match_to_match_prob(&self, ins_qual: usize, del_qual: usize) -> f64 {
-        let mut min_qual;
-        let mut max_qual;
+        let min_qual;
+        let max_qual;
         if ins_qual <= del_qual {
             min_qual = ins_qual;
             max_qual = del_qual;
@@ -461,8 +461,8 @@ impl PairHMMModel {
     }
 
     pub fn match_to_match_prob_static(ins_qual: u8, del_qual: u8) -> f64 {
-        let mut min_qual;
-        let mut max_qual;
+        let min_qual;
+        let max_qual;
         if ins_qual <= del_qual {
             min_qual = ins_qual;
             max_qual = del_qual;
@@ -492,8 +492,8 @@ impl PairHMMModel {
      * @return a value between 0 and -Inf.
      */
     pub fn match_to_match_prob_log10(&self, ins_qual: usize, del_qual: usize) -> f64 {
-        let mut min_qual;
-        let mut max_qual;
+        let min_qual;
+        let max_qual;
         if ins_qual <= del_qual {
             min_qual = ins_qual;
             max_qual = del_qual;

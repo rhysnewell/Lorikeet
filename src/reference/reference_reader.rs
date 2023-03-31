@@ -1,12 +1,12 @@
 use bio::io::fasta::IndexedReader;
-use reference::reference_reader_utils::GenomesAndContigs;
 use hashlink::LinkedHashSet;
-use rayon::prelude::*;
-use reference::reference_reader_utils::ReferenceReaderUtils;
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::collections::HashMap;
 use std::fs::File;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::reference::reference_reader_utils::GenomesAndContigs;
+use crate::reference::reference_reader_utils::ReferenceReaderUtils;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
 * Struct handling methods to read and handle information for references
@@ -49,7 +49,7 @@ impl ReferenceReader {
     pub fn new(
         concatenated_genomes: &Option<String>,
         genomes_and_contigs: GenomesAndContigs,
-        number_of_contigs: usize,
+        _number_of_contigs: usize,
     ) -> ReferenceReader {
         let indexed_reader = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
 
@@ -94,7 +94,7 @@ impl ReferenceReader {
             let ref_tids = reader.reference_index_to_tid.get(&ref_idx).unwrap().clone();
             let mut target_names = HashMap::with_capacity(ref_tids.len());
             let mut target_lens = HashMap::with_capacity(ref_tids.len());
-            ref_tids.iter().map(|tid| {
+            ref_tids.iter().for_each(|tid| {
                 target_names.insert(*tid, reader.target_names.get(tid).unwrap().clone());
                 target_lens.insert(*tid, reader.target_lens.get(tid).unwrap().clone());
             });

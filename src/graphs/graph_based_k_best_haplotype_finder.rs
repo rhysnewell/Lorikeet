@@ -1,13 +1,13 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::k_best_haplotype::KBestHaplotype;
-use graphs::k_best_haplotype_finder::KBestHaplotypeFinder;
+
 use petgraph::prelude::NodeIndex;
 use petgraph::Direction;
-use rayon::prelude::*;
-use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::k_best_haplotype::KBestHaplotype;
+use crate::graphs::k_best_haplotype_finder::KBestHaplotypeFinder;
 
 /**
  * Efficient algorithm to obtain the list of best haplotypes given the {@link BaseGraph instance}.
@@ -92,7 +92,7 @@ impl GraphBasedKBestHaplotypeFinder {
         );
 
         while !queue.is_empty() && result.len() < max_number_of_haplotypes {
-            let mut path_to_extend = queue.pop().unwrap();
+            let path_to_extend = queue.pop().unwrap();
             // debug!("Path to extend {:?}", &path_to_extend);
             let vertex_to_extend = path_to_extend.path.last_vertex;
             if self

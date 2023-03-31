@@ -1,14 +1,13 @@
 use bio::alphabets::dna;
 use bio_types::strand::Strand;
 use itertools::{izip, Itertools};
-use model::variant_context::VariantContext;
-use model::variant_context_utils::VariantContextUtils;
-use model::variants::{Base, Variant};
-use rand::seq::index::sample;
-use reference::reference_reader::ReferenceReader;
 use rust_htslib::bcf::Read;
 use std::collections::HashMap;
-use utils::utils::{mean, std_deviation};
+
+use crate::model::variant_context::VariantContext;
+use crate::model::variant_context_utils::VariantContextUtils;
+use crate::reference::reference_reader::ReferenceReader;
+use crate::utils::utils::{mean, std_deviation};
 
 #[allow(dead_code)]
 pub struct GeneInfo {
@@ -184,7 +183,7 @@ impl Translations for CodonTable {
                 let end = *gene.end() as usize - 1;
                 debug!("Start {} End {}", start, end);
                 // fetch variants in this window
-                variants.fetch(rid, start as u64, Some(end as u64));
+                variants.fetch(rid, start as u64, Some(end as u64)).expect("Unable to fetch variants");
 
                 // VariantContext::process_vcf_in_region()
 
@@ -384,7 +383,7 @@ impl Translations for CodonTable {
                                             new_codons[sample_idx] = Vec::new();
                                         }
 
-                                        let mut which_are_present = context
+                                        let which_are_present = context
                                             .alleles_present_in_sample(
                                                 sample_idx,
                                                 depth_per_sample_filter,
@@ -540,38 +539,5 @@ pub fn get_codons<'a>(sequence: &'a [u8], frame: usize, strandedness: Strand) ->
                 .map(|chunk| chunk.to_vec())
                 .collect::<Vec<Vec<u8>>>()
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bio::io::gff;
-    use bio::stats::LogProb;
-    use model::variants;
-    use std::collections::HashSet;
-
-    fn create_base(ref_sequence: &Vec<u8>, var_char: u8, pos: i64, sample_count: usize) -> Base {
-        Base {
-            tid: 0,
-            pos,
-            refr: ref_sequence[pos as usize..(pos as usize + 1)].to_vec(),
-            variant: Variant::SNV(var_char),
-            depth: vec![5; sample_count],
-            truedepth: vec![5; sample_count],
-            totaldepth: vec![5; sample_count],
-            genotypes: HashSet::new(),
-            quals: vec![0.; sample_count],
-            referencedepth: vec![0; sample_count],
-            freq: vec![0.; sample_count],
-            rel_abunds: vec![0.; sample_count],
-            reads: HashSet::new(),
-        }
-    }
-
-    #[test]
-    fn test_floor_division() {
-        assert_eq!(0 / 3 as usize, 0);
-        assert_eq!(803 / 3 as usize, 267);
     }
 }

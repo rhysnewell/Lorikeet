@@ -1,6 +1,6 @@
-use rayon::prelude::*;
 use statrs::function::gamma;
-use utils::math_utils::LOG10_E;
+
+use crate::utils::math_utils::LOG10_E;
 
 pub struct Dirichlet<'a> {
     alpha: &'a [f64],

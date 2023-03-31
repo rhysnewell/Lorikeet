@@ -1,16 +1,17 @@
-use haplotype::event_map::EventMap;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
 use ordered_float::OrderedFloat;
-use reads::alignment_utils::AlignmentUtils;
-use reads::cigar_builder::CigarBuilder;
-use reads::cigar_utils::CigarUtils;
-use reads::read_utils::ReadUtils;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
+use rust_htslib::bam::record::{Cigar, CigarString};
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use utils::errors::BirdToolError;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::haplotype::event_map::EventMap;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::reads::alignment_utils::AlignmentUtils;
+use crate::reads::cigar_builder::CigarBuilder;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::reads::read_utils::ReadUtils;
+use crate::utils::errors::BirdToolError;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 // lazy_static! {
 //     pub static ref SIZE_AND_BASE_ORDER: Then<Extract<Fn(&Haplotype<Locatable>)>>
@@ -211,7 +212,7 @@ impl<L: Locatable> Haplotype<L> {
                     tmp.add_all(
                         new_cigar.0[first_index_to_keep_inclusive..last_index_to_keep_exclusive]
                             .to_vec(),
-                    );
+                    ).expect("Cigar builder failed");
                     match tmp.make(false) {
                         Ok(cigar_string) => cigar_string,
                         _ => {
@@ -249,8 +250,8 @@ impl<L: Locatable> Haplotype<L> {
         pad_size: usize,
     ) -> Result<CigarString, BirdToolError> {
         let mut builder = CigarBuilder::new(true);
-        builder.add_all(self.cigar.0.clone());
-        builder.add(Cigar::Match(pad_size as u32));
+        builder.add_all(self.cigar.0.clone()).expect("Cigar builder failed");
+        builder.add(Cigar::Match(pad_size as u32)).expect("Cigar builder failed");
         return builder.make(false);
     }
 

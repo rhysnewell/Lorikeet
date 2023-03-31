@@ -1,21 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate hashlink;
-extern crate ndarray;
-extern crate ordered_float;
-extern crate rand;
 
 use hashlink::LinkedHashMap;
 use lorikeet_genome::genotype::genotype_allele_counts::GenotypeAlleleCounts;
@@ -593,7 +584,7 @@ fn make_good_and_bad_likelihoods<A: Allele>(
     samples: &Vec<String>,
     alleles: &Vec<A>,
     reads: &HashMap<usize, Vec<BirdToolRead>>,
-    reads_to_skip: Box<Fn(usize) -> bool>,
+    reads_to_skip: Box<dyn Fn(usize) -> bool>,
 ) -> AlleleLikelihoods<A> {
     let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
     for s in 0..samples.len() {

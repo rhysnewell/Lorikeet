@@ -1,7 +1,8 @@
-use genotype::genotype_allele_counts::GenotypeAlleleCounts;
-use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use ndarray::{Array, Array2};
-use utils::math_utils::MathUtils;
+
+use crate::genotype::genotype_allele_counts::GenotypeAlleleCounts;
+use crate::genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
+use crate::utils::math_utils::MathUtils;
 
 #[derive(Debug, Clone)]
 pub struct GenotypeLikelihoodCalculators {

@@ -1,10 +1,8 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use hashlink::LinkedHashSet;
 use petgraph::stable_graph::NodeIndex;
-use rayon::prelude::*;
-use std::collections::HashSet;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
 
 /**
  * Utility functions used in the graphs package
@@ -19,7 +17,7 @@ impl GraphUtils {
      * @return the number of shared bytes common at the start of all bytes
      */
     pub fn common_maximum_prefix_length(list_of_bytes: &Vec<&[u8]>) -> usize {
-        let mut min_length = Self::min_kmer_length(list_of_bytes);
+        let min_length = Self::min_kmer_length(list_of_bytes);
         for i in 0..min_length {
             let b = list_of_bytes[0][i];
             for j in 1..list_of_bytes.len() {

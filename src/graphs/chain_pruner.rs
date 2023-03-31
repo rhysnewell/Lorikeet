@@ -1,9 +1,3 @@
-use graphs::adaptive_chain_pruner::AdaptiveChainPruner;
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::low_weight_chain_pruner::LowWeightChainPruner;
-use graphs::path::Path;
 use petgraph::stable_graph::EdgeIndex;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -11,6 +5,13 @@ use petgraph::Direction;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+
+use crate::graphs::adaptive_chain_pruner::AdaptiveChainPruner;
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::low_weight_chain_pruner::LowWeightChainPruner;
+use crate::graphs::path::Path;
 
 #[derive(Debug, Clone)]
 pub enum ChainPruner {

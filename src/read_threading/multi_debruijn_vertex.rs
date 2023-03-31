@@ -1,9 +1,9 @@
-use graphs::base_vertex::BaseVertex;
 use itertools::Itertools;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use rayon::prelude::*;
 use std::hash::{Hash, Hasher};
+
+use crate::graphs::base_vertex::BaseVertex;
 
 lazy_static! {
     static ref suffices_as_byte_array: Vec<Vec<u8>> = (0..=std::u8::MAX)

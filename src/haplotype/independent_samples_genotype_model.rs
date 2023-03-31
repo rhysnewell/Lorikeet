@@ -1,20 +1,18 @@
-use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
-use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use genotype::genotyping_likelihoods::GenotypingLikelihoods;
-use haplotype::homogenous_ploidy_model::PloidyModel;
-use model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
-use model::allele_likelihoods::AlleleLikelihoods;
-use model::allele_list::AlleleList;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use std::fs::read;
+use crate::genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
+use crate::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use crate::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use crate::haplotype::homogenous_ploidy_model::PloidyModel;
+use crate::model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
+use crate::model::allele_likelihoods::AlleleLikelihoods;
+use crate::model::allele_list::AlleleList;
+use crate::model::byte_array_allele::Allele;
 
 #[derive(Debug, Clone)]
 pub struct IndependentSamplesGenotypesModel {
     cache_allele_count_capacity: usize,
     cache_ploidy_capacity: usize,
     likelihood_calculators: Vec<Vec<Option<GenotypeLikelihoodCalculator>>>,
-    calculators: GenotypeLikelihoodCalculators,
+    // calculators: GenotypeLikelihoodCalculators,
 }
 
 impl IndependentSamplesGenotypesModel {
@@ -42,7 +40,7 @@ impl IndependentSamplesGenotypesModel {
                 vec![None; calculator_cache_allele_capacity];
                 calculator_cache_ploidy_capacity
             ],
-            calculators: GenotypeLikelihoodCalculators::build_empty(),
+            // calculators: GenotypeLikelihoodCalculators::build_empty(),
         }
     }
 
@@ -52,11 +50,11 @@ impl IndependentSamplesGenotypesModel {
         read_likelihoods_alleles: AlleleList<A>,
         read_likelihoods: &AlleleLikelihoods<B>,
         ploidy_model: &P,
-        padded_reference: &[u8],
-        offset_for_into_event: usize,
+        _padded_reference: &[u8],
+        _offset_for_into_event: usize,
     ) -> Vec<GenotypeLikelihoods> {
         let permutation = read_likelihoods_alleles.permutation(genotyping_alleles.clone());
-        let mut allele_likelihood_matrix_mapper = AlleleLikelihoodMatrixMapper::new(permutation);
+        let allele_likelihood_matrix_mapper = AlleleLikelihoodMatrixMapper::new(permutation);
 
         let sample_count = read_likelihoods.samples.len();
         let mut genotype_likelihoods = Vec::with_capacity(sample_count);

@@ -1,12 +1,11 @@
-use bio_types::sequence::SequenceRead;
 use num::traits::AsPrimitive;
-use rayon::prelude::*;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_utils::CigarUtils;
-use reads::read_clipper::ClippingRepresentation;
-use reads::read_utils::ReadUtils;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use utils::simple_interval::Locatable;
+
+use crate::utils::simple_interval::Locatable;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::reads::read_clipper::ClippingRepresentation;
+use crate::reads::read_utils::ReadUtils;
 
 #[derive(Debug)]
 pub struct ClippingOp {
@@ -73,7 +72,7 @@ impl ClippingOp {
                     "Cannot apply soft clipping operator to the middle of a read: {:?} to be clipped at {}-{}", read.read.qname(), self.start, stop);
 
             let old_cigar = read.read.cigar();
-            let mut new_cigar = CigarUtils::clip_cigar(
+            let new_cigar = CigarUtils::clip_cigar(
                 &old_cigar,
                 self.start as u32,
                 (stop + 1) as u32,
@@ -105,7 +104,7 @@ impl ClippingOp {
         {
             // pass
         } else {
-            let mut unclipped_cigar = CigarUtils::revert_soft_clips(&read.read.cigar());
+            let unclipped_cigar = CigarUtils::revert_soft_clips(&read.read.cigar());
             let qname = read.read.qname().to_vec();
             let bases = read.read.seq().as_bytes();
             let quals = read.read.qual().to_vec();
@@ -176,9 +175,9 @@ impl ClippingOp {
         );
     }
 
-    fn overwrite_from_start_to_stop(arr: &mut [u8], new_val: u8) {
-        arr.iter_mut().for_each(|val| *val = new_val);
-    }
+    // fn overwrite_from_start_to_stop(arr: &mut [u8], new_val: u8) {
+    //     arr.iter_mut().for_each(|val| *val = new_val);
+    // }
 
     /**
      * Hard clip bases from read, from start to stop in base coordinates

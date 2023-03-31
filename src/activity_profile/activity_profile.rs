@@ -1,10 +1,10 @@
-use activity_profile::activity_profile_state::{ActivityProfileState, Type};
-use assembly::assembly_region::AssemblyRegion;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use rayon::prelude::*;
 use std::cmp::min;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
+use crate::activity_profile::activity_profile_state::{ActivityProfileState, Type};
+use crate::assembly::assembly_region::AssemblyRegion;
 
 /**
  * Class holding information about per-base activity scores for
@@ -370,7 +370,7 @@ impl Profile for ActivityProfile {
         assembly_region_extension: usize,
         min_region_size: usize,
         max_region_size: usize,
-        force_conversion: bool,
+        _force_conversion: bool,
     ) -> Vec<AssemblyRegion> {
         assert!(min_region_size > 0, "min_region_size must be >= 1");
         assert!(max_region_size > 0, "max_region_size must be >= 1");
@@ -475,7 +475,7 @@ impl Profile for ActivityProfile {
         match offset_of_next_region_end {
             Some(offset_of_next_region_end) => {
                 // we need to create the active region, and clip out the states we're extracting from this profile
-                let mut sub = self
+                let sub = self
                     .state_list
                     .drain(0..offset_of_next_region_end + 1)
                     .collect_vec();

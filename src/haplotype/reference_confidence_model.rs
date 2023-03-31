@@ -1,8 +1,9 @@
-use assembly::assembly_region::AssemblyRegion;
-use haplotype::haplotype::Haplotype;
-use model::byte_array_allele::Allele;
 use rust_htslib::bam::record::Cigar;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::assembly::assembly_region::AssemblyRegion;
+use crate::haplotype::haplotype::Haplotype;
+use crate::model::byte_array_allele::Allele;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 pub struct ReferenceConfidenceModel {}
 
@@ -34,7 +35,7 @@ impl ReferenceConfidenceModel {
         }
         let mut ref_haplotype = Haplotype::new(ref_bases, true);
         ref_haplotype.set_alignment_start_hap_wrt_ref(alignment_start as usize);
-        let mut c = vec![Cigar::Match(ref_haplotype.get_bases().len() as u32)];
+        let c = vec![Cigar::Match(ref_haplotype.get_bases().len() as u32)];
         ref_haplotype.set_cigar(c);
 
         return ref_haplotype;

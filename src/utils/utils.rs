@@ -1,15 +1,21 @@
-use crate::*;
-use coverm::bam_generator::*;
-use coverm::mapping_index_maintenance;
-use coverm::mapping_parameters::*;
-use coverm::FlagFilter;
-use processing::lorikeet_engine::ReadType;
-
-use coverm::mapping_index_maintenance::MappingIndex;
 use rayon::prelude::*;
-use std::str;
+use std::{str, process};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
+
+use crate::external_command_checker;
+
+use crate::{bam_parsing::{
+    FlagFilter,
+    mapping_index_maintenance::{
+        MappingIndex,
+        generate_bwa_index,
+        generate_minimap2_index
+    },
+    mapping_parameters::*,
+    bam_generator::*
+}, parse_percentage};
+use crate::processing::lorikeet_engine::ReadType;
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
@@ -111,55 +117,40 @@ pub fn get_streamed_bam_readers<'a>(
     mapping_program: MappingProgram,
     reference_tempfile: &'a Option<NamedTempFile>,
     readtype: &ReadType,
-    references: &'a Option<Vec<&'a str>>,
+    _references: &'a Option<Vec<&'a str>>,
     tmp_bam_file_cache: &Option<TempDir>,
 ) -> Vec<BamGeneratorSet<StreamingNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
-    if m.is_present("bam-file-cache-directory") {
+    if m.contains_id("bam-file-cache-directory") {
         match readtype {
             &ReadType::Long => {
-                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&m.get_one::<String>("bam-file-cache-directory").unwrap());
                 setup_bam_cache_directory(&format!(
                     "{}/long/",
-                    m.value_of("bam-file-cache-directory").unwrap()
+                    m.get_one::<String>("bam-file-cache-directory").unwrap()
                 ));
             }
             &ReadType::Short => {
-                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&m.get_one::<String>("bam-file-cache-directory").unwrap());
                 setup_bam_cache_directory(&format!(
                     "{}/short/",
-                    m.value_of("bam-file-cache-directory").unwrap()
-                ));
-            }
-            &ReadType::Assembly => {
-                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
-                setup_bam_cache_directory(&format!(
-                    "{}/assembly/",
-                    m.value_of("bam-file-cache-directory").unwrap()
+                    m.get_one::<String>("bam-file-cache-directory").unwrap()
                 ));
             }
         }
     }
-    let discard_unmapped = m.is_present("discard-unmapped");
+    let discard_unmapped = m.contains_id("discard-unmapped");
     debug!("Reference Tempfile: {:?}", &reference_tempfile);
     let params = match readtype {
         &ReadType::Short => MappingParameters::generate_from_clap(
             m,
             mapping_program,
             &reference_tempfile,
-            &references,
         ),
         &ReadType::Long => MappingParameters::generate_longread_from_clap(
             m,
             mapping_program,
             &reference_tempfile,
-            &references,
-        ),
-        &ReadType::Assembly => MappingParameters::generate_assembly_from_clap(
-            m,
-            mapping_program,
-            &reference_tempfile,
-            &references,
         ),
     };
 
@@ -173,7 +164,7 @@ pub fn get_streamed_bam_readers<'a>(
         debug!("Reference file {:?}", &reference);
         let bam_file_cache = |naming_readset| -> Option<String> {
             let bam_file_cache_path;
-            match m.is_present("bam-file-cache-directory") {
+            match m.contains_id("bam-file-cache-directory") {
                 false => {
                     bam_file_cache_path = generate_cached_bam_file_name(
                         tmp_bam_file_cache
@@ -190,7 +181,7 @@ pub fn get_streamed_bam_readers<'a>(
                 }
                 true => {
                     bam_file_cache_path = generate_cached_bam_file_name(
-                        m.value_of("bam-file-cache-directory").unwrap(),
+                        m.get_one::<String>("bam-file-cache-directory").unwrap(),
                         match reference_tempfile {
                             Some(_) => CONCATENATED_REFERENCE_CACHE_STEM,
                             None => reference,
@@ -243,11 +234,11 @@ pub fn long_generator_setup(
     references: &Option<Vec<&str>>,
     tmp_bam_file_cache: &Option<TempDir>,
 ) -> (
-    Vec<coverm::bam_generator::StreamingNamedBamReaderGenerator>,
+    Vec<StreamingNamedBamReaderGenerator>,
     Vec<Option<Box<dyn MappingIndex>>>,
 ) {
     // Perform mapping
-    let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+    let mapping_program = parse_mapping_program(Some(m.get_one::<String>("longread-mapper").map(|s| s.as_str()).unwrap_or_else(|| "")));
     let readtype = ReadType::Long;
     external_command_checker::check_for_samtools();
     let generator_sets = get_streamed_bam_readers(
@@ -270,36 +261,6 @@ pub fn long_generator_setup(
     return (long_generators, indices);
 }
 
-pub fn assembly_generator_setup(
-    m: &clap::ArgMatches,
-    reference_tempfile: &Option<NamedTempFile>,
-    references: &Option<Vec<&str>>,
-    tmp_bam_file_cache: &Option<TempDir>,
-) -> Vec<coverm::bam_generator::StreamingNamedBamReaderGenerator> {
-    // Perform mapping
-    let mapping_program = parse_mapping_program(Some("minimap2-assembly"));
-    let readtype = ReadType::Assembly;
-    external_command_checker::check_for_samtools();
-    let generator_sets = get_streamed_bam_readers(
-        m,
-        mapping_program,
-        reference_tempfile,
-        &readtype,
-        references,
-        tmp_bam_file_cache,
-    );
-    let mut long_generators = vec![];
-    let mut indices = vec![]; // Prevent indices from being dropped
-    for set in generator_sets {
-        indices.push(set.index);
-        for g in set.generators {
-            long_generators.push(g)
-        }
-    }
-
-    return long_generators;
-}
-
 pub fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
     let mapping_program = match mapper {
         Some("bwa-mem") => MappingProgram::BWA_MEM,
@@ -308,10 +269,7 @@ pub fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
         Some("minimap2-ont") => MappingProgram::MINIMAP2_ONT,
         Some("minimap2-pb") => MappingProgram::MINIMAP2_PB,
         Some("minimap2-hifi") => MappingProgram::MINIMAP2_HIFI,
-        Some("minimap2-assembly") => MappingProgram::MINIMAP2_ASS,
         Some("minimap2-no-preset") => MappingProgram::MINIMAP2_NO_PRESET,
-        Some("ngmlr-ont") => MappingProgram::NGMLR_ONT,
-        Some("ngmlr-pb") => MappingProgram::NGMLR_PB,
         None => DEFAULT_MAPPING_SOFTWARE_ENUM,
         _ => panic!("Unexpected definition for --mapper: {:?}", mapper),
     };
@@ -326,12 +284,8 @@ pub fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
         | MappingProgram::MINIMAP2_ONT
         | MappingProgram::MINIMAP2_HIFI
         | MappingProgram::MINIMAP2_PB
-        | MappingProgram::MINIMAP2_ASS
         | MappingProgram::MINIMAP2_NO_PRESET => {
             external_command_checker::check_for_minimap2();
-        }
-        MappingProgram::NGMLR_ONT | MappingProgram::NGMLR_PB => {
-            external_command_checker::check_for_ngmlr();
         }
     }
     return mapping_program;
@@ -343,55 +297,40 @@ pub fn get_streamed_filtered_bam_readers(
     reference_tempfile: &Option<NamedTempFile>,
     filter_params: &FilterParameters,
     readtype: &ReadType,
-    references: &Option<Vec<&str>>,
+    _references: &Option<Vec<&str>>,
     tmp_bam_file_cache: &Option<TempDir>,
 ) -> Vec<BamGeneratorSet<StreamingFilteredNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
-    if m.is_present("bam-file-cache-directory") {
+    if m.contains_id("bam-file-cache-directory") {
         match readtype {
             &ReadType::Long => {
-                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&m.get_one::<String>("bam-file-cache-directory").unwrap());
                 setup_bam_cache_directory(&format!(
                     "{}/long/",
-                    m.value_of("bam-file-cache-directory").unwrap()
+                    m.get_one::<String>("bam-file-cache-directory").unwrap()
                 ));
             }
             &ReadType::Short => {
-                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&m.get_one::<String>("bam-file-cache-directory").unwrap());
                 setup_bam_cache_directory(&format!(
                     "{}/short/",
-                    m.value_of("bam-file-cache-directory").unwrap()
-                ));
-            }
-            &ReadType::Assembly => {
-                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
-                setup_bam_cache_directory(&format!(
-                    "{}/assembly/",
-                    m.value_of("bam-file-cache-directory").unwrap()
+                    m.get_one::<String>("bam-file-cache-directory").unwrap()
                 ));
             }
         }
     }
-    let discard_unmapped = m.is_present("discard-unmapped");
+    let discard_unmapped = m.contains_id("discard-unmapped");
 
     let params = match readtype {
         &ReadType::Short => MappingParameters::generate_from_clap(
             m,
             mapping_program,
             &reference_tempfile,
-            &references,
         ),
         &ReadType::Long => MappingParameters::generate_longread_from_clap(
             m,
             mapping_program,
             &reference_tempfile,
-            &references,
-        ),
-        &ReadType::Assembly => MappingParameters::generate_assembly_from_clap(
-            m,
-            mapping_program,
-            &reference_tempfile,
-            &references,
         ),
     };
     let mut generator_set = vec![];
@@ -404,7 +343,7 @@ pub fn get_streamed_filtered_bam_readers(
 
         let bam_file_cache = |naming_readset| -> Option<String> {
             let bam_file_cache_path;
-            match m.is_present("bam-file-cache-directory") {
+            match m.contains_id("bam-file-cache-directory") {
                 false => {
                     bam_file_cache_path = generate_cached_bam_file_name(
                         tmp_bam_file_cache
@@ -421,7 +360,7 @@ pub fn get_streamed_filtered_bam_readers(
                 }
                 true => {
                     bam_file_cache_path = generate_cached_bam_file_name(
-                        m.value_of("bam-file-cache-directory").unwrap(),
+                        m.get_one::<String>("bam-file-cache-directory").unwrap(),
                         match reference_tempfile {
                             Some(_) => CONCATENATED_REFERENCE_CACHE_STEM,
                             None => reference,
@@ -477,10 +416,10 @@ pub fn setup_mapping_index(
     reference_wise_params: &SingleReferenceMappingParameters,
     m: &clap::ArgMatches,
     mapping_program: MappingProgram,
-) -> Option<Box<dyn coverm::mapping_index_maintenance::MappingIndex>> {
+) -> Option<Box<dyn MappingIndex>> {
     match mapping_program {
         MappingProgram::BWA_MEM | MappingProgram::BWA_MEM2 => {
-            Some(coverm::mapping_index_maintenance::generate_bwa_index(
+            Some(generate_bwa_index(
                 reference_wise_params.reference,
                 None,
                 mapping_program,
@@ -490,11 +429,10 @@ pub fn setup_mapping_index(
         | MappingProgram::MINIMAP2_ONT
         | MappingProgram::MINIMAP2_HIFI
         | MappingProgram::MINIMAP2_PB
-        | MappingProgram::MINIMAP2_ASS
         | MappingProgram::MINIMAP2_NO_PRESET => {
-            if m.is_present("minimap2-reference-is-index") || reference_wise_params.len() == 1 {
+            if m.contains_id("minimap2-reference-is-index") || reference_wise_params.len() == 1 {
                 info!("Not pre-generating minimap2 index");
-                if m.is_present("minimap2-reference-is-index") {
+                if m.contains_id("minimap2-reference-is-index") {
                     warn!(
                         "Minimap2 uses mapping parameters defined when the index was created, \
                     not parameters defined when mapping. Proceeding on the assumption that you \
@@ -503,17 +441,13 @@ pub fn setup_mapping_index(
                 }
                 None
             } else {
-                Some(coverm::mapping_index_maintenance::generate_minimap2_index(
+                Some(generate_minimap2_index(
                     reference_wise_params.reference,
-                    Some(m.value_of("threads").unwrap().parse::<usize>().unwrap()),
-                    Some(m.value_of("minimap2-params").unwrap_or("")),
+                    Some(*m.get_one::<u16>("threads").unwrap()),
+                    Some(m.get_one::<String>("minimap2-params").map(|s| s.as_str()).unwrap_or_else(|| "")),
                     mapping_program,
                 ))
             }
-        }
-        MappingProgram::NGMLR_PB | MappingProgram::NGMLR_ONT => {
-            // NGMLR won't let us just create mapping index, so we will use the --skip-write parameter
-            None
         }
     }
 }
@@ -652,27 +586,6 @@ pub fn generate_cached_bam_file_name(
                     .to_string()
                 + ".bam"
         }
-        &ReadType::Assembly => {
-            std::path::Path::new(&format!("{}/assembly/", directory))
-                .to_str()
-                .expect("Unable to covert bam-file-cache-directory name into str")
-                .to_string()
-                + "/"
-                + &std::path::Path::new(reference)
-                    .file_name()
-                    .expect("Unable to convert reference to file name")
-                    .to_str()
-                    .expect("Unable to covert file name into str")
-                    .to_string()
-                + "."
-                + &std::path::Path::new(read1_path)
-                    .file_name()
-                    .expect("Unable to convert read1 name to file name")
-                    .to_str()
-                    .expect("Unable to covert file name into str")
-                    .to_string()
-                + ".bam"
-        }
     }
 }
 
@@ -688,45 +601,21 @@ pub struct FilterParameters {
 }
 impl FilterParameters {
     pub fn generate_from_clap(m: &clap::ArgMatches) -> FilterParameters {
-        let mut f = FilterParameters {
+        let f = FilterParameters {
             flag_filters: FlagFilter {
-                include_improper_pairs: !m.is_present("proper-pairs-only"),
-                include_secondary: m.is_present("include-secondary"),
-                include_supplementary: !m.is_present("exclude-supplementary"),
+                include_improper_pairs: !m.get_flag("proper-pairs-only"),
+                include_secondary: m.get_flag("include-secondary"),
+                include_supplementary: !m.get_flag("exclude-supplementary"),
             },
-            min_aligned_length_single: match m.is_present("min-read-aligned-length") {
-                true => m
-                    .value_of("min-read-aligned-length")
-                    .unwrap()
-                    .parse()
-                    .unwrap(),
-                false => 0,
-            },
+            min_aligned_length_single: *m.get_one::<u32>("min-read-aligned-length").unwrap_or(&0),
             min_percent_identity_single: parse_percentage(&m, "min-read-percent-identity"),
             min_aligned_percent_single: parse_percentage(&m, "min-read-aligned-percent"),
-            min_aligned_length_pair: match m.is_present("min-read-aligned-length-pair") {
-                true => m
-                    .value_of("min-read-aligned-length-pair")
-                    .unwrap()
-                    .parse()
-                    .unwrap(),
-                false => 0,
-            },
+            min_aligned_length_pair: *m
+                .get_one::<u32>("min-read-aligned-length-pair")
+                .unwrap_or(&0),
             min_percent_identity_pair: parse_percentage(&m, "min-read-percent-identity-pair"),
             min_aligned_percent_pair: parse_percentage(&m, "min-read-aligned-percent-pair"),
         };
-
-        if doing_metabat(&m) {
-            debug!(
-                "Setting single read percent identity threshold at 0.97 for \
-                 MetaBAT adjusted coverage."
-            );
-            // we use >= where metabat uses >. Gah.
-            f.min_percent_identity_single = 0.97001;
-            f.flag_filters.include_improper_pairs = true;
-            f.flag_filters.include_supplementary = true;
-            f.flag_filters.include_secondary = true;
-        }
         debug!("Filter parameters set as {:?}", f);
         return f;
     }
@@ -738,25 +627,6 @@ impl FilterParameters {
             || self.min_aligned_percent_pair > 0.0
             || self.min_aligned_length_single > 0
             || self.min_aligned_length_pair > 0;
-    }
-}
-
-pub fn doing_metabat(m: &clap::ArgMatches) -> bool {
-    match m.subcommand_name() {
-        Some("contig") | None => {
-            if !m.is_present("method") {
-                return false;
-            }
-            let methods: &str = m.value_of("method").unwrap();
-            if methods.contains(&"metabat") {
-                return true;
-            }
-            return false;
-        }
-        _ => {
-            debug!("Not running in contig mode so cannot be in metabat mode");
-            return false;
-        }
     }
 }
 

@@ -1,7 +1,8 @@
 use num::traits::Float;
 use rayon::prelude::*;
 use std::cmp::{max, min};
-use utils::math_utils::MathUtils;
+
+use crate::utils::math_utils::MathUtils;
 
 lazy_static! {
     static ref MIN_LOG10_SCALED_QUAL: f64 = (std::f64::MIN).log10();

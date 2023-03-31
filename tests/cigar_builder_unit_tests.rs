@@ -1,23 +1,18 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 
-use lorikeet_genome::haplotype::event_map::EventMap;
-use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
-use lorikeet_genome::model::variant_context::VariantContext;
-use lorikeet_genome::model::variant_context_utils::VariantContextUtils;
+
+
+
+
+
 use lorikeet_genome::reads::cigar_builder::CigarBuilder;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use rust_htslib::bam::record::{Cigar, CigarString};
+
+
+use rust_htslib::bam::record::{CigarString};
 use std::convert::TryFrom;
 
 fn test_simple_concatenation(cigar_element_strings: Vec<&str>) {

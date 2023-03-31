@@ -1,22 +1,17 @@
-use annotator::variant_annotation::VariantAnnotations::AlleleCount;
-use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
-use haplotype::haplotype::Haplotype;
 use hashlink::linked_hash_map::LinkedHashMap;
-use hashlink::LinkedHashSet;
-use model::allele_list::AlleleList;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variants::NON_REF_ALLELE;
-use ndarray::{Array2, ArrayBase, ArrayView, Axis};
 use rayon::prelude::*;
-use reads::bird_tool_reads::BirdToolRead;
-use statrs::statistics::Median;
-use std::cmp::max;
+use ndarray::{Array2, ArrayView, Axis};
 use std::collections::HashMap;
 use std::f64::NAN;
 use std::hash::Hash;
-use test_utils::allele_list_unit_tester::AlleleListUnitTester;
-use utils::math_utils::MathUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
+use crate::haplotype::haplotype::Haplotype;
+use crate::model::allele_list::AlleleList;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::utils::math_utils::MathUtils;
+use crate::utils::simple_interval::SimpleInterval;
 
 lazy_static! {
     pub static ref LOG_10_INFORMATIVE_THRESHOLD: f64 = 0.2;
@@ -96,7 +91,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
     ) -> AlleleLikelihoods<A> {
         let sample_count = samples.len();
-        let allele_count = alleles.len();
+        let _allele_count = alleles.len();
 
         let allele_count = alleles.len();
         let mut values_by_sample_index = vec![Array2::<f64>::zeros((0, 0)); sample_count];
@@ -430,9 +425,9 @@ impl<A: Allele> AlleleLikelihoods<A> {
         //     worst_likelihood_cap, best_allele.likelihood, maximum_best_alt_likelihood_difference
         // );
 
-        let allele_count = self.alleles.len();
+        let _allele_count = self.alleles.len();
 
-        let mut sample_values = &mut self.values_by_sample_index[sample_index];
+        let sample_values = &mut self.values_by_sample_index[sample_index];
 
         sample_values
             .column_mut(evidence_index)
@@ -595,12 +590,13 @@ impl<A: Allele> AlleleLikelihoods<A> {
                                 number_of_qualified_allele_likelihoods += 1;
                             }
                         }
-                        let non_ref_likelihood = qualified_allele_likelihoods.median();
+
+                        let non_ref_likelihood = MathUtils::median_clone(&qualified_allele_likelihoods);
                         // when the median is NaN that means that all applicable likekihoods are the same as the best
                         // so the evidence is not informative at all given the existing alleles. Unless there is only one (or zero) concrete
                         // alleles with give the same (the best) likelihood to the NON-REF. When there is only one (or zero) concrete
                         // alleles we set the NON-REF likelihood to NaN.
-                        let mut sample_values = &mut self.values_by_sample_index[s];
+                        let sample_values = &mut self.values_by_sample_index[s];
 
                         sample_values[[non_ref_allele_index, r]] = if !non_ref_likelihood.is_nan() {
                             non_ref_likelihood
@@ -652,7 +648,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             &old_to_new_allele_index_map,
         );
 
-        let sample_count = self.number_of_samples();
+        let _sample_count = self.number_of_samples();
         // debug!("new liklelihood values {:?}", &new_likelihood_values);
 
         // let new_allele_list = old_to_new_allele_index_map
@@ -825,7 +821,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         &mut self,
         initial_likelihood: f64,
         sample_index: usize,
-        old_evidence_count: usize,
+        _old_evidence_count: usize,
         new_evidence_count: usize,
     ) {
         let number_of_alleles = self.alleles.number_of_alleles();
@@ -849,10 +845,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
             self.likelihoods_matrix_evidence_capacity_by_sample_index[sample_index];
         if current_capacity < x {
             let new_capacity = x << 1; // we double it to avoid repetitive 1-element extensions resizing.
-            for i in 0..(new_capacity - current_capacity) {
+            for _i in 0..(new_capacity - current_capacity) {
                 self.values_by_sample_index[sample_index].push_column(ArrayView::from(
                     &vec![initial_likelihood; number_of_alleles],
-                ));
+                )).expect("Could not add column to likelihoods matrix");
             }
             self.likelihoods_matrix_evidence_capacity_by_sample_index[sample_index] = new_capacity;
         }
@@ -862,7 +858,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
     /// NOTE: the evidence-to-index cache is updated in place and not invalidated via {@link #invalidateEvidenceToIndexCache(int)} because adding new evidence
     /// to the cache, as opposed to removing evidence, is just a matter of appending entries
     fn append_evidence(&mut self, new_sample_evidence: Vec<BirdToolRead>, sample_index: usize) {
-        let mut sample_evidence = self
+        let sample_evidence = self
             .evidence_by_sample_index
             .entry(sample_index)
             .or_insert_with(Vec::new);
@@ -920,7 +916,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
     ) {
         let number_of_samples = self.samples.len();
         for sample_index in 0..number_of_samples {
-            let mut indexes_to_remove;
+            let indexes_to_remove;
             {
                 if !self.evidence_by_sample_index.contains_key(&sample_index) {
                     continue;
@@ -961,7 +957,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             let new_evidence_count = old_evidence_count - num_to_remove;
 
             // update the list of evidence and evidence count
-            let mut old_evidence = self
+            let old_evidence = self
                 .evidence_by_sample_index
                 .remove(&sample_index)
                 .unwrap_or_default();
@@ -975,7 +971,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
                     new_evidence.push(read);
 
                     // update the likelihoods arrays in place
-                    let mut sample_values = &mut self.values_by_sample_index[sample_index];
+                    let sample_values = &mut self.values_by_sample_index[sample_index];
                     for mut allele_values in sample_values.rows_mut() {
                         allele_values[n - num_removed] = allele_values[n]
                     }
@@ -983,11 +979,11 @@ impl<A: Allele> AlleleLikelihoods<A> {
             }
 
             // set to NaN lks of the deleted positions in lk value arrays.
-            let mut sample_values = &mut self.values_by_sample_index[sample_index];
+            let sample_values = &mut self.values_by_sample_index[sample_index];
             for mut allele_values in sample_values.rows_mut() {
                 allele_values
                     .slice_mut(s![new_evidence_count..])
-                    .par_mapv_inplace(|v| f64::NAN);
+                    .par_mapv_inplace(|_v| f64::NAN);
             }
 
             self.number_of_evidences[sample_index] = new_evidence_count;
@@ -1078,7 +1074,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
 
     pub fn change_evidence(&mut self, evidence_replacements: HashMap<ReadIndexer, BirdToolRead>) {
         for (read_indexer, replacement_read) in evidence_replacements {
-            let mut sample_evidence = self
+            let sample_evidence = self
                 .evidence_by_sample_index
                 .get_mut(&read_indexer.sample_index);
 

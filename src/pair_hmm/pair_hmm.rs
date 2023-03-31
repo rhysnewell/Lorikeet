@@ -1,18 +1,16 @@
-use gkl::pairhmm::forward;
-use haplotype::haplotype::Haplotype;
-use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::Allele;
-use ndarray::prelude::*;
 use ndarray::{Array2, Zip};
-use pair_hmm::pair_hmm_likelihood_calculation_engine::{AVXMode, PairHMMInputScoreImputator};
-use pair_hmm::pair_hmm_model::PairHMMModel;
 use rayon::prelude::*;
-use rayon::prelude::*;
-use reads::bird_tool_reads::BirdToolRead;
-use rust_htslib::bam::record::Seq;
 use std::collections::HashMap;
-use utils::quality_utils::QualityUtils;
-use utils::simple_interval::SimpleInterval;
+use gkl::pairhmm::forward;
+
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::{AVXMode, PairHMMInputScoreImputator};
+use crate::pair_hmm::pair_hmm_model::PairHMMModel;
+use crate::haplotype::haplotype::Haplotype;
+use crate::model::allele_likelihoods::AlleleLikelihoods;
+use crate::model::byte_array_allele::Allele;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::utils::quality_utils::QualityUtils;
+use crate::utils::simple_interval::SimpleInterval;
 
 lazy_static! {
     static ref INITIAL_CONDITION: f64 = 2.0_f64.powf(1020.0);
@@ -39,7 +37,7 @@ pub struct PairHMM<'a> {
     m_log_likelihood_array: Vec<f64>,
     m_haplotype_data_array: Vec<&'a [u8]>,
     haplotype_to_haplotype_list_index_map: HashMap<&'a Haplotype<SimpleInterval>, usize>,
-    do_profiling: bool,
+    // do_profiling: bool,
     transition: Array2<f64>,
     prior: Array2<f64>,
     match_matrix: Array2<f64>,
@@ -96,7 +94,7 @@ impl<'a> PairHMM<'a> {
                     m_log_likelihood_array: Vec::new(),
                     m_haplotype_data_array,
                     haplotype_to_haplotype_list_index_map,
-                    do_profiling: true,
+                    // do_profiling: true,
                     previous_haplotype_length: None,
                     constants_are_initialized: false,
                     model: PairHMMModel::new(),
@@ -153,7 +151,7 @@ impl<'a> PairHMM<'a> {
             m_log_likelihood_array: Vec::new(),
             m_haplotype_data_array: Vec::new(),
             haplotype_to_haplotype_list_index_map: HashMap::new(),
-            do_profiling: true,
+            // do_profiling: true,
             previous_haplotype_length: None,
             constants_are_initialized: false,
             model: PairHMMModel::new(),
@@ -512,7 +510,7 @@ impl<'a> PairHMM<'a> {
         overall_gcp: &[u8],
         hap_start_index: usize,
         recache_read_values: bool,
-        next_hap_start_index: usize,
+        _next_hap_start_index: usize,
     ) -> f64 {
         match self.previous_haplotype_length {
             None => {

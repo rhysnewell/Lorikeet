@@ -1,8 +1,8 @@
-use graphs::base_edge::BaseEdge;
-use rayon::prelude::*;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::hash::{Hash, Hasher};
+
+use crate::graphs::base_edge::BaseEdge;
 
 /**
  * Edge class for connecting nodes in the graph that tracks some per-sample information.

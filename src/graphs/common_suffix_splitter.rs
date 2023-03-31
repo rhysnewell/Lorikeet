@@ -1,14 +1,13 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_vertex::BaseVertex;
-use graphs::graph_utils::GraphUtils;
-use graphs::seq_graph::SeqGraph;
-use graphs::seq_vertex::SeqVertex;
 use hashlink::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
-use petgraph::{Direction, Graph};
-use rayon::prelude::*;
-use std::collections::HashSet;
+use petgraph::Direction;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::graph_utils::GraphUtils;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::graphs::seq_vertex::SeqVertex;
 
 /**
  * Split a collection of middle nodes in a graph into their shared prefix and suffix values
@@ -81,7 +80,7 @@ impl CommonSuffixSplitter {
                         .without_suffix(suffix_v_template.get_sequence());
                     let out = graph.base_graph.outgoing_edge_of(*mid).unwrap();
                     // debug!("Mid {:?} out {:?}", &mid, &out);
-                    let mut incoming_target;
+                    let incoming_target;
                     match prefix_v {
                         None => {
                             // this node is entirely explained by suffix

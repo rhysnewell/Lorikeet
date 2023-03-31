@@ -1,18 +1,18 @@
-use annotator::variant_annotation::VariantAnnotations;
-use genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use hashlink::{LinkedHashMap, LinkedHashSet};
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variant_context::VariantContext;
-use model::variants::SPAN_DEL_ALLELE;
 use rayon::prelude::*;
-use reads::alignment_utils::AlignmentUtils;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::ops::Range;
-use utils::simple_interval::{Locatable, SimpleInterval};
-use utils::vcf_constants::*;
+
+use crate::annotator::variant_annotation::VariantAnnotations;
+use crate::genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::model::variant_context::VariantContext;
+use crate::model::variants::SPAN_DEL_ALLELE;
+use crate::reads::alignment_utils::AlignmentUtils;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
+use crate::utils::vcf_constants::*;
 
 pub struct VariantContextUtils {}
 
@@ -153,7 +153,7 @@ impl VariantContextUtils {
         /* we can't exactly apply same logic as in basesAreRepeated() to compute tandem unit and number of repeated units.
           Consider case where ref =ATATAT and we have an insertion of ATAT. Natural description is (AT)3 -> (AT)2.
         */
-        let mut long_b;
+        let long_b;
 
         // find first repeat unit based on either ref or alt, whichever is longer
         if alt_bases.len() > ref_bases.len() {
@@ -602,7 +602,7 @@ impl VariantContextUtils {
     /// contexts. One for each alternate allele.
     /// Returns the split VCs and the filtered VCs in separate vectors as a tuple
     pub fn split_contexts(
-        mut vcs: Vec<VariantContext>,
+        vcs: Vec<VariantContext>,
         min_qual_by_depth: f64,
         min_variant_depth: i64,
     ) -> (Vec<VariantContext>, Vec<VariantContext>) {
@@ -753,7 +753,7 @@ impl VariantContextUtils {
     fn merge_genotypes<'b>(
         merged_genotypes: &'b mut GenotypesContext,
         one_vc: &'b VariantContext,
-        mut allele_mapping: AlleleMapper<'b>,
+        allele_mapping: AlleleMapper<'b>,
         uniquify_samples: bool,
     ) {
         //TODO: should we add a check for cases when the genotypeMergeOption is REQUIRE_UNIQUE
@@ -833,7 +833,7 @@ impl VariantContextUtils {
         let extra_bases = &ref_allele.get_bases()[input_ref.1.len()..];
 
         let mut map = LinkedHashMap::new();
-        for (idx, a) in input_alleles.into_iter() {
+        for (_idx, a) in input_alleles.into_iter() {
             if Self::is_non_symbolic_extendable_allele(a) {
                 let extended = ByteArrayAllele::extend(a, extra_bases);
                 map.insert(a, extended);
@@ -1029,7 +1029,7 @@ impl VariantContextUtils {
         let mut original_to_trimmed_allele_map = HashMap::new(); // usize to usize
 
         let mut allele_index = 0;
-        for (i, a) in input_vc.get_alleles().iter().enumerate() {
+        for (_i, a) in input_vc.get_alleles().iter().enumerate() {
             if a.is_symbolic {
                 alleles.push(a.clone());
                 original_to_trimmed_allele_map.insert(a, allele_index);
@@ -1111,7 +1111,7 @@ impl VariantContextUtils {
      * @return a non-null VariantContext
      */
     pub fn make_from_alleles(
-        name: String,
+        _name: String,
         contig: usize,
         start: usize,
         allele_strings: Vec<&str>,
@@ -1125,7 +1125,7 @@ impl VariantContextUtils {
             first = false;
         }
 
-        let mut b = VariantContext::build(contig, start, start + length - 1, alleles);
+        let b = VariantContext::build(contig, start, start + length - 1, alleles);
         return b;
     }
 
@@ -1266,7 +1266,7 @@ impl<'b> AlleleMapper<'b> {
         }
     }
 
-    pub fn remap_allele(&'b self, idx: usize, a: &'b ByteArrayAllele) -> &'b ByteArrayAllele {
+    pub fn remap_allele(&'b self, _idx: usize, a: &'b ByteArrayAllele) -> &'b ByteArrayAllele {
         match &self.map {
             None => return a,
             Some(map) => {

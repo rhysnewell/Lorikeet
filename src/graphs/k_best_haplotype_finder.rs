@@ -1,13 +1,14 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use hashlink::LinkedHashSet;
 use petgraph::algo::is_cyclic_directed;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
+use hashlink::LinkedHashSet;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
 
 /**
  * A common interface for the different KBestHaplotypeFinder implementations to conform to
@@ -32,7 +33,7 @@ impl KBestHaplotypeFinder {
             "source does not belong to the graph"
         );
 
-        let mut result = KBestHaplotypeFinder { sinks, sources };
+        let result = KBestHaplotypeFinder { sinks, sources };
 
         //TODO dealing with cycles here due to a bug in some of the graph transformations that produces cycles.
         //     Once that is solve, the if-else below should be substituted by a throw if there is any cycles,
@@ -58,7 +59,7 @@ impl KBestHaplotypeFinder {
             "source does not belong to the graph"
         );
 
-        let mut result = KBestHaplotypeFinder { sinks, sources };
+        let result = KBestHaplotypeFinder { sinks, sources };
 
         //TODO dealing with cycles here due to a bug in some of the graph transformations that produces cycles.
         //TODO Once that is solve, the if-else below should be substituted by a throw if there is any cycles,

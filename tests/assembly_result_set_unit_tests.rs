@@ -1,22 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate bio;
-extern crate itertools;
-extern crate rand;
-extern crate term;
 
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::assembly::assembly_result::{AssemblyResult, Status};

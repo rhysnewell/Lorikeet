@@ -1,17 +1,17 @@
-use assembly::assembly_region::AssemblyRegion;
-use assembly::assembly_result::AssemblyResult;
-use haplotype::event_map::EventMap;
-use haplotype::haplotype::Haplotype;
 use hashlink::LinkedHashSet;
-use model::byte_array_allele::Allele;
-use model::variant_context::VariantContext;
-use rayon::prelude::*;
-use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
-use reads::bird_tool_reads::BirdToolRead;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::mem::swap;
-use utils::errors::BirdToolError;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::assembly::assembly_region::AssemblyRegion;
+use crate::assembly::assembly_result::AssemblyResult;
+use crate::haplotype::event_map::EventMap;
+use crate::haplotype::haplotype::Haplotype;
+use crate::model::byte_array_allele::Allele;
+use crate::model::variant_context::VariantContext;
+use crate::read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::utils::errors::BirdToolError;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * Collection of read assembly using several kmerSizes.
@@ -394,8 +394,8 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      *
      * @return never {@code null}, a new trimmed assembly result set.
      */
-    pub fn trim_to(mut self, mut trimmed_assembly_region: AssemblyRegion) -> Self {
-        let mut original_by_trimmed_haplotypes =
+    pub fn trim_to(mut self, trimmed_assembly_region: AssemblyRegion) -> Self {
+        let original_by_trimmed_haplotypes =
             self.calculate_original_by_trimmed_haplotypes(&trimmed_assembly_region.padded_span);
 
         debug!(
@@ -449,7 +449,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
             self.haplotypes.len(),
             self.haplotypes.iter().next().unwrap().cigar.to_string()
         );
-        let mut haplotype_list = self
+        let haplotype_list = self
             .haplotypes
             .iter()
             .cloned()
@@ -497,23 +497,23 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         return original_by_trimmed_haplotypes;
     }
 
-    fn map_original_to_trimmed(
-        original_by_trimmed_haplotypes: HashMap<
-            Haplotype<SimpleInterval>,
-            Haplotype<SimpleInterval>,
-        >,
-        trimmed_haplotypes: Vec<Haplotype<SimpleInterval>>,
-    ) -> BTreeMap<Haplotype<SimpleInterval>, Haplotype<SimpleInterval>> {
-        let mut sorted_original_by_trimmed_haplotypes = BTreeMap::new();
+    // fn map_original_to_trimmed(
+    //     original_by_trimmed_haplotypes: HashMap<
+    //         Haplotype<SimpleInterval>,
+    //         Haplotype<SimpleInterval>,
+    //     >,
+    //     trimmed_haplotypes: Vec<Haplotype<SimpleInterval>>,
+    // ) -> BTreeMap<Haplotype<SimpleInterval>, Haplotype<SimpleInterval>> {
+    //     let mut sorted_original_by_trimmed_haplotypes = BTreeMap::new();
 
-        for trimmed in trimmed_haplotypes {
-            let value = original_by_trimmed_haplotypes
-                .get(&trimmed)
-                .unwrap()
-                .clone();
-            sorted_original_by_trimmed_haplotypes.insert(trimmed, value);
-        }
+    //     for trimmed in trimmed_haplotypes {
+    //         let value = original_by_trimmed_haplotypes
+    //             .get(&trimmed)
+    //             .unwrap()
+    //             .clone();
+    //         sorted_original_by_trimmed_haplotypes.insert(trimmed, value);
+    //     }
 
-        return sorted_original_by_trimmed_haplotypes;
-    }
+    //     return sorted_original_by_trimmed_haplotypes;
+    // }
 }

@@ -1,24 +1,9 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate coverm;
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-extern crate bio;
-extern crate itertools;
-extern crate petgraph;
-extern crate rand;
-extern crate term;
+
 
 use lorikeet_genome::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use lorikeet_genome::graphs::base_vertex::BaseVertex;
@@ -26,7 +11,7 @@ use lorikeet_genome::graphs::common_suffix_splitter::CommonSuffixSplitter;
 use lorikeet_genome::graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
 use lorikeet_genome::graphs::seq_graph::SeqGraph;
 use lorikeet_genome::graphs::seq_vertex::SeqVertex;
-use lorikeet_genome::graphs::shared_sequence_merger::SharedSequenceMerger;
+
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::utils::simple_interval::SimpleInterval;
 use petgraph::prelude::NodeIndex;
@@ -60,7 +45,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
     for common_suffix in vec!["", "A", "AT"] {
         for n_bots in vec![0, 1, 2] {
             for n_mids in vec![1, 2, 3] {
-                for n_tops in 0..n_mids {
+                for _n_tops in 0..n_mids {
                     for n_top_connections in 1..=n_mids {
                         let mut multi = 1;
                         let mut graph = SeqGraph::new(11);
@@ -128,7 +113,7 @@ fn test_split_function() -> Box<dyn Fn(SplitMergeData)> {
         let expected_merge =
             !data.common_suffix.is_empty() && data.graph.base_graph.in_degree_of(data.v) > 1;
 
-        let mut original = data.graph.clone();
+        let original = data.graph.clone();
         let succeed = CommonSuffixSplitter::split(&mut data.graph, data.v);
         assert_eq!(succeed, expected_merge, "Not expected result");
         if succeed {
@@ -164,7 +149,7 @@ fn test_split_function() -> Box<dyn Fn(SplitMergeData)> {
 }
 
 fn assert_same_haplotypes(
-    name: String,
+    _name: String,
     mut actual: SeqGraph<BaseEdgeStruct>,
     mut original: SeqGraph<BaseEdgeStruct>,
 ) {

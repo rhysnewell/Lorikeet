@@ -1,30 +1,29 @@
-use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
-use genotype::genotype_builder::{
+use hashlink::LinkedHashMap;
+use ordered_float::OrderedFloat;
+use std::collections::{BinaryHeap, HashSet};
+
+use crate::assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
+use crate::genotype::genotype_builder::{
     AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext,
 };
-use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use genotype::genotype_prior_calculator::GenotypePriorCalculator;
-use hashlink::LinkedHashMap;
-use model::allele_frequency_calculator::AlleleFrequencyCalculator;
-use model::allele_frequency_calculator_result::AFCalculationResult;
-use model::allele_subsetting_utils::AlleleSubsettingUtils;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variant_context::VariantContext;
-use model::variants::{Filter, NON_REF_ALLELE};
-use ordered_float::OrderedFloat;
-use rayon::prelude::*;
-use std::collections::HashMap;
-use std::collections::{BinaryHeap, HashSet};
-use utils::math_utils::MathUtils;
-use utils::quality_utils::QualityUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
-use utils::vcf_constants::*;
+use crate::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use crate::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use crate::genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use crate::model::allele_frequency_calculator::AlleleFrequencyCalculator;
+use crate::model::allele_frequency_calculator_result::AFCalculationResult;
+use crate::model::allele_subsetting_utils::AlleleSubsettingUtils;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::model::variant_context::VariantContext;
+use crate::model::variants::{Filter, NON_REF_ALLELE};
+use crate::utils::math_utils::MathUtils;
+use crate::utils::quality_utils::QualityUtils;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
+use crate::utils::vcf_constants::*;
 
 #[derive(Debug, Clone)]
 pub struct GenotypingEngine {
     pub(crate) allele_frequency_calculator: AlleleFrequencyCalculator,
-    pub(crate) number_of_genomes: usize,
+    // pub(crate) number_of_genomes: usize,
     pub(crate) samples: Vec<String>,
     // the top of the queue is the upstream deletion that ends first
     // note that we can get away with ordering just by the end and not the contig as long as we preserve the invariant
@@ -53,19 +52,19 @@ impl GenotypingEngine {
         args: &clap::ArgMatches,
         samples: Vec<String>,
         do_allele_specific_calcs: bool,
-        sample_ploidy: usize,
+        _sample_ploidy: usize,
     ) -> GenotypingEngine {
         GenotypingEngine {
             allele_frequency_calculator: AlleleFrequencyCalculator::make_calculator(args),
-            number_of_genomes: samples.len() * sample_ploidy,
+            // number_of_genomes: samples.len() * sample_ploidy,
             samples,
             do_allele_specific_calcs,
             upstream_deletions_loc: BinaryHeap::new(),
             genotype_assignment_method: GenotypeAssignmentMethod::from_args(args),
             use_posterior_probabilities_to_calculate_qual: args
-                .is_present("use-posteriors-to-calculate-qual"),
+                .get_flag("use-posteriors-to-calculate-qual"),
             annotate_number_of_alleles_discovered: args
-                .is_present("annotate-with-num-discovered-alleles"),
+                .get_flag("annotate-with-num-discovered-alleles"),
         }
     }
 
@@ -330,7 +329,7 @@ impl GenotypingEngine {
      */
     fn record_deletions(&mut self, vc: &VariantContext, emitted_alleles: &Vec<ByteArrayAllele>) {
         while !self.upstream_deletions_loc.is_empty() {
-            let mut condition_met = false;
+            let condition_met;
             match self.upstream_deletions_loc.peek() {
                 Some(upstream) => {
                     if !upstream.contigs_match(&vc.loc) || upstream.get_end() < vc.loc.get_start() {

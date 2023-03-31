@@ -1,15 +1,14 @@
-use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
-use graphs::common_suffix_splitter::CommonSuffixSplitter;
-use graphs::seq_graph::SeqGraph;
-use graphs::shared_sequence_merger::SharedSequenceMerger;
-use graphs::shared_vertex_sequence_splitter::SharedVertexSequenceSplitter;
-use graphs::vertex_based_transformer::VertexBasedTransformer::{
-    MergeCommonSuffices, MergeDiamonds, MergeTails, SplitCommonSuffices,
-};
 use hashlink::LinkedHashSet;
 use petgraph::stable_graph::NodeIndex;
-use petgraph::Direction;
-use std::collections::HashSet;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::common_suffix_splitter::CommonSuffixSplitter;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::graphs::shared_sequence_merger::SharedSequenceMerger;
+use crate::graphs::shared_vertex_sequence_splitter::SharedVertexSequenceSplitter;
+use crate::graphs::vertex_based_transformer::VertexBasedTransformer::{
+    MergeCommonSuffices, MergeDiamonds, MergeTails, SplitCommonSuffices,
+};
 
 /**
  * Base enum for transformation operations that need to iterate over proposed vertices, where
@@ -309,7 +308,7 @@ impl<'a, E: BaseEdge> VertexBasedTransformer<'a, E> {
                 }
 
                 // actually do the merging, returning true if at least 1 base was successfully split
-                let mut splitter = SharedVertexSequenceSplitter::new(graph, middles);
+                let splitter = SharedVertexSequenceSplitter::new(graph, middles);
                 return splitter.meets_min_mergable_sequence_for_either_prefix_or_suffix(1)
                     && splitter.split_and_update(Some(v), Some(bottom));
             }
@@ -332,14 +331,14 @@ impl<'a, E: BaseEdge> VertexBasedTransformer<'a, E> {
                     return true;
                 };
 
-                let mut splitter = SharedVertexSequenceSplitter::new(graph, tails);
+                let splitter = SharedVertexSequenceSplitter::new(graph, tails);
                 return splitter.meets_min_mergable_sequence_for_either_prefix_or_suffix(
                     Self::MIN_COMMON_SEQUENCE_TO_MERGE_SOURCE_SINK_VERTICES,
                 ) && splitter.split_and_update(Some(v), None);
             }
             Self::SplitCommonSuffices {
                 graph,
-                dont_modify_graph_even_if_possible,
+                dont_modify_graph_even_if_possible: _,
                 already_split,
             } => {
                 if already_split.contains(&v) {
@@ -352,7 +351,7 @@ impl<'a, E: BaseEdge> VertexBasedTransformer<'a, E> {
             }
             Self::MergeCommonSuffices {
                 graph,
-                dont_modify_graph_even_if_possible,
+                dont_modify_graph_even_if_possible: _,
             } => return SharedSequenceMerger::merge(graph, v),
         }
     }

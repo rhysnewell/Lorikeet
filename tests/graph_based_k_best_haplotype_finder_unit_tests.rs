@@ -1,24 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate bio;
-extern crate gkl;
-extern crate itertools;
-extern crate petgraph;
-extern crate rand;
-extern crate term;
 
 use gkl::smithwaterman::Parameters;
 use lorikeet_genome::graphs::base_edge::BaseEdge;
@@ -38,6 +26,7 @@ use lorikeet_genome::utils::simple_interval::SimpleInterval;
 use petgraph::prelude::NodeIndex;
 use rust_htslib::bam::record::Cigar;
 use std::collections::HashSet;
+
 
 lazy_static! {
     static ref PATH_TO_REFERENCE_SW_PARAMETERS: Parameters = *NEW_SW_PARAMETERS;
@@ -686,16 +675,16 @@ fn test_degenerate_path_pruning_optimization() {
     let ref_end = SeqVertex::new(b"TTTT".to_vec());
 
     let nodes = graph.base_graph.add_vertices(vec![
-        top.clone(),
-        bot.clone(),
-        mid.clone(), // 0 1 2
-        mid_and_top_ext.clone(),
-        bot.clone(), // 3 4
-        bot_ext.clone(),
-        bot_ext_top.clone(),
-        bot_ext_bot.clone(), // 5 6 7
-        ref_start.clone(),
-        ref_end.clone(), // 8 9
+        &top,
+        &bot,
+        &mid, // 0 1 2
+        &mid_and_top_ext,
+        &bot, // 3 4
+        &bot_ext,
+        &bot_ext_top,
+        &bot_ext_bot, // 5 6 7
+        &ref_start,
+        &ref_end, // 8 9
     ]);
 
     // First diamon with 3 mostly equivalent cost paths
@@ -766,10 +755,10 @@ fn test_hard_sw_path() {
     let reference = SeqVertex::new(b"TGTGTGTGTGTGTGACAGAGAGAGAGAGAGAGAGAGAGAGAGAGA".to_vec());
 
     let nodes = graph.base_graph.add_vertices(vec![
-        top.clone(),
-        bot.clone(),
-        alternate.clone(),
-        reference.clone(),
+        &top,
+        &bot,
+        &alternate,
+        &reference,
     ]);
     graph.base_graph.add_edges(
         nodes[0],

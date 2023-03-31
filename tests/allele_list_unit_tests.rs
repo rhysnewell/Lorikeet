@@ -1,22 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate bio;
-extern crate itertools;
-extern crate rand;
-extern crate term;
 
 use lorikeet_genome::model::allele_list::{AlleleList, AlleleListPermutation};
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
@@ -119,8 +109,8 @@ fn test_subset_permutation(alleles1: &Vec<ByteArrayAllele>) {
         };
     }
 
-    let mut original_allele_list = AlleleList::new(alleles1);
-    let mut target_random_allele_list = AlleleList::new_from_vec(random_subset_alleles);
+    let original_allele_list = AlleleList::new(alleles1);
+    let target_random_allele_list = AlleleList::new_from_vec(random_subset_alleles);
     let subset = original_allele_list
         .clone()
         .permutation(target_random_allele_list.clone());
@@ -157,7 +147,7 @@ fn test_subset_permutation(alleles1: &Vec<ByteArrayAllele>) {
 
 fn test_shuffle_permutation(alleles1: &Vec<ByteArrayAllele>) {
     let mut rnd = ThreadRng::default();
-    let mut original_allele_list = AlleleList::new(alleles1);
+    let original_allele_list = AlleleList::new(alleles1);
     if original_allele_list.number_of_alleles() <= 1 {
         // can't do anything so ignore
     } else {
@@ -181,7 +171,7 @@ fn test_shuffle_permutation(alleles1: &Vec<ByteArrayAllele>) {
             target_allele_array[i] = other;
         }
 
-        let mut target_allele_list = AlleleList::new(&target_allele_array);
+        let target_allele_list = AlleleList::new(&target_allele_array);
 
         let permutation = original_allele_list
             .clone()

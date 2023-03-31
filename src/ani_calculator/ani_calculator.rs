@@ -1,15 +1,13 @@
-use annotator::variant_annotation::{Annotation, VariantAnnotations};
-use genotype::genotype_builder::AttributeObject;
-use itertools::Itertools;
 use mathru::algebra::abstr::Sign;
-use model::variant_context::VariantContext;
-use model::variant_context_utils::VariantContextUtils;
 use ndarray::Array2;
 use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-// use polars;
+
+use crate::model::variant_context::VariantContext;
+use crate::model::variant_context_utils::VariantContextUtils;
+
 
 /// Holds the population and consensus ANI & Fst arrays
 /// Compares ANI between samples (Non-diagonal cells) and the ANI of sample compared to reference (Diagonals)
@@ -178,7 +176,7 @@ impl ANICalculator {
     fn calculate_from_contexts(
         &mut self,
         contexts: &mut [VariantContext],
-        genome_size: u64,
+        _genome_size: u64,
         qual_by_depth_filter: f64,
         qual_threshold: f64,
         depth_per_sample_filter: i64,
@@ -187,7 +185,7 @@ impl ANICalculator {
         let n_samples = self.conANI.ncols();
 
         for context in contexts {
-            let n_alleles = context.get_n_alleles();
+            let _n_alleles = context.get_n_alleles();
 
             let mut consenus_allele_indices = Vec::with_capacity(n_samples);
             let mut present_alleles = Vec::with_capacity(n_samples);
@@ -210,7 +208,7 @@ impl ANICalculator {
                             .unwrap_or_default(),
                     );
                     // which alleles are present in first sample
-                    let mut which_are_present =
+                    let which_are_present =
                         context.alleles_present_in_sample(sample_idx_1, depth_per_sample_filter);
 
                     present_alleles.push(which_are_present);
@@ -229,7 +227,7 @@ impl ANICalculator {
                                 .unwrap_or_default(),
                         );
                         // which alleles are present in first sample with at least two supporting reads
-                        let mut which_are_present = context
+                        let which_are_present = context
                             .alleles_present_in_sample(sample_idx_2, depth_per_sample_filter);
                         present_alleles.push(which_are_present);
                     }
@@ -376,7 +374,7 @@ impl ANICalculator {
             file_open,
             "##source=lorikeet-v{}",
             env!("CARGO_PKG_VERSION")
-        );
+        ).expect("Unable to write data");
 
         for (sample_idx, sample_name) in sample_names.iter().enumerate() {
             // remove tmp file name from sample id
@@ -385,7 +383,7 @@ impl ANICalculator {
                 "##sample=<ID={}, name={}>",
                 sample_idx + 1,
                 sample_name
-            );
+            ).expect("Unable to write data");
         }
 
         // Print header line

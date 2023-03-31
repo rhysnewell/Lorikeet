@@ -1,31 +1,30 @@
-use annotator::variant_annotation::VariantAnnotations;
-use external_command_checker::check_for_bcftools;
-use genotype::genotype_builder::{
-    AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypeType, GenotypesContext,
-};
-use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use hashlink::{LinkedHashMap, LinkedHashSet};
 use itertools::Itertools;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variants::{Filter, Variant, NON_REF_ALLELE};
 use ordered_float::OrderedFloat;
-use process::Stdio;
-use rayon::prelude::*;
-use reference::reference_reader::ReferenceReader;
+use std::process::Stdio;
 use rust_htslib::bcf::header::HeaderView;
 use rust_htslib::bcf::record::{GenotypeAllele, Numeric};
 use rust_htslib::bcf::{IndexedReader, Read, Reader, Record, Writer};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
-use std::fmt::Error;
+use std::cmp::{min, Ordering};
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::ops::{Deref, Range};
+use std::ops::Range;
 use std::path::Path;
-use utils::math_utils::MathUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
-use utils::vcf_constants::*;
+
+use crate::genotype::genotype_builder::{
+    AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext,
+};
+use crate::annotator::variant_annotation::VariantAnnotations;
+use crate::external_command_checker::check_for_bcftools;
+use crate::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use crate::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use crate::genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::model::variants::{Filter, NON_REF_ALLELE};
+use crate::reference::reference_reader::ReferenceReader;
+use crate::utils::math_utils::MathUtils;
+use crate::utils::simple_interval::SimpleInterval;
+use crate::utils::vcf_constants::*;
 
 #[derive(Debug, Clone)]
 pub struct VariantContext {
@@ -440,7 +439,6 @@ impl VariantContext {
                     &GenotypeAssignmentMethod::DoNotAssignGenotypes => {
                         // pass
                     }
-                    _ => panic!("Unknown GenotypeAssignmentMethod"),
                 }
             }
             _ => {
@@ -686,7 +684,7 @@ impl VariantContext {
         start: u64,
         end: u64,
     ) -> Vec<VariantContext> {
-        indexed_vcf.fetch(tid, start, Some(end));
+        indexed_vcf.fetch(tid, start, Some(end)).expect("Failed to fetch region");
 
         let variant_contexts = indexed_vcf
             .records()
@@ -798,7 +796,7 @@ impl VariantContext {
                 &allele_depths,
                 record.format(b"AD").integer().unwrap()
             );
-            let mut genotypes = allele_depths
+            let genotypes = allele_depths
                 .iter()
                 .map(|depths| {
                     let mut depths = depths.into_iter().map(|d| *d as i64).collect::<Vec<i64>>();
@@ -837,11 +835,11 @@ impl VariantContext {
     pub fn collect_variants(
         record: &mut Record,
         omit_snvs: bool,
-        omit_indels: bool,
-        indel_len_range: Option<Range<u32>>,
+        _omit_indels: bool,
+        _indel_len_range: Option<Range<u32>>,
     ) -> Vec<ByteArrayAllele> {
-        let pos = record.pos();
-        let svlens = match record.info(b"SVLEN").integer() {
+        let _pos = record.pos();
+        let _svlens = match record.info(b"SVLEN").integer() {
             // Gets value from SVLEN tag in VCF record
             Ok(Some(svlens)) => Some(
                 svlens
@@ -857,7 +855,7 @@ impl VariantContext {
             ),
             _ => None,
         };
-        let end = match record.info(b"END").integer() {
+        let _end = match record.info(b"END").integer() {
             Ok(Some(end)) => {
                 let end = end[0] as u32 - 1;
                 Some(end)
@@ -876,23 +874,23 @@ impl VariantContext {
         //     true
         // };
 
-        let is_valid_insertion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
+        let _is_valid_insertion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
             alt_allele == b"<INS>"
                 || (ref_allele.len() < alt_allele.len()
                     && ref_allele == &alt_allele[..ref_allele.len()])
         };
 
-        let is_valid_deletion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
+        let _is_valid_deletion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
             alt_allele == b"<DEL>"
                 || (ref_allele.len() > alt_allele.len()
                     && &ref_allele[..alt_allele.len()] == alt_allele)
         };
 
-        let is_valid_inversion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
+        let _is_valid_inversion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
             alt_allele == b"<INV>" || (ref_allele.len() == alt_allele.len())
         };
 
-        let is_valid_mnv = |ref_allele: &[u8], alt_allele: &[u8]| {
+        let _is_valid_mnv = |ref_allele: &[u8], alt_allele: &[u8]| {
             alt_allele == b"<MNV>" || (ref_allele.len() == alt_allele.len())
         };
 
@@ -935,7 +933,7 @@ impl VariantContext {
                         variant_vec.push(ByteArrayAllele::new(alt_allele, is_reference))
                     }
                 } else {
-                    let indel_len =
+                    let _indel_len =
                         (alt_allele.len() as i32 - ref_allele.len() as i32).abs() as u32;
                     // TODO fix position if variant is like this: cttt -> ct
                     variant_vec.push(ByteArrayAllele::new(alt_allele, is_reference))
@@ -1076,7 +1074,7 @@ impl VariantContext {
 
     pub fn get_called_chr_count(&self) -> i32 {
         let mut n = 0;
-        let mut genotypes = self.get_genotypes();
+        let genotypes = self.get_genotypes();
 
         for g in genotypes.genotypes() {
             for a in g.alleles.iter() {
@@ -1392,7 +1390,7 @@ impl VariantContext {
         }
     }
 
-    fn add_genotype_format(&self, record: &mut Record, n_samples: usize) {
+    fn add_genotype_format(&self, record: &mut Record, _n_samples: usize) {
         // let mut genotype_alleles = Vec::with_capacity(self.genotypes.len());
         let mut phases = Vec::new();
         let mut pls = Vec::new();
@@ -1490,13 +1488,13 @@ impl VariantContext {
         let mut ploidy_index = ploidy.saturating_sub(1); // start from back of tag
 
         let mut allele_counts = vec![0; ploidy]; // count of times we have saturated this position
-        let mut allele_index = ploidy.saturating_sub(1); // this is the allele index of the last tag
-        let mut rounds = 0;
+        let _allele_index = ploidy.saturating_sub(1); // this is the allele index of the last tag
+        // let mut rounds = 0;
         let mut max_allele_allowed = 1;
-        for tag_index in 0..pls_index {
+        for _tag_index in 0..pls_index {
             if ploidy_index == 0 && genotype_tag_vals[ploidy_index] == max_allele_allowed {
                 // reached end of round
-                rounds += 1;
+                // rounds += 1;
                 ploidy_index = ploidy.saturating_sub(1); // reset ploidy index
                 genotype_tag_vals.fill(0);
 

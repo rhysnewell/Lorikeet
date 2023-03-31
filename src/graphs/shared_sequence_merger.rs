@@ -1,11 +1,11 @@
-use graphs::base_edge::BaseEdge;
-use graphs::seq_graph::SeqGraph;
-use graphs::seq_vertex::SeqVertex;
 use hashlink::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use std::collections::HashSet;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::graphs::seq_vertex::SeqVertex;
 
 /**
  * Merges the incoming vertices of a vertex V of a graph

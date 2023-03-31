@@ -1,53 +1,22 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
+use lorikeet_genome::genotype::genotype_builder::Genotype;
+use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use lorikeet_genome::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use lorikeet_genome::model::allele_frequency_calculator::AlleleFrequencyCalculator;
+use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
+use lorikeet_genome::model::variant_context::VariantContext;
+use lorikeet_genome::model::variants::SPAN_DEL_ALLELE;
+use lorikeet_genome::utils::math_utils::{MathUtils, LOG10_ONE_HALF};
+use rayon::prelude::*;
+
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate itertools;
-extern crate rand;
-extern crate term;
-
-use itertools::Itertools;
-use lorikeet_genome::genotype::genotype_builder::Genotype;
-use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use lorikeet_genome::genotype::genotype_likelihoods::GenotypeLikelihoods;
-use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::model::allele_frequency_calculator::AlleleFrequencyCalculator;
-use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
-use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
-use lorikeet_genome::model::variant_context::VariantContext;
-use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
-use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMInputScoreImputator;
-use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
-use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
-use lorikeet_genome::utils::base_utils::BaseUtils;
-use lorikeet_genome::utils::math_utils::{MathUtils, LOG10_ONE_HALF};
-use lorikeet_genome::utils::quality_utils::QualityUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
-use rand::rngs::ThreadRng;
-use rand::seq::index::sample;
-use rayon::prelude::*;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView, Seq};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::ops::Deref;
-use std::sync::Mutex;
 
 lazy_static! {
     static ref A: ByteArrayAllele = ByteArrayAllele::new("A".as_bytes(), true);

@@ -1,18 +1,17 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
     non_snake_case,
-    unused,
     non_camel_case_types
 )]
-extern crate openssl;
-extern crate openssl_sys;
+// extern crate openssl;
+// extern crate openssl_sys;
 
 pub mod abundance;
 pub mod activity_profile;
 pub mod ani_calculator;
 pub mod annotator;
 pub mod assembly;
+pub mod bam_parsing;
 pub mod cli;
 pub mod evolve;
 pub mod external_command_checker;
@@ -32,67 +31,20 @@ pub mod smith_waterman;
 pub mod test_utils;
 pub mod utils;
 
-// HTS and bio files
-extern crate bio;
-extern crate bio_types;
-extern crate gkl;
-extern crate rust_htslib;
-extern crate needletail;
-
-// Birds and CoverM
-extern crate bird_tool_utils;
-extern crate bird_tool_utils_man;
-extern crate coverm;
-extern crate galah;
-
 // Stats
 #[macro_use]
 extern crate ndarray;
-extern crate mathru;
-extern crate ndarray_npy;
-extern crate statrs;
-// extern crate polars;
-
 // Utilities
 #[macro_use]
-extern crate approx;
-extern crate bstr;
-extern crate clap;
-extern crate clap_complete;
-extern crate compare;
-#[macro_use]
 extern crate enum_ordinalize;
-extern crate env_logger;
-extern crate glob;
-extern crate hashlink;
-extern crate indexmap;
-extern crate itertools;
-extern crate libm;
-extern crate multimap;
-extern crate num;
-extern crate ordered_float;
-extern crate petgraph;
-extern crate pyo3;
-extern crate rand;
-extern crate rayon;
-extern crate scoped_threadpool;
-extern crate strum;
-extern crate tempdir;
-extern crate tempfile;
-
 #[macro_use]
 extern crate log;
-extern crate indicatif;
-extern crate strum_macros;
 #[macro_use]
 extern crate lazy_static;
-extern crate roff;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
-extern crate term;
-extern crate core;
+extern crate approx;
 
 use std::process;
 
@@ -102,9 +54,9 @@ pub const AUTHOR_AND_EMAIL: &str =
     "Rhys J. P. Newell, Centre for Microbiome Research, School of Biomedical Sciences, Faculty of Health, Queensland University of Technology <rhys.newell94 near gmail.com>";
 
 pub fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
-    match m.is_present(parameter) {
+    match m.contains_id(parameter) {
         true => {
-            let mut percentage: f32 = m.value_of(parameter).unwrap().parse().unwrap();
+            let mut percentage: f32 = *m.get_one(parameter).unwrap();
             if percentage >= 1.0 && percentage <= 100.0 {
                 percentage = percentage / 100.0;
             } else if percentage < 0.0 || percentage > 100.0 {

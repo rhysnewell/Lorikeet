@@ -1,8 +1,8 @@
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use rayon::prelude::*;
 use std::collections::HashMap;
-use utils::math_utils::MathUtils;
-use utils::quality_utils::QualityUtils;
+
+use crate::utils::math_utils::MathUtils;
+use crate::utils::quality_utils::QualityUtils;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
 
 /**
  * Describes the results of the AFCalc

@@ -1,30 +1,19 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate bio;
-extern crate gkl;
-extern crate itertools;
-extern crate rand;
-extern crate term;
 
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
+
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
+    NEW_SW_PARAMETERS,
 };
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::convert::TryFrom;

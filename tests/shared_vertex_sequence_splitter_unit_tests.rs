@@ -1,25 +1,8 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate coverm;
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-extern crate bio;
-extern crate hashlink;
-extern crate itertools;
-extern crate petgraph;
-extern crate rand;
-extern crate term;
 
 use hashlink::LinkedHashSet;
 use itertools::Itertools;
@@ -29,13 +12,13 @@ use lorikeet_genome::graphs::graph_based_k_best_haplotype_finder::GraphBasedKBes
 use lorikeet_genome::graphs::graph_utils::GraphUtils;
 use lorikeet_genome::graphs::seq_graph::SeqGraph;
 use lorikeet_genome::graphs::seq_vertex::SeqVertex;
-use lorikeet_genome::graphs::shared_sequence_merger::SharedSequenceMerger;
+
 use lorikeet_genome::graphs::shared_vertex_sequence_splitter::SharedVertexSequenceSplitter;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::byte_array_allele::Allele;
 use lorikeet_genome::utils::simple_interval::SimpleInterval;
 use petgraph::prelude::NodeIndex;
-use std::cmp::Ordering::Equal;
+
 use std::collections::HashSet;
 
 fn test_prefix_suffix(strings: Vec<&str>, expected_prefix_len: usize, expected_suffix_len: usize) {
@@ -197,7 +180,7 @@ fn test_splitter_complete_cycle(strings: Vec<&str>, has_top: bool, has_bot: bool
         v.push(SeqVertex::new(s.as_bytes().to_vec()));
     }
     println!("vertices {:?}", &v);
-    let mut nodes = graph.base_graph.add_vertices(v.iter());
+    let nodes = graph.base_graph.add_vertices(v.iter());
     let first = nodes[0];
 
     let mut top_index = None;

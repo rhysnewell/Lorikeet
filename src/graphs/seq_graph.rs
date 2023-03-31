@@ -1,16 +1,13 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::seq_vertex::SeqVertex;
-use graphs::vertex_based_transformer::VertexBasedTransformer::{
-    MergeCommonSuffices, MergeDiamonds, MergeTails, SplitCommonSuffices,
-};
-use graphs::vertex_based_transformer::VertexBasedTransformerOptions;
 use petgraph::algo::is_cyclic_directed;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use std::collections::HashSet;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::seq_vertex::SeqVertex;
+use crate::graphs::vertex_based_transformer::VertexBasedTransformerOptions;
 
 /**
  * A graph that contains base sequence at each node
@@ -307,7 +304,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      */
     fn merge_linear_chain(&mut self, linear_chain: &Vec<NodeIndex>) -> bool {
         match self.merge_linear_chain_vertex(linear_chain) {
-            Some(index) => true,
+            Some(_index) => true,
             None => false,
         }
     }
@@ -350,7 +347,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
 
         self.base_graph
             .graph
-            .retain_nodes(|gr, v| !linear_chain.contains(&v));
+            .retain_nodes(|_gr, v| !linear_chain.contains(&v));
 
         return Some(added_node_index);
     }

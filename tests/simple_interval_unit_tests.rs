@@ -1,25 +1,22 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
 extern crate lorikeet_genome;
 extern crate rust_htslib;
 
-use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::reads::read_clipper::ReadClipper;
-use lorikeet_genome::test_utils::read_clipper_test_utils::ReadClipperTestUtils;
+
+
+
+
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
-use std::cmp::{max, min};
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::ops::Deref;
+
+
+
+
+
+
 
 #[test]
 fn test_equality() {

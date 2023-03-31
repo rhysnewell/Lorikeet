@@ -1,11 +1,12 @@
 use rayon::prelude::*;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::read_clipper::ReadClipper;
-use reference::reference_reader::ReferenceReader;
 use std::cmp::min;
-use utils::interval_utils::IntervalUtils;
-use utils::simple_interval::Locatable;
-use utils::simple_interval::SimpleInterval;
+
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::read_clipper::ReadClipper;
+use crate::reference::reference_reader::ReferenceReader;
+use crate::utils::interval_utils::IntervalUtils;
+use crate::utils::simple_interval::Locatable;
+use crate::utils::simple_interval::SimpleInterval;
 
 /**
  * Region of the genome that gets assembled by the local assembly engine.
@@ -175,9 +176,9 @@ impl AssemblyRegion {
      *
      * @param value new activity state of this region
      */
-    fn set_is_active(&mut self, value: bool) {
-        self.is_active = value
-    }
+    // fn set_is_active(&mut self, value: bool) {
+    //     self.is_active = value
+    // }
 
     /**
      * Get the span of this assembly region including the padding value
@@ -440,7 +441,7 @@ impl AssemblyRegion {
                     .get(&self.tid)
                     .unwrap_or(&std::u64::MAX) as usize
                     - 1,
-                (genome_loc.get_end() + padding),
+                genome_loc.get_end() + padding,
             ),
         );
 
@@ -464,7 +465,7 @@ impl AssemblyRegion {
         } else {
             return &reference_reader.current_sequence[interval.start
                 ..min(
-                    (interval.get_end() + 1),
+                    interval.get_end() + 1,
                     *reference_reader
                         .target_lens
                         .get(&interval.get_contig())

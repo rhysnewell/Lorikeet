@@ -1,19 +1,15 @@
-use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
-use genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
-use haplotype::haplotype::Haplotype;
 use hashlink::{LinkedHashMap, LinkedHashSet};
-use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variant_context::VariantContext;
 use rand::distributions::{Distribution, Normal};
 use rand::rngs::ThreadRng;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::read_utils::ReadUtils;
-use statrs::statistics::Median;
 use std::cmp::Ordering;
-use std::collections::HashMap;
-use utils::math_utils::MathUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
+use crate::model::allele_likelihoods::AlleleLikelihoods;
+use crate::model::byte_array_allele::Allele;
+use crate::model::variant_context::VariantContext;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::read_utils::ReadUtils;
+use crate::utils::math_utils::MathUtils;
 
 /// Determine whether the annotation appears in the info or format field of the VCF
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -126,7 +122,7 @@ impl VariantAnnotations {
                 }
             }
             Self::AlleleFraction => {
-                let mut genotype = genotype.unwrap();
+                let genotype = genotype.unwrap();
                 debug!("Allele Fraction");
                 if genotype.has_ad() {
                     let allele_fractions = MathUtils::normalize_sum_to_one(
@@ -164,7 +160,7 @@ impl VariantAnnotations {
                 }
             }
             Self::AlleleCount => {
-                let mut genotype = genotype.unwrap();
+                let genotype = genotype.unwrap();
                 debug!("Allele Count");
                 if genotype.has_ad() {
                     let allele_counts = genotype.get_ad().into_iter().filter(|ad| **ad > 0).count();
@@ -256,7 +252,7 @@ impl VariantAnnotations {
                 }
                 let mut allele_counts = LinkedHashMap::new();
                 // let mut subset = LinkedHashMap::new();
-                for (allele_index, allele) in alleles.iter().enumerate() {
+                for (allele_index, _allele) in alleles.iter().enumerate() {
                     allele_counts.insert(allele_index, 0);
                     // subset.insert(allele_index, vec![allele]);
                 }
@@ -307,7 +303,7 @@ impl VariantAnnotations {
                     return AttributeObject::None;
                 }
 
-                let mut genotypes = vc.get_genotypes_mut();
+                let genotypes = vc.get_genotypes_mut();
                 debug!("genotypes empty {}", genotypes.is_empty());
                 if genotypes.is_empty() {
                     return AttributeObject::None;

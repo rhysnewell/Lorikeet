@@ -1,14 +1,14 @@
-use abundance::strain_abundances_calculator::StrainAbundanceCalculator;
-use annotator::variant_annotation::VariantAnnotations;
-use genotype::genotype_builder::AttributeObject;
 use hashlink::LinkedHashMap;
-use model::variant_context::VariantContext;
-use rand::seq::index::sample;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+
+use crate::model::variant_context::VariantContext;
+use crate::abundance::strain_abundances_calculator::StrainAbundanceCalculator;
+use crate::annotator::variant_annotation::VariantAnnotations;
+use crate::genotype::genotype_builder::AttributeObject;
 
 /// Calculates the per sample strain abundance for a list of variant contexts
 /// that have been annotated with their potential strain assignments
@@ -45,15 +45,14 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         n_samples: usize,
     ) -> (Vec<usize>, Vec<VariantContext>) {
         // The initialization vector for the EM algorithm
-        let mut abundance_vectors = Vec::with_capacity(n_samples);
         let reference_present = self.reference_strain_potentially_present(n_samples);
         let mut per_sample_reference_presence = vec![reference_present; n_samples];
 
         n_strains += if reference_present { 1 } else { 0 };
 
         let mut strain_ids = (0..n_strains).into_iter().collect::<Vec<usize>>();
-        let mut abundance_key = HashMap::with_capacity(n_strains);
-        let mut strain_id_key = HashMap::with_capacity(n_strains);
+        let mut abundance_key;
+        let mut strain_id_key;
         let eps = Self::EPSILON;
         // the per sample strain presence vec, true if suspected of being present
         // false if not. Used to detect if a suspected strain disappears from a sample between
@@ -66,6 +65,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
         debug!("Strain presences {:?}", &strain_presences);
 
+        let mut abundance_vectors;
         loop {
             abundance_key = HashMap::with_capacity(n_strains);
             strain_id_key = HashMap::with_capacity(n_strains);
@@ -88,7 +88,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
             abundance_vectors = (0..n_samples)
                 .into_iter()
-                .map(|sample_vec_index| {
+                .map(|_sample_vec_index| {
                     strain_ids
                         .iter()
                         .map(|strain_index| StrainAbundanceCalculator::new(*strain_index, capacity))
@@ -187,7 +187,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                 // }
                             }
 
-                            let mut reference_present =
+                            let _reference_present =
                                 &mut per_sample_reference_presence[sample_index];
 
                             let strains_using_reference_allele = (0..n_strains)
@@ -204,7 +204,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                     // We divide the total depth of variant here by the total amount of strains that
                                     // variant occurs in. E.g. if a variant had a depth of 6
                                     // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                                    let mut weight = vc.genotypes.genotypes()[sample_index].ad[0]
+                                    let weight = vc.genotypes.genotypes()[sample_index].ad[0]
                                         as f64
                                         / total_depth;
 
@@ -294,12 +294,12 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             // Then that genotype had an abundance weighting of 0 in
             // every sample and therefore does not exist so remove it.
             let mut strains_to_remove = vec![0; n_strains];
-            let mut something_removed = false;
+            let something_removed = false;
             abundance_vectors
                 .iter()
                 .enumerate()
                 .for_each(|(idx, sample_calculators)| {
-                    let mut strain_present = &mut strain_presences[idx];
+                    let strain_present = &mut strain_presences[idx];
                     sample_calculators
                         .iter()
                         .enumerate()
@@ -365,16 +365,16 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         (strain_ids, self.variant_contexts)
     }
 
-    fn normalize_weights(&self, abundance_vectors: &mut Vec<Vec<StrainAbundanceCalculator>>) {
-        for sample_vec in abundance_vectors {
-            // should contain no negative numbers so just divide by the sum of all weights
-            let weight_sum = sample_vec.iter().map(|a| a.abundance_weight).sum::<f64>();
+    // fn normalize_weights(&self, abundance_vectors: &mut Vec<Vec<StrainAbundanceCalculator>>) {
+    //     for sample_vec in abundance_vectors {
+    //         // should contain no negative numbers so just divide by the sum of all weights
+    //         let weight_sum = sample_vec.iter().map(|a| a.abundance_weight).sum::<f64>();
 
-            sample_vec
-                .iter_mut()
-                .for_each(|g| g.abundance_weight = g.abundance_weight / weight_sum);
-        }
-    }
+    //         sample_vec
+    //             .iter_mut()
+    //             .for_each(|g| g.abundance_weight = g.abundance_weight / weight_sum);
+    //     }
+    // }
 
     fn print_strain_coverages(&self, abundance_vectors: Vec<Vec<StrainAbundanceCalculator>>) {
         debug!("Printing strain coverages {}", self.reference_name);
@@ -409,7 +409,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             file_open,
             "##source=lorikeet-v{}",
             env!("CARGO_PKG_VERSION")
-        );
+        ).expect("Unable to write to file");
         for (sample_idx, sample_name) in self.sample_names.iter().enumerate() {
             // remove tmp file name from sample id
             writeln!(
@@ -417,7 +417,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                 "##sample=<ID={}, name={}>",
                 sample_idx + 1,
                 sample_name
-            );
+            ).expect("Unable to write to file");
         }
 
         // Print header line
@@ -458,7 +458,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             file_open,
             "##source=lorikeet-v{}",
             env!("CARGO_PKG_VERSION")
-        );
+        ).expect("Could not write to file");
         for (sample_idx, sample_name) in self.sample_names.iter().enumerate() {
             // remove tmp file name from sample id
             writeln!(
@@ -466,7 +466,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                 "##sample=<ID={}, name={}>",
                 sample_idx + 1,
                 sample_name
-            );
+            ).expect("Could not write to file");
         }
 
         // Print header line

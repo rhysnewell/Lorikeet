@@ -1,8 +1,8 @@
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use rayon::prelude::*;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+
+use crate::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
 
 lazy_static! {
     static ref HAPLOID_NO_CALL: Vec<ByteArrayAllele> = vec![ByteArrayAllele::fake(false)];
@@ -21,7 +21,7 @@ pub enum GenotypeAssignmentMethod {
 
 impl GenotypeAssignmentMethod {
     pub fn from_args(args: &clap::ArgMatches) -> GenotypeAssignmentMethod {
-        match args.value_of("genotype-assignment-method").unwrap() {
+        match args.get_one::<String>("genotype-assignment-method").map(|s| s.as_str()).unwrap_or_else(|| "DoNotAssignGenotypes") {
             "UsePLsToAssign" => GenotypeAssignmentMethod::UsePLsToAssign,
             "UsePosteriorProbabilities" => GenotypeAssignmentMethod::UsePosteriorProbabilities,
             "BestMatchToOriginal" => GenotypeAssignmentMethod::BestMatchToOriginal,
@@ -259,7 +259,7 @@ impl Genotype {
     }
 
     pub fn pl_i32(&self) -> Vec<i32> {
-        let mut pls: Vec<i32> = self.pl.iter().map(|i| *i as i32).collect();
+        let pls: Vec<i32> = self.pl.iter().map(|i| *i as i32).collect();
 
         pls
     }
@@ -277,14 +277,14 @@ impl Genotype {
     }
 
     pub fn ad_i32(&self) -> Vec<i32> {
-        let mut ads: Vec<i32> = self.ad.iter().map(|i| *i as i32).collect();
+        let ads: Vec<i32> = self.ad.iter().map(|i| *i as i32).collect();
 
         ads
     }
 
     pub fn af(&self) -> Vec<f32> {
         let sum = self.ad.iter().sum::<i64>() as f32;
-        let mut afs: Vec<f32> = self.ad.iter().map(|i| (*i as f32) / sum).collect();
+        let afs: Vec<f32> = self.ad.iter().map(|i| (*i as f32) / sum).collect();
 
         afs
     }

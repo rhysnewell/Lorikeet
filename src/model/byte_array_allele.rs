@@ -1,7 +1,7 @@
-use model::variants;
-use rayon::prelude::*;
 use std::hash::{Hash, Hasher};
-use utils::vcf_constants::VCFConstants;
+
+use crate::model::variants;
+use crate::utils::vcf_constants::VCFConstants;
 
 #[derive(Debug, Clone, Ord, PartialOrd)]
 pub struct ByteArrayAllele {

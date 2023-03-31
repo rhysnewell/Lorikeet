@@ -1,5 +1,5 @@
 use num::traits::Float;
-use utils::simple_interval::{Locatable, SimpleInterval};
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * Captures the probability that a specific locus in the genome represents an "active" site containing

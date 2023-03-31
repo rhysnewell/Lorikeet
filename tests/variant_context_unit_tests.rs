@@ -1,8 +1,5 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
@@ -12,12 +9,12 @@ extern crate lazy_static;
 extern crate num;
 extern crate statrs;
 
-use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
-use lorikeet_genome::model::variant_context;
+use lorikeet_genome::model::byte_array_allele::{ByteArrayAllele};
+
 use lorikeet_genome::model::variant_context::{VariantContext, VariantType};
-use lorikeet_genome::model::variant_context_utils;
+
 use lorikeet_genome::utils::simple_interval::Locatable;
-use num::integer::binomial;
+
 use statrs::function::factorial::factorial;
 
 static snp_loc: &str = "chr1";
@@ -114,7 +111,7 @@ fn test_determine_types() {
     let AC: ByteArrayAllele = ByteArrayAllele::new("AC".as_bytes(), false);
     let AT: ByteArrayAllele = ByteArrayAllele::new("AT".as_bytes(), false);
 
-    let C: ByteArrayAllele = ByteArrayAllele::new("C".as_bytes(), false);
+    let _C: ByteArrayAllele = ByteArrayAllele::new("C".as_bytes(), false);
     let CAT: ByteArrayAllele = ByteArrayAllele::new("CAT".as_bytes(), false);
 
     let TA: ByteArrayAllele = ByteArrayAllele::new("TA".as_bytes(), false);
@@ -248,7 +245,7 @@ fn test_multiple_snp_allele_ordering() {
 
 #[test]
 fn test_creating_snp_variant_context() {
-    let mut vc_unit_test = VariantContextUnitTest::new();
+    let vc_unit_test = VariantContextUnitTest::new();
 
     let alleles = vec![vc_unit_test.A_ref.clone(), vc_unit_test.T.clone()];
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop, alleles);
@@ -412,7 +409,7 @@ fn test_genotype_tag_calc() {
             let den = factorial(ploidy) * factorial(alleles - 1);
             let combos_with_repeats = (num / den) as usize;
             let mut pls = vec![1; combos_with_repeats];
-            let mut gts = vec![0; combos_with_repeats];
+            let _gts = vec![0; combos_with_repeats];
             for gt in 0..combos_with_repeats {
                 pls[gt] = 0;
             }

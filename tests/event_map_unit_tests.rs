@@ -1,18 +1,13 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 
 use lorikeet_genome::haplotype::event_map::EventMap;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
-use lorikeet_genome::model::variant_context::VariantContext;
+
 use lorikeet_genome::model::variant_context_utils::VariantContextUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
 use rust_htslib::bam::record::CigarString;
@@ -35,7 +30,7 @@ fn test_mnps(
 ) {
     let mut hap = Haplotype::new(haplotype_bases.as_bytes(), false);
     hap.set_cigar(CigarString::try_from(cigar).unwrap().0);
-    let mut loc = SimpleInterval::new(0, 1, ref_bases.len());
+    let loc = SimpleInterval::new(0, 1, ref_bases.len());
     hap.set_genome_location(loc.clone());
     for max_dist in max_mnp_distance {
         let events = EventMap::new(
@@ -106,7 +101,7 @@ fn test_make_blocks(
         VariantContextUtils::make_from_alleles("x".to_string(), 20, 10, expected_alleles);
 
     // println!("vc1 {:?} vc2 {:?} expected {:?}", &vc1, &vc2, &expected);
-    let mut event_map = EventMap::state_for_testing(Vec::new());
+    let _event_map = EventMap::state_for_testing(Vec::new());
     let block = EventMap::make_block(vc1, vc2);
 
     assert_eq!(block.loc.get_start(), expected.loc.get_start());

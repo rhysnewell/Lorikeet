@@ -1,19 +1,19 @@
-use assembly::assembly_result_set::AssemblyResultSet;
-use haplotype::haplotype::Haplotype;
-use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::Allele;
-use model::variant_context_utils::VariantContextUtils;
-use ordered_float::OrderedFloat;
-use pair_hmm::pair_hmm::PairHMM;
 use rayon::prelude::*;
-use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::read_clipper::ReadClipper;
-use reads::read_utils::ReadUtils;
 use std::cmp::{max, min};
 use std::collections::HashMap;
-use utils::quality_utils::QualityUtils;
-use utils::simple_interval::SimpleInterval;
+use ordered_float::OrderedFloat;
+
+use crate::utils::quality_utils::QualityUtils;
+use crate::utils::simple_interval::SimpleInterval;
+use crate::assembly::assembly_result_set::AssemblyResultSet;
+use crate::haplotype::haplotype::Haplotype;
+use crate::model::allele_likelihoods::AlleleLikelihoods;
+use crate::model::variant_context_utils::VariantContextUtils;
+use crate::pair_hmm::pair_hmm::PairHMM;
+use crate::read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::read_clipper::ReadClipper;
+use crate::reads::read_utils::ReadUtils;
 
 lazy_static! {
     // table used for disqualifying reads for genotyping
@@ -40,10 +40,10 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone)]
-pub struct PairHMMLikelihoodCalculationEngine<'a> {
-    constant_gcp: u8,
+pub struct PairHMMLikelihoodCalculationEngine {
+    // constant_gcp: u8,
     log10_global_read_mismapping_rate: f64,
-    pair_hmm: Option<PairHMM<'a>>,
+    // pair_hmm: Option<PairHMM<'a>>,
     dynamic_disqualification: bool,
     read_disqualification_scale: f64,
     expected_error_rate_per_base: f64,
@@ -78,7 +78,7 @@ impl PCRErrorModel {
      */
     pub fn new(args: &clap::ArgMatches) -> PCRErrorModel {
         let pcr_error_model_arg = args
-            .value_of("pcr-indel-model")
+            .get_one::<String>("pcr-indel-model")
             .unwrap()
             .to_ascii_lowercase();
         let pcr_error_model = match pcr_error_model_arg.as_str() {
@@ -93,8 +93,8 @@ impl PCRErrorModel {
     }
 }
 
-impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
-    const DEFAULT_DYNAMIC_DISQUALIFICATION_SCALE_FACTOR: f64 = 1.0;
+impl PairHMMLikelihoodCalculationEngine {
+    // const DEFAULT_DYNAMIC_DISQUALIFICATION_SCALE_FACTOR: f64 = 1.0;
     const MAX_STR_UNIT_LENGTH: usize = 8;
     const MAX_REPEAT_LENGTH: usize = 20;
     const MIN_ADJUSTED_QSCORE: usize = 10;
@@ -138,16 +138,16 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
         disable_cap_read_qualities_to_mapq: bool,
         modify_soft_clipped_bases: bool,
         avx_mode: AVXMode,
-    ) -> PairHMMLikelihoodCalculationEngine<'static> {
+    ) -> PairHMMLikelihoodCalculationEngine {
         assert!(
             base_quality_score_threshold >= QualityUtils::MIN_USABLE_Q_SCORE,
             "base_quality_score_threshold must be greater than or equal to 6"
         );
 
         let mut result = PairHMMLikelihoodCalculationEngine {
-            constant_gcp,
+            // constant_gcp,
             log10_global_read_mismapping_rate,
-            pair_hmm: None,
+            // pair_hmm: None,
             dynamic_disqualification: dynamic_read_disqualification,
             read_disqualification_scale,
             expected_error_rate_per_base,
@@ -389,7 +389,7 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
                 } else {
                     let maybe_unclipped =
                         ReadClipper::new(read.clone()).hard_clip_soft_clipped_bases();
-                    let bases = maybe_unclipped.bases.as_slice();
+                    let bases = maybe_unclipped.seq();
 
                     let mut read_quals = maybe_unclipped.read.qual().to_vec();
                     let mut read_ins_quals =
@@ -494,8 +494,8 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
     ) -> BirdToolRead {
         let mut processed_read =
             ReadUtils::empty_read_with_quals_and_bases(&read, &base_qualities, read_bases);
-        ReadUtils::set_insertion_base_qualities(&mut processed_read, &base_insertion_qualities);
-        ReadUtils::set_deletion_base_qualities(&mut processed_read, &base_deletion_qualities);
+        ReadUtils::set_insertion_base_qualities(&mut processed_read, &base_insertion_qualities).expect("Failed to set insertion qualities");
+        ReadUtils::set_deletion_base_qualities(&mut processed_read, &base_deletion_qualities).expect("Failed to set deletion qualities");
         return processed_read;
     }
 

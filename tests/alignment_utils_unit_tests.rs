@@ -1,129 +1,90 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-extern crate gkl;
-extern crate itertools;
-extern crate rand;
-extern crate term;
-
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
-use itertools::Itertools;
-use lorikeet_genome::genotype::genotype_builder::Genotype;
-use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use lorikeet_genome::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use gkl::smithwaterman::OverhangStrategy;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::model::allele_frequency_calculator::AlleleFrequencyCalculator;
-use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
-use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
-use lorikeet_genome::model::variant_context::VariantContext;
-use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
-use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    AVXMode, PairHMMInputScoreImputator,
-};
+use lorikeet_genome::model::byte_array_allele::Allele;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use lorikeet_genome::processing::lorikeet_engine::ReadType;
 use lorikeet_genome::reads::alignment_utils::AlignmentUtils;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_builder::CigarBuilder;
-use lorikeet_genome::reads::cigar_utils::{
-    CigarUtils, ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS,
-};
+use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    SmithWatermanAligner, SmithWatermanAlignmentResult, ORIGINAL_DEFAULT, STANDARD_NGS,
+    SmithWatermanAligner, ORIGINAL_DEFAULT,
 };
-use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
 use lorikeet_genome::utils::base_utils::BaseUtils;
-use lorikeet_genome::utils::math_utils::{MathUtils, LOG10_ONE_HALF};
-use lorikeet_genome::utils::quality_utils::QualityUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
 use lorikeet_genome::utils::utils::make_permutations;
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
-use rand::rngs::ThreadRng;
-use rand::seq::index::sample;
-use rayon::prelude::*;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView, Seq};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
+use rust_htslib::bam::record::{Cigar, CigarString};
+use std::cmp::Ordering;
 use std::convert::TryFrom;
-use std::ops::Deref;
-use std::sync::Mutex;
 
-static DEBUG: bool = true;
+// static DEBUG: bool = true;
 
-struct AlignmentUtilsUnitTests {
-    read_mapped: BirdToolRead,
-    read_unmapped_flag: BirdToolRead,
-    read_unknown_contig: BirdToolRead,
-}
+// struct AlignmentUtilsUnitTests {
+//     read_mapped: BirdToolRead,
+//     read_unmapped_flag: BirdToolRead,
+//     read_unknown_contig: BirdToolRead,
+// }
 
-impl AlignmentUtilsUnitTests {
-    fn init() -> Self {
-        let read_mapped = create_mapped_read("mapped", 0);
-        let mut read_unmapped = create_mapped_read("unmapped_flag", 1);
-        read_unmapped.read.set_unmapped();
+// impl AlignmentUtilsUnitTests {
+//     fn init() -> Self {
+//         let read_mapped = create_mapped_read("mapped", 0);
+//         let mut read_unmapped = create_mapped_read("unmapped_flag", 1);
+//         read_unmapped.read.set_unmapped();
 
-        let mut read_unknown_contig = create_mapped_read("unknown_contig", 2);
-        read_unknown_contig.read.set_pos(3);
-        read_unknown_contig.read.set_tid(-1);
+//         let mut read_unknown_contig = create_mapped_read("unknown_contig", 2);
+//         read_unknown_contig.read.set_pos(3);
+//         read_unknown_contig.read.set_tid(-1);
 
-        Self {
-            read_mapped,
-            read_unmapped_flag: read_unmapped,
-            read_unknown_contig,
-        }
-    }
-}
+//         Self {
+//             read_mapped,
+//             read_unmapped_flag: read_unmapped,
+//             read_unknown_contig,
+//         }
+//     }
+// }
 
-fn create_mapped_read(name: &str, start: i64) -> BirdToolRead {
-    BirdToolRead::new(
-        ArtificialReadUtils::create_artificial_read_default(
-            name,
-            0,
-            start,
-            ArtificialReadUtils::DEFAULT_READ_LENGTH,
-            false,
-        ),
-        0,
-        ReadType::Short,
-    )
-}
+// fn create_mapped_read(name: &str, start: i64) -> BirdToolRead {
+//     BirdToolRead::new(
+//         ArtificialReadUtils::create_artificial_read_default(
+//             name,
+//             0,
+//             start,
+//             ArtificialReadUtils::DEFAULT_READ_LENGTH,
+//             false,
+//         ),
+//         0,
+//         ReadType::Short,
+//     )
+// }
 
-fn make_cigar_element_combinations() -> Vec<Vec<Cigar>> {
-    // this functionality can be adapted to provide input data for whatever you might want in your data
-    let mut cigar_elements = Vec::new();
-    for size in vec![0, 10] {
-        cigar_elements.push(Cigar::Match(size));
-        cigar_elements.push(Cigar::Ins(size));
-        cigar_elements.push(Cigar::Del(size));
-        cigar_elements.push(Cigar::RefSkip(size));
-        cigar_elements.push(Cigar::SoftClip(size));
-        cigar_elements.push(Cigar::HardClip(size));
-        cigar_elements.push(Cigar::Pad(size));
-        cigar_elements.push(Cigar::Equal(size));
-        cigar_elements.push(Cigar::Diff(size));
-    }
+// fn make_cigar_element_combinations() -> Vec<Vec<Cigar>> {
+//     // this functionality can be adapted to provide input data for whatever you might want in your data
+//     let mut cigar_elements = Vec::new();
+//     for size in vec![0, 10] {
+//         cigar_elements.push(Cigar::Match(size));
+//         cigar_elements.push(Cigar::Ins(size));
+//         cigar_elements.push(Cigar::Del(size));
+//         cigar_elements.push(Cigar::RefSkip(size));
+//         cigar_elements.push(Cigar::SoftClip(size));
+//         cigar_elements.push(Cigar::HardClip(size));
+//         cigar_elements.push(Cigar::Pad(size));
+//         cigar_elements.push(Cigar::Equal(size));
+//         cigar_elements.push(Cigar::Diff(size));
+//     }
 
-    let mut combinations = Vec::new();
-    for n_elements in vec![1, 2, 3] {
-        combinations.extend(make_permutations(&cigar_elements, n_elements, true));
-    }
+//     let mut combinations = Vec::new();
+//     for n_elements in vec![1, 2, 3] {
+//         combinations.extend(make_permutations(&cigar_elements, n_elements, true));
+//     }
 
-    return combinations;
-}
+//     return combinations;
+// }
 
 /******************************************************
  * Tests for AlignmentUtils.createReadAlignedToRef()
@@ -170,7 +131,7 @@ fn test_read_aligned_to_ref(
                 ref_start,
                 true,
                 AVXMode::detect_mode(),
-            );
+            ).expect("create_read_aligned_to_ref failed");
             println!(
                 "aligned read {} expected cigar {}",
                 aligned_read.read.cigar().to_string(),
@@ -282,7 +243,7 @@ fn make_read_aligned_to_ref_data() {
         let read = make_read_for_aligned_to_ref_test(read_bases);
         let ref_start = 10130100;
         let hap_start = 500;
-        let bad_cigar = "31M6D211M";
+        // let bad_cigar = "31M6D211M";
         let good_cigar = "28M6D214M";
         let mut bad_hap = Haplotype::new(hap.as_bytes(), false);
         bad_hap.set_cigar(CigarString::try_from(hap_cigar.as_str()).unwrap().0);
@@ -462,7 +423,7 @@ fn test_read_aligned_to_ref_complex_alignment(
         0,
         true,
         AVXMode::detect_mode(),
-    );
+    ).expect("Failed to align read to ref");
     let mismatches = AlignmentUtils::get_mismatch_count(
         &aligned_read,
         reference.as_bytes(),
@@ -629,7 +590,7 @@ fn test_with_clips_and_reference_context(
                                 ref_bases.as_slice(),
                                 read_bases.as_slice(),
                                 extra_ref_in_front as u32,
-                            )
+                            ).expect("left_align_indels failed")
                             .cigar;
 
                             assert_eq!(result.to_string(), expected_cigar_with_clips);

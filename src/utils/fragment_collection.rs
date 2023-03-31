@@ -1,6 +1,7 @@
-use reads::bird_tool_reads::BirdToolRead;
 use std::collections::HashMap;
-use utils::simple_interval::Locatable;
+
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::utils::simple_interval::Locatable;
 
 /**
  * Represents the results of the reads -> fragment calculation.

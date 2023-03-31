@@ -1,30 +1,31 @@
-use assembly::kmer::Kmer;
 use compare::{Compare, Extract};
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
-use graphs::base_edge::BaseEdge;
-use graphs::base_edge::BaseEdgeStruct;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::multi_sample_edge::MultiSampleEdge;
-use graphs::seq_graph::SeqGraph;
-use hashlink::{LinkedHashMap, LinkedHashSet};
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use hashlink::LinkedHashMap;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use rayon::prelude::*;
-use read_threading::abstract_read_threading_graph::{
-    AbstractReadThreadingGraph, DanglingChainMergeHelper, SequenceForKmers, TraversalDirection,
-};
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
-use reads::alignment_utils::AlignmentUtils;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::Cigar;
-use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::HashSet;
-use utils::simple_interval::Locatable;
+
+use crate::assembly::kmer::Kmer;
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_edge::BaseEdgeStruct;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::multi_sample_edge::MultiSampleEdge;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use crate::read_threading::abstract_read_threading_graph::{
+    AbstractReadThreadingGraph, DanglingChainMergeHelper, SequenceForKmers, TraversalDirection,
+};
+use crate::read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use crate::reads::alignment_utils::AlignmentUtils;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::smith_waterman::smith_waterman_aligner::SmithWatermanAligner;
+use crate::utils::simple_interval::Locatable;
 
 /**
  * Note: not final but only intended to be subclassed for testing.
@@ -64,13 +65,13 @@ pub struct ReadThreadingGraph {
 impl ReadThreadingGraph {
     pub const ANONYMOUS_SAMPLE: &'static str = "XXX_UNNAMED_XXX";
     const WRITE_GRAPH: bool = false;
-    const DEBUG_NON_UNIQUE_CALC: bool = false;
+    // const DEBUG_NON_UNIQUE_CALC: bool = false;
     pub const MAX_CIGAR_COMPLEXITY: usize = 3;
     const INCREASE_COUNTS_BACKWARDS: bool = true;
 
     pub fn new(
         kmer_size: usize,
-        debug_graph_transformations: bool,
+        _debug_graph_transformations: bool,
         min_base_quality_to_use_in_assembly: u8,
         min_pruning_samples: usize,
         min_matching_bases_to_dangling_end_recovery: i32,
@@ -232,7 +233,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     fn is_threading_start(
         &self,
         kmer: &Kmer,
-        start_threading_only_at_existing_vertex: bool,
+        _start_threading_only_at_existing_vertex: bool,
     ) -> bool {
         if self.start_threading_only_at_existing_vertex {
             self.kmer_to_vertex_map.contains_key(kmer)
@@ -261,7 +262,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         &self,
         kmer: &Kmer,
         is_ref: bool,
-        prev_vertex: NodeIndex,
+        _prev_vertex: NodeIndex,
     ) -> Option<&NodeIndex> {
         let unique_merge_vertex = self.get_kmer_vertex(kmer, false);
         assert!(
@@ -335,7 +336,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     fn add_read<'a>(
         &mut self,
         read: &'a BirdToolRead,
-        sample_names: &[String],
+        _sample_names: &[String],
         count: &mut usize,
         pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>,
     ) {
@@ -397,7 +398,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         self.start_threading_only_at_existing_vertex = value
     }
 
-    fn print_graph(&self, file_name: String, prune_factor: usize) {
+    fn print_graph(&self, file_name: String, _prune_factor: usize) {
         self.base_graph.print_graph(&file_name, true, 0);
     }
 
@@ -462,7 +463,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
 
         self.already_built = true;
         for (_, v) in self.kmer_to_vertex_map.iter_mut() {
-            let mut node = self.base_graph.graph.node_weight_mut(*v).unwrap();
+            let node = self.base_graph.graph.node_weight_mut(*v).unwrap();
             node.set_additional_info(format!("{}+", node.get_additional_info()));
         }
     }
@@ -622,7 +623,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      * @param kmer the kmer we want to create a vertex for
      * @return the non-null created vertex
      */
-    fn create_vertex(&mut self, sequence: &[u8], mut kmer: Kmer) -> NodeIndex {
+    fn create_vertex(&mut self, sequence: &[u8], kmer: Kmer) -> NodeIndex {
         let new_vertex = MultiDeBruijnVertex::new(kmer.bases(sequence).to_vec(), false);
         let node_index = self.base_graph.add_node(&new_vertex);
 
@@ -757,7 +758,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             *merge_vertex.unwrap()
         };
 
-        let edge_index = self.base_graph.graph.add_edge(
+        let _edge_index = self.base_graph.graph.add_edge(
             prev_vertex,
             next_vertex,
             MultiSampleEdge::new(is_ref, count, self.num_pruning_samples),
@@ -1279,7 +1280,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             let new_v_index = self.base_graph.add_node(&new_v);
             let new_e =
                 MultiSampleEdge::new(false, removed_edge.multiplicity, self.num_pruning_samples);
-            let new_e_index = self.base_graph.graph.add_edge(new_v_index, prev_v, new_e);
+            let _new_e_index = self.base_graph.graph.add_edge(new_v_index, prev_v, new_e);
             dangling_head_merge_result.dangling_path.push(new_v_index);
             prev_v = new_v_index;
         }
@@ -1326,7 +1327,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             {
                 break;
             } else {
-                for j in 0..(ce.len()) {
+                for _j in 0..(ce.len()) {
                     if path1[ref_idx as usize] != path2[read_idx as usize] {
                         break 'cigarLoop;
                     };
@@ -1786,8 +1787,8 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     // alteations that must be made to the graph based on implementation
     fn post_process_for_haplotype_finding<L: Locatable>(
         &mut self,
-        debug_graph_output_path: Option<&String>,
-        ref_haplotype: &L,
+        _debug_graph_output_path: Option<&String>,
+        _ref_haplotype: &L,
     ) {
         // Do nothing There is no processing required for this graph so simply return
     }

@@ -1,35 +1,31 @@
-use assembly::assembly_region::AssemblyRegion;
-use assembly::assembly_result::{AssemblyResult, Status};
-use assembly::assembly_result_set::AssemblyResultSet;
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
-use graphs::adaptive_chain_pruner::AdaptiveChainPruner;
-use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::chain_pruner::ChainPruner;
-use graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
-use graphs::k_best_haplotype::KBestHaplotype;
-use graphs::seq_graph::SeqGraph;
-use graphs::seq_vertex::SeqVertex;
-use haplotype::haplotype::Haplotype;
-use hashlink::{LinkedHashMap, LinkedHashSet};
-use model::byte_array_allele::Allele;
-use ordered_float::OrderedFloat;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
-use petgraph::stable_graph::NodeIndex;
+use hashlink::LinkedHashMap;
 use rayon::prelude::*;
-// use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
-use graphs::low_weight_chain_pruner::LowWeightChainPruner;
-use read_error_corrector::read_error_corrector::ReadErrorCorrector;
-use read_threading::abstract_read_threading_graph::{AbstractReadThreadingGraph, SequenceForKmers};
-use read_threading::read_threading_graph::ReadThreadingGraph;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_utils::CigarUtils;
-use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+// use crate::read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
+use crate::assembly::assembly_region::AssemblyRegion;
+use crate::assembly::assembly_result::{AssemblyResult, Status};
+use crate::assembly::assembly_result_set::AssemblyResultSet;
+use crate::graphs::adaptive_chain_pruner::AdaptiveChainPruner;
+use crate::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::chain_pruner::ChainPruner;
+use crate::graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
+use crate::graphs::k_best_haplotype::KBestHaplotype;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::graphs::seq_vertex::SeqVertex;
+use crate::haplotype::haplotype::Haplotype;
+use crate::model::byte_array_allele::Allele;
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use crate::graphs::low_weight_chain_pruner::LowWeightChainPruner;
+use crate::read_threading::abstract_read_threading_graph::{AbstractReadThreadingGraph, SequenceForKmers};
+use crate::read_threading::read_threading_graph::ReadThreadingGraph;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::reads::read_clipper::ReadClipper;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 #[derive(Debug, Clone)]
 pub struct ReadThreadingAssembler {
@@ -37,7 +33,7 @@ pub struct ReadThreadingAssembler {
     dont_increase_kmer_sizes_for_cycles: bool,
     allow_non_unique_kmers_in_ref: bool,
     generate_seq_graph: bool,
-    recover_haplotypes_from_edges_not_covered_in_junction_trees: bool,
+    // recover_haplotypes_from_edges_not_covered_in_junction_trees: bool,
     num_pruning_samples: i32,
     num_best_haplotypes_per_graph: i32,
     prune_before_cycle_counting: bool,
@@ -52,7 +48,7 @@ pub struct ReadThreadingAssembler {
     chain_pruner: ChainPruner,
     pub(crate) debug_graph_transformations: bool,
     pub(crate) debug_graph_output_path: Option<String>,
-    graph_haplotype_histogram_path: Option<String>,
+    // graph_haplotype_histogram_path: Option<String>,
     pub(crate) graph_output_path: Option<String>,
 }
 
@@ -64,7 +60,7 @@ impl ReadThreadingAssembler {
     /**
      * If false, we will only write out a region around the reference source
      */
-    const PRINT_FILL_GRAPH_FOR_DEBUGGING: bool = true;
+    // const PRINT_FILL_GRAPH_FOR_DEBUGGING: bool = true;
     const DEFAULT_MIN_BASE_QUALITY_TO_USE: u8 = 10;
     const MIN_HAPLOTYPE_REFERENCE_LENGTH: u32 = 30;
 
@@ -80,7 +76,7 @@ impl ReadThreadingAssembler {
         pruning_log_odds_threshold: f64,
         pruning_seeding_log_odds_threshold: f64,
         max_unpruned_variants: usize,
-        use_linked_debruijn_graphs: bool,
+        _use_linked_debruijn_graphs: bool,
         enable_legacy_graph_cycle_detection: bool,
         min_matching_bases_to_dangle_end_recovery: i32,
     ) -> ReadThreadingAssembler {
@@ -120,11 +116,11 @@ impl ReadThreadingAssembler {
             min_dangling_branch_length: 0,
             num_best_haplotypes_per_graph: max_allowed_paths_for_read_threading_assembler,
             min_matching_bases_to_dangling_end_recovery: min_matching_bases_to_dangle_end_recovery,
-            recover_haplotypes_from_edges_not_covered_in_junction_trees: true,
+            // recover_haplotypes_from_edges_not_covered_in_junction_trees: true,
             min_base_quality_to_use_in_assembly: Self::DEFAULT_MIN_BASE_QUALITY_TO_USE,
             debug_graph_transformations: false,
             debug_graph_output_path: Some(format!("graph_debugging")),
-            graph_haplotype_histogram_path: None,
+            // graph_haplotype_histogram_path: None,
             graph_output_path: None,
         }
     }
@@ -227,7 +223,7 @@ impl ReadThreadingAssembler {
         // };
 
         // Revert clipped bases if necessary (since we do not want to assemble them)
-        let mut corrected_reads = assembly_region.move_reads();
+        let corrected_reads = assembly_region.move_reads();
         let corrected_reads = corrected_reads
             .into_par_iter()
             .map(|read| ReadClipper::new(read).hard_clip_soft_clipped_bases())
@@ -437,7 +433,7 @@ impl ReadThreadingAssembler {
             let kmer_size = kmers_to_try[i];
             let is_last_cycle = i == kmers_to_try.len() - 1;
             if !has_adequately_assembled_graph {
-                let mut assembled_result = self.create_graph(
+                let assembled_result = self.create_graph(
                     corrected_reads,
                     &ref_haplotype,
                     kmer_size,
@@ -460,7 +456,7 @@ impl ReadThreadingAssembler {
                                     .get_base_graph(),
                                 &ref_haplotype,
                             );
-                            &mut assembled_result
+                            let _ = &mut assembled_result
                                 .threading_graph
                                 .as_mut()
                                 .unwrap()
@@ -882,7 +878,7 @@ impl ReadThreadingAssembler {
         ref_haplotype: &'b Haplotype<SimpleInterval>,
         kmer_size: usize,
         allow_low_complexity_graphs: bool,
-        allow_non_unique_kmers_in_ref: bool,
+        _allow_non_unique_kmers_in_ref: bool,
         sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         avx_mode: AVXMode,
@@ -1164,7 +1160,7 @@ impl ReadThreadingAssembler {
     }
 
     fn get_result_set_for_rt_graph<A: AbstractReadThreadingGraph>(
-        mut rt_graph: A,
+        rt_graph: A,
     ) -> AssemblyResult<SimpleInterval, A> {
         // The graph has degenerated in some way, so the reference source and/or sink cannot be id'd.  Can
         // happen in cases where for example the reference somehow manages to acquire a cycle, or
@@ -1296,15 +1292,15 @@ impl ReadThreadingAssembler {
         return AssemblyResult::new(Status::AssembledSomeVariation, Some(seq_graph), None);
     }
 
-    fn print_seq_graphs(&self, graphs: &Vec<SeqGraph<BaseEdgeStruct>>) {
-        let write_first_graph_with_size_smaller_than = 50;
+    // fn print_seq_graphs(&self, graphs: &Vec<SeqGraph<BaseEdgeStruct>>) {
+    //     let _write_first_graph_with_size_smaller_than = 50;
 
-        for (idx, graph) in graphs.iter().enumerate() {
-            graph.base_graph.print_graph(
-                &(self.graph_output_path.as_ref().unwrap().to_string() + &idx.to_string()),
-                false,
-                self.prune_factor as usize,
-            )
-        }
-    }
+    //     for (idx, graph) in graphs.iter().enumerate() {
+    //         graph.base_graph.print_graph(
+    //             &(self.graph_output_path.as_ref().unwrap().to_string() + &idx.to_string()),
+    //             false,
+    //             self.prune_factor as usize,
+    //         )
+    //     }
+    // }
 }

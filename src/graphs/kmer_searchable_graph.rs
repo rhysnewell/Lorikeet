@@ -1,6 +1,6 @@
-use assembly::kmer::Kmer;
-use graphs::base_edge::BaseEdge;
-use graphs::base_vertex::BaseVertex;
+use crate::assembly::kmer::Kmer;
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_vertex::BaseVertex;
 
 /**
  * Common interface for those graphs that implement vertex by kmer look-up.

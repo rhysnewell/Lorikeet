@@ -92,7 +92,7 @@ impl Kmer {
      * @return a non-null byte[] containing length() bases of this kmer, regardless of how this kmer was created
      */
     pub fn bases<'a>(&self, sequence: &'a [u8]) -> &'a [u8] {
-        &sequence[self.start..min((self.start + self.length), sequence.len())]
+        &sequence[self.start..min(self.start + self.length, sequence.len())]
     }
 
     pub fn len(&self) -> usize {

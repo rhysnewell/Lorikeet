@@ -1,36 +1,35 @@
 use bio::io::fasta::IndexedReader;
-use external_command_checker;
-use galah::cluster_argument_parsing::GalahClustererCommandDefinition;
 use glob::glob;
 use needletail::parse_fastx_file;
-use process::Stdio;
+use std::process::{Stdio, exit};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Write, BufRead};
+use std::io::BufRead;
 use std::path::Path;
-use std::process;
 use tempfile::NamedTempFile;
 
+use crate::external_command_checker;
+use crate::bam_parsing::mapping_index_maintenance::generate_concatenated_fasta_file;
 use crate::utils::utils::find_first;
 
-lazy_static! {
-    static ref GALAH_COMMAND_DEFINITION: GalahClustererCommandDefinition = {
-        GalahClustererCommandDefinition {
-            dereplication_ani_argument: "ani".to_string(),
-            dereplication_prethreshold_ani_argument: "precluster-ani".to_string(),
-            dereplication_quality_formula_argument: "quality-formula".to_string(),
-            dereplication_precluster_method_argument: "precluster-method".to_string(),
-            dereplication_aligned_fraction_argument: "min-aligned-fraction".to_string(),
-            dereplication_fraglen_argument: "fragment-length".to_string(),
-            dereplication_output_cluster_definition_file: "output-cluster-definition".to_string(),
-            dereplication_output_representative_fasta_directory:
-                "output-representative-fasta-directory".to_string(),
-            dereplication_output_representative_fasta_directory_copy:
-                "output-representative-fasta-directory-copy".to_string(),
-            dereplication_output_representative_list: "output-representative-list".to_string(),
-        }
-    };
-}
+// lazy_static! {
+//     static ref GALAH_COMMAND_DEFINITION: GalahClustererCommandDefinition = {
+//         GalahClustererCommandDefinition {
+//             dereplication_ani_argument: "ani".to_string(),
+//             dereplication_prethreshold_ani_argument: "precluster-ani".to_string(),
+//             dereplication_quality_formula_argument: "quality-formula".to_string(),
+//             dereplication_precluster_method_argument: "precluster-method".to_string(),
+//             dereplication_aligned_fraction_argument: "min-aligned-fraction".to_string(),
+//             dereplication_fraglen_argument: "fragment-length".to_string(),
+//             dereplication_output_cluster_definition_file: "output-cluster-definition".to_string(),
+//             dereplication_output_representative_fasta_directory:
+//                 "output-representative-fasta-directory".to_string(),
+//             dereplication_output_representative_fasta_directory_copy:
+//                 "output-representative-fasta-directory-copy".to_string(),
+//             dereplication_output_representative_list: "output-representative-list".to_string(),
+//         }
+//     };
+// }
 
 pub struct ReferenceReaderUtils {}
 
@@ -74,33 +73,33 @@ impl ReferenceReaderUtils {
                 Ok(paths) => {
                     if paths.len() == 0 {
                         error!("Genome paths were described, but ultimately none were found");
-                        process::exit(1);
+                        exit(1);
                     }
-                    if m.is_present("checkm-tab-table") || m.is_present("genome-info") {
-                        let genomes_after_filtering =
-                            galah::cluster_argument_parsing::filter_genomes_through_checkm(
-                                &paths,
-                                m,
-                                &Self::galah_command_line_definition(),
-                            )
-                            .expect("Error parsing CheckM-related options");
-                        info!(
-                            "After filtering by CheckM, {} genomes remained",
-                            genomes_after_filtering.len()
-                        );
-                        if genomes_after_filtering.len() == 0 {
-                            error!("All genomes were filtered out, so none remain to be mapped to");
-                            process::exit(1);
-                        }
-                        Some(
-                            genomes_after_filtering
-                                .iter()
-                                .map(|s| s.to_string())
-                                .collect(),
-                        )
-                    } else {
-                        Some(paths)
-                    }
+                    // if m.is_present("checkm-tab-table") || m.is_present("genome-info") {
+                    //     let genomes_after_filtering =
+                    //         galah::cluster_argument_parsing::filter_genomes_through_checkm(
+                    //             &paths,
+                    //             m,
+                    //             &Self::galah_command_line_definition(),
+                    //         )
+                    //         .expect("Error parsing CheckM-related options");
+                    //     info!(
+                    //         "After filtering by CheckM, {} genomes remained",
+                    //         genomes_after_filtering.len()
+                    //     );
+                    //     if genomes_after_filtering.len() == 0 {
+                    //         error!("All genomes were filtered out, so none remain to be mapped to");
+                    //         exit(1);
+                    //     }
+                    //     Some(
+                    //         genomes_after_filtering
+                    //             .iter()
+                    //             .map(|s| s.to_string())
+                    //             .collect(),
+                    //     )
+                    // } else {
+                    Some(paths)
+                    // }
                 }
                 Err(_) => None,
             }
@@ -108,11 +107,11 @@ impl ReferenceReaderUtils {
 
         debug!("Found paths {:?}", &genome_fasta_files_opt);
 
-        let (concatenated_genomes, genomes_and_contigs_option) = match m.is_present("reference") {
+        let (concatenated_genomes, genomes_and_contigs_option) = match m.contains_id("genome-fasta-files") {
             true => match genome_fasta_files_opt {
                 Some(genome_paths) => (
                     Some(
-                        coverm::mapping_index_maintenance::generate_concatenated_fasta_file(
+                        generate_concatenated_fasta_file(
                             &genome_paths,
                         ),
                     ),
@@ -126,7 +125,7 @@ impl ReferenceReaderUtils {
             false => {
                 // Dereplicate if required
                 // TODO: Properly implement dereplication in cli.rs and make sure function works
-                let dereplicated_genomes: Vec<String> = if m.is_present("dereplicate") {
+                let dereplicated_genomes: Vec<String> = if m.contains_id("dereplicate") {
                     // Self::dereplicate(m, &genome_fasta_files_opt.unwrap())
                     genome_fasta_files_opt.unwrap()
                 } else {
@@ -138,7 +137,7 @@ impl ReferenceReaderUtils {
 
                 (
                     Some(
-                        coverm::mapping_index_maintenance::generate_concatenated_fasta_file(
+                        generate_concatenated_fasta_file(
                             list_of_genome_fasta_files,
                         ),
                     ),
@@ -159,15 +158,15 @@ impl ReferenceReaderUtils {
     }
 
     pub fn parse_references(m: &clap::ArgMatches) -> Vec<String> {
-        let references = match m.values_of("genome-fasta-files") {
+        let references = match m.get_many::<String>("genome-fasta-files") {
             Some(vec) => {
                 let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
                 debug!("Reference files {:?}", reference_paths);
                 reference_paths
             }
-            None => match m.value_of("genome-fasta-directory") {
+            None => match m.get_one::<String>("genome-fasta-directory") {
                 Some(path) => {
-                    let ext = m.value_of("genome-fasta-extension").unwrap();
+                    let ext = m.get_one::<String>("genome-fasta-extension").unwrap();
                     let reference_glob = format!("{}/*.{}", path, ext);
                     let reference_paths = glob(&reference_glob)
                         .expect("Failed to read cache")
@@ -191,9 +190,9 @@ impl ReferenceReaderUtils {
         m: &clap::ArgMatches,
         genome_fasta_files: &Vec<&str>,
     ) -> Option<GenomesAndContigs> {
-        match m.is_present("genome-definition") {
+        match m.contains_id("genome-definition") {
             true => Some(read_genome_definition_file(
-                m.value_of("genome-definition").unwrap(),
+                m.get_one::<String>("genome-definition").unwrap(),
             )),
             false => Some(read_genome_fasta_files(
                 &genome_fasta_files,
@@ -222,57 +221,57 @@ impl ReferenceReaderUtils {
         return IndexedReader::from_file(&reference_path).expect("Unable to generate index");
     }
 
-    pub fn galah_command_line_definition() -> &'static GalahClustererCommandDefinition {
-        &*GALAH_COMMAND_DEFINITION
-    }
+    // pub fn galah_command_line_definition() -> &'static GalahClustererCommandDefinition {
+    //     &*GALAH_COMMAND_DEFINITION
+    // }
 
-    pub fn dereplicate(m: &clap::ArgMatches, genome_fasta_files: &Vec<String>) -> Vec<String> {
-        info!(
-            "Found {} genomes specified before dereplication",
-            genome_fasta_files.len()
-        );
+    // pub fn dereplicate(m: &clap::ArgMatches, genome_fasta_files: &Vec<String>) -> Vec<String> {
+    //     info!(
+    //         "Found {} genomes specified before dereplication",
+    //         genome_fasta_files.len()
+    //     );
 
-        // Generate clusterer and check for dependencies
-        let clusterer = galah::cluster_argument_parsing::generate_galah_clusterer(
-            genome_fasta_files,
-            &m,
-            Self::galah_command_line_definition(),
-        )
-        .expect("Failed to parse galah clustering arguments correctly");
-        galah::external_command_checker::check_for_dependencies();
-        info!("Dereplicating genome at {}% ANI ..", clusterer.ani * 100.);
+    //     // Generate clusterer and check for dependencies
+    //     let clusterer = galah::cluster_argument_parsing::generate_galah_clusterer(
+    //         genome_fasta_files,
+    //         &m,
+    //         Self::galah_command_line_definition(),
+    //     )
+    //     .expect("Failed to parse galah clustering arguments correctly");
+    //     galah::external_command_checker::check_for_dependencies();
+    //     info!("Dereplicating genome at {}% ANI ..", clusterer.ani * 100.);
 
-        let cluster_indices = clusterer.cluster();
-        info!(
-            "Finished dereplication, finding {} representative genomes.",
-            cluster_indices.len()
-        );
-        debug!("Found cluster indices: {:?}", cluster_indices);
-        let reps = cluster_indices
-            .iter()
-            .map(|cluster| genome_fasta_files[cluster[0]].clone())
-            .collect::<Vec<_>>();
-        debug!("Found cluster representatives: {:?}", reps);
+    //     let cluster_indices = clusterer.cluster();
+    //     info!(
+    //         "Finished dereplication, finding {} representative genomes.",
+    //         cluster_indices.len()
+    //     );
+    //     debug!("Found cluster indices: {:?}", cluster_indices);
+    //     let reps = cluster_indices
+    //         .iter()
+    //         .map(|cluster| genome_fasta_files[cluster[0]].clone())
+    //         .collect::<Vec<_>>();
+    //     debug!("Found cluster representatives: {:?}", reps);
 
-        if m.is_present("output-dereplication-clusters") {
-            let path = m.value_of("output-dereplication-clusters").unwrap();
-            info!("Writing dereplication cluster memberships to {}", path);
-            let mut f = std::fs::File::create(path)
-                .expect("Error creating dereplication cluster output file");
-            for cluster in cluster_indices.iter() {
-                let rep = cluster[0];
-                for member in cluster {
-                    writeln!(
-                        f,
-                        "{}\t{}",
-                        genome_fasta_files[rep], genome_fasta_files[*member]
-                    )
-                    .expect("Failed to write a specific line to dereplication cluster file");
-                }
-            }
-        }
-        reps
-    }
+    //     if m.is_present("output-dereplication-clusters") {
+    //         let path = m.value_of("output-dereplication-clusters").unwrap();
+    //         info!("Writing dereplication cluster memberships to {}", path);
+    //         let mut f = std::fs::File::create(path)
+    //             .expect("Error creating dereplication cluster output file");
+    //         for cluster in cluster_indices.iter() {
+    //             let rep = cluster[0];
+    //             for member in cluster {
+    //                 writeln!(
+    //                     f,
+    //                     "{}\t{}",
+    //                     genome_fasta_files[rep], genome_fasta_files[*member]
+    //                 )
+    //                 .expect("Failed to write a specific line to dereplication cluster file");
+    //             }
+    //         }
+    //     }
+    //     reps
+    // }
 }
 
 #[derive(Debug, Clone)]
@@ -305,7 +304,7 @@ impl GenomesAndContigs {
 
 pub fn read_genome_fasta_files(
     fasta_file_paths: &Vec<&str>,
-    use_full_sequence_name: bool,
+    _use_full_sequence_name: bool,
 ) -> GenomesAndContigs {
     let mut contig_to_genome = GenomesAndContigs::new();
 
@@ -336,9 +335,9 @@ pub fn read_genome_fasta_files(
         );
         if contig_to_genome.genome_index(&genome_name).is_some() {
             error!("The genome name {} was derived from >1 file", genome_name);
-            process::exit(1);
+            exit(1);
         }
-        let genome_index = contig_to_genome.establish_genome(genome_name);
+        let _genome_index = contig_to_genome.establish_genome(genome_name);
         while let Some(record) = reader.next() {
             let record_expected =
                 record.expect(&format!("Failed to parse record in fasta file {:?}", path));
@@ -395,7 +394,7 @@ pub fn read_genome_definition_file(definition_file_path: &str) -> GenomesAndCont
                     genome name and contig name separated by a tab",
                 line
             );
-            process::exit(1);
+            exit(1);
         }
     }
 
@@ -407,8 +406,8 @@ pub fn read_genome_definition_file(definition_file_path: &str) -> GenomesAndCont
     );
 
     for genome in genome_order {
-        let contigs = &genome_to_contig[&genome];
-        let genome_index = contig_to_genome.establish_genome(genome);
+        let _contigs = &genome_to_contig[&genome];
+        let _genome_index = contig_to_genome.establish_genome(genome);
     }
     return contig_to_genome;
 }

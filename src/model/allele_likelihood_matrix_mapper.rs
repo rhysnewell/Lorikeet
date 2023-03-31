@@ -1,5 +1,5 @@
-use model::allele_list::Permutation;
-use model::byte_array_allele::Allele;
+use crate::model::allele_list::Permutation;
+use crate::model::byte_array_allele::Allele;
 
 #[derive(Debug)]
 pub struct AlleleLikelihoodMatrixMapper<A: Allele> {

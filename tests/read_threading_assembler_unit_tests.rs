@@ -1,77 +1,35 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-extern crate bio;
-extern crate gkl;
-extern crate itertools;
-extern crate petgraph;
-extern crate rand;
-extern crate term;
 
 use bio::io::fasta::IndexedReader;
 use gkl::smithwaterman::Parameters;
-use itertools::Itertools;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::assembly::assembly_result_set::AssemblyResultSet;
-use lorikeet_genome::genotype::genotype_builder::Genotype;
-use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use lorikeet_genome::genotype::genotype_likelihoods::GenotypeLikelihoods;
 use lorikeet_genome::graphs::base_edge::BaseEdgeStruct;
 use lorikeet_genome::graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
 use lorikeet_genome::graphs::seq_graph::SeqGraph;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::model::allele_frequency_calculator::AlleleFrequencyCalculator;
-use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
 use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
-use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
-use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    AVXMode, PairHMMInputScoreImputator,
-};
-use lorikeet_genome::read_error_corrector::nearby_kmer_error_corrector::{
-    CorrectionSet, NearbyKmerErrorCorrector,
-};
-use lorikeet_genome::read_error_corrector::read_error_corrector::ReadErrorCorrector;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use lorikeet_genome::read_threading::read_threading_assembler::ReadThreadingAssembler;
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
+    NEW_SW_PARAMETERS, STANDARD_NGS,
 };
-use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
-use lorikeet_genome::utils::base_utils::BaseUtils;
-use lorikeet_genome::utils::math_utils::{MathUtils, LOG10_ONE_HALF};
-use lorikeet_genome::utils::quality_utils::QualityUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
 use petgraph::stable_graph::NodeIndex;
-use rand::rngs::ThreadRng;
-use rand::seq::index::sample;
-use rayon::prelude::*;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView, Seq};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
+use rust_htslib::bam::record::{Cigar, CigarString};
+use std::collections::HashSet;
 use std::fs::File;
-use std::ops::Deref;
-use std::sync::Mutex;
 
 lazy_static! {
     static ref DANGLING_END_SW_PARAMETERS: Parameters = *STANDARD_NGS;
@@ -173,12 +131,11 @@ fn assemble(
         AssemblyRegion::new(loc.clone(), true, 0, contig_len, loc.get_contig(), 0);
     active_region.add_all(reads);
     let samples = vec!["sample_1".to_string()];
-    let assembly_result_set = assembler.run_local_assembly::<NearbyKmerErrorCorrector>(
+    let assembly_result_set = assembler.run_local_assembly(
         active_region,
         ref_haplotype,
         ref_bases.to_vec(),
         loc.clone(),
-        None,
         &samples,
         *STANDARD_NGS,
         *NEW_SW_PARAMETERS,

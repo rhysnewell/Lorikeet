@@ -1,19 +1,19 @@
+use anyhow::Result;
 use gkl::smithwaterman::OverhangStrategy;
-use haplotype::haplotype::Haplotype;
-use model::byte_array_allele::Allele;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
-use rayon::prelude::*;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_builder::{CigarBuilder, CigarBuilderResult};
-use reads::cigar_utils::CigarUtils;
-use reads::cigar_utils::ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS;
-use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Aux, Cigar, CigarString, CigarStringView};
-use smith_waterman::smith_waterman_aligner::SmithWatermanAligner;
 use std::cmp::min;
-use std::hash::Hash;
 use std::ops::Range;
-use utils::simple_interval::SimpleInterval;
+
+use crate::haplotype::haplotype::Haplotype;
+use crate::model::byte_array_allele::Allele;
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_builder::{CigarBuilder, CigarBuilderResult};
+use crate::reads::cigar_utils::CigarUtils;
+use crate::reads::cigar_utils::ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS;
+use crate::reads::read_clipper::ReadClipper;
+use crate::smith_waterman::smith_waterman_aligner::SmithWatermanAligner;
+use crate::utils::simple_interval::SimpleInterval;
 
 lazy_static! {
     pub static ref HAPLOTYPE_TAG: String = format!("HC");
@@ -44,7 +44,7 @@ impl AlignmentUtils {
         reference_start: usize,
         is_informative: bool,
         avx_mode: AVXMode,
-    ) -> BirdToolRead {
+    ) -> Result<BirdToolRead> {
         // compute the smith-waterman alignment of read -> haplotype //TODO use more efficient than the read clipper here
         let read_minus_soft_clips =
             ReadClipper::new(original_read.clone()).hard_clip_soft_clipped_bases();
@@ -61,7 +61,7 @@ impl AlignmentUtils {
 
         if read_to_haplotype_sw_alignment.alignment_offset == -1 {
             // sw can fail (reasons not clear) so if it happens just don't realign the read
-            return original_read.clone();
+            return Ok(original_read.clone());
         }
 
         let mut sw_cigar_builder = CigarBuilder::new(true);
@@ -122,7 +122,7 @@ impl AlignmentUtils {
             ref_haplotype.get_bases(),
             read_minus_soft_clips.bases.as_slice(),
             read_start_on_reference_haplotype,
-        );
+        )?;
         let left_aligned_read_to_ref_cigar = &left_aligned_read_to_ref_cigar_result.cigar;
 
         // it's possible that left-alignment shifted a deletion to the beginning of a read and
@@ -160,7 +160,7 @@ impl AlignmentUtils {
             );
         };
 
-        return copied_read;
+        return Ok(copied_read);
     }
 
     /**
@@ -260,7 +260,7 @@ impl AlignmentUtils {
             elt_23_I += transform.advance_23;
 
             if transform.op_13.is_some() {
-                new_elements.add(transform.op_13.unwrap());
+                new_elements.add(transform.op_13.unwrap()).expect("Failed to add cigar element");
             };
 
             // if have exhausted our current element, advance to the next one
@@ -374,7 +374,7 @@ impl AlignmentUtils {
             new_elements.add(CigarUtils::new_cigar_from_operator_and_length(
                 elt,
                 overlap_length,
-            ));
+            )).expect("Failed to add Cigar element");
         }
 
         assert!(
@@ -427,9 +427,9 @@ impl AlignmentUtils {
         ref_seq: &[u8],
         read: &[u8],
         read_start: u32,
-    ) -> CigarBuilderResult {
+    ) -> Result<CigarBuilderResult> {
         if cigar.0.iter().all(|elem| !CigarUtils::is_indel(elem)) {
-            return CigarBuilderResult::new(cigar, 0, 0);
+            return Ok(CigarBuilderResult::new(cigar, 0, 0));
         }
 
         // we need reference bases from the start of the read to the rightmost indel
@@ -554,9 +554,9 @@ impl AlignmentUtils {
         );
         let mut cigar_builder = CigarBuilder::new(true);
         result_right_to_left.reverse();
-        cigar_builder.add_all(result_right_to_left);
+        cigar_builder.add_all(result_right_to_left)?;
 
-        return cigar_builder.make_and_record_deletions_removed_result();
+        return Ok(cigar_builder.make_and_record_deletions_removed_result());
     }
 
     /**
@@ -792,7 +792,7 @@ impl AlignmentUtils {
                     bases_pos += len;
                 }
                 &Cigar::Match(len) | &Cigar::Diff(len) | &Cigar::Equal(len) => {
-                    for i in 0..len {
+                    for _i in 0..len {
                         if ref_pos == ref_start {
                             bases_start = Some(bases_pos);
                         };
@@ -807,7 +807,7 @@ impl AlignmentUtils {
                     }
                 }
                 &Cigar::Del(len) => {
-                    for i in 0..len {
+                    for _i in 0..len {
                         if ref_pos == ref_end || ref_pos == ref_start {
                             // if we ever reach a ref position that is either a start or an end, we fail
                             return None;
@@ -827,7 +827,7 @@ impl AlignmentUtils {
         if ref_pos == ref_end {
             // base is last position in the sequence
             bases_stop = Some(bases_pos);
-            done = true;
+            // done = true;
         }
         // println!("DEBUG: ref pos {} bases {} start {} end {} bases start {:?} end {:?}", ref_pos, bases_pos, ref_start, ref_end, &bases_start, &bases_stop);
         if bases_start.is_none() || bases_stop.is_none() {
@@ -900,7 +900,7 @@ impl AlignmentUtils {
                         read_idx += *element_length as usize;
                     }
                     Cigar::Match(element_length) => {
-                        for j in 0..*element_length as usize {
+                        for _j in 0..*element_length as usize {
                             if ref_index >= ref_seq.len() || read_idx < start_on_read {
                                 // pass
                             } else if read_idx > end_on_read {

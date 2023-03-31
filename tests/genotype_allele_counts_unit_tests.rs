@@ -1,13 +1,8 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -15,19 +10,19 @@ extern crate approx;
 
 use lorikeet_genome::genotype::genotype_allele_counts::GenotypeAlleleCounts;
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
-use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::reads::read_clipper::ReadClipper;
-use lorikeet_genome::test_utils::read_clipper_test_utils::ReadClipperTestUtils;
+
+
+
+
 use lorikeet_genome::utils::math_utils::MathUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::ops::Deref;
+use lorikeet_genome::utils::simple_interval::{Locatable};
+
+
+
+use std::cmp::{max, Ordering};
+use std::collections::{HashSet};
+
+
 use std::sync::Mutex;
 
 lazy_static! {
@@ -109,7 +104,7 @@ fn test_next(ploidy: usize) {
 fn test_next_zero_ploidy() {
     let alleles = GenotypeAlleleCountsUnitTest::new();
     let mut first = GenotypeAlleleCounts::first(0);
-    let mut next = first.next();
+    let next = first.next();
     assert_eq!(&first, &next);
     assert_eq!(next.distinct_allele_count(), 0);
     assert_eq!(next.ploidy(), 0);
@@ -124,7 +119,7 @@ fn test_next_zero_ploidy() {
 
 fn test_next_one_ploidy() {
     let alleles = GenotypeAlleleCountsUnitTest::new();
-    let mut ploidy2 = GenotypeAlleleCounts::first(2);
+    let ploidy2 = GenotypeAlleleCounts::first(2);
     let mut current = GenotypeAlleleCounts::first(1);
 
     while !current.contains_allele(MAXIMUM_ALLELE_INDEX + 1) {
@@ -263,8 +258,8 @@ fn test_ploidy_two_or_more(ploidy: usize) {
             }
         }
 
-        let mut allele_counts_as_list = next.sorted_allele_counts.clone();
-        let mut absent_alleles = Mutex::new(HashSet::new());
+        let allele_counts_as_list = next.sorted_allele_counts.clone();
+        let absent_alleles = Mutex::new(HashSet::new());
 
         next.for_each_absent_allele_index(
             |allele_index: usize| {
@@ -366,7 +361,7 @@ fn test_ploidy_two_or_more(ploidy: usize) {
         //check as_allele_list
         let mut expected_list = Vec::new();
         for i in 0..next.distinct_allele_count() {
-            for j in 0..next.allele_count_at(i) {
+            for _j in 0..next.allele_count_at(i) {
                 expected_list.push(alleles.test_alleles[next.allele_index_at(i)].clone());
             }
         }
@@ -409,7 +404,7 @@ fn test_increase(ploidy: usize) {
 
 fn test_next_zero_ploidy_increase() {
     let mut first = GenotypeAlleleCounts::first(0);
-    let mut next = first.next();
+    let next = first.next();
     let alleles = GenotypeAlleleCountsUnitTest::new();
 
     assert_eq!(&first, &next);
@@ -428,10 +423,10 @@ fn test_next_zero_ploidy_increase() {
 
 fn test_next_one_ploidy_increase() {
     let mut next = GenotypeAlleleCounts::first(1);
-    let alleles = GenotypeAlleleCountsUnitTest::new();
+    let _alleles = GenotypeAlleleCountsUnitTest::new();
 
     while !next.contains_allele(MAXIMUM_ALLELE_INDEX + 1) {
-        let mut current = next.clone();
+        let current = next.clone();
         next.increase(1);
         assert_eq!(next.minimum_allele_index(), next.maximum_allele_index());
         assert_eq!(
@@ -483,7 +478,7 @@ fn test_ploidy_two_or_more_increase(ploidy: usize) {
     let mut next = GenotypeAlleleCounts::first(ploidy);
 
     while !next.contains_allele(MAXIMUM_ALLELE_INDEX + 1) {
-        let mut current = next.clone();
+        let current = next.clone();
 
         next.increase(1);
         if current.distinct_allele_count() == 1 {

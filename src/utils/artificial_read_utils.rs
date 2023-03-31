@@ -1,13 +1,11 @@
-use processing::lorikeet_engine::ReadType;
-use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use rust_htslib::bam::{Read, Reader, Record};
-use rust_htslib::{
-    bam,
-    bam::{Header, HeaderView},
-};
+use rust_htslib::bam;
 use std::convert::TryFrom;
 use std::rc::Rc;
+
+use crate::processing::lorikeet_engine::ReadType;
+use crate::reads::bird_tool_reads::BirdToolRead;
 
 pub static DEFAULT_READ_GROUP_PREFIX: &str = "ReadGroup";
 pub static DEFAULT_PLATFORM_UNIT_PREFIX: &str = "Lane";
@@ -72,7 +70,7 @@ impl ArtificialReadUtils {
         length: usize,
         unmapped: bool,
     ) -> Record {
-        let bam = Self::get_default_reader();
+        let _bam = Self::get_default_reader();
         let mut record = Record::new();
 
         let cigar = CigarString(vec![Cigar::Match(length as u32)]);

@@ -1,10 +1,11 @@
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_builder::CigarBuilder;
-use reads::cigar_utils::CigarUtils;
-use reads::read_clipper::ReadClipper;
+use anyhow::Result;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::convert::TryFrom;
-use utils::artificial_read_utils::ArtificialReadUtils;
+
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_builder::CigarBuilder;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::utils::artificial_read_utils::ArtificialReadUtils;
 
 lazy_static! {
     pub static ref BASES: Vec<u8> = vec!['A' as u8, 'C' as u8, 'T' as u8, 'G' as u8];
@@ -86,8 +87,8 @@ impl ReadClipperTestUtils {
     pub fn generate_cigar_list(
         maximum_cigar_elements: usize,
         include_skips: bool,
-    ) -> Vec<CigarString> {
-        let mut core_elements = if include_skips {
+    ) -> Result<Vec<CigarString>> {
+        let core_elements = if include_skips {
             CORE_CIGAR_ELEMENTS_INCLUDING_SKIPS.to_vec()
         } else {
             CORE_CIGAR_ELEMENTS.to_vec()
@@ -108,15 +109,15 @@ impl ReadClipperTestUtils {
 
                 let mut current_index = 0;
                 loop {
-                    let mut core_cigar = Self::create_cigar_from_combination(
+                    let core_cigar = Self::create_cigar_from_combination(
                         cigar_combination.clone(),
                         core_elements.clone(),
                     ); // create the cigar
                     if CigarUtils::is_good(&core_cigar) {
                         let mut builder = CigarBuilder::new(true);
-                        builder.add_all(leading_clip_elements.clone());
-                        builder.add_all(core_cigar.0);
-                        builder.add_all(trailing_clip_elements.clone());
+                        builder.add_all(leading_clip_elements.clone())?;
+                        builder.add_all(core_cigar.0)?;
+                        builder.add_all(trailing_clip_elements.clone())?;
                         match builder.make(false) {
                             Ok(cigar) => cigar_list.push(cigar),
                             Err(_) => {} // do nothing
@@ -148,7 +149,7 @@ impl ReadClipperTestUtils {
             }
         }
 
-        return cigar_list;
+        return Ok(cigar_list);
     }
 
     fn create_cigar_from_combination(

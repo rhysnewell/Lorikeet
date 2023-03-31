@@ -1,7 +1,7 @@
-use assembly::assembly_region::AssemblyRegion;
-use model::variant_context::VariantContext;
-use model::variant_context_utils::VariantContextUtils;
-use utils::simple_interval::Locatable;
+use crate::assembly::assembly_region::AssemblyRegion;
+use crate::model::variant_context::VariantContext;
+use crate::model::variant_context_utils::VariantContextUtils;
+use crate::utils::simple_interval::Locatable;
 
 /**
  * Tandem repeat unit composition and counts per allele

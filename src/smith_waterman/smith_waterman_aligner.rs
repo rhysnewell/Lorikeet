@@ -1,12 +1,12 @@
-use ndarray::{Array2, Axis};
-use reads::alignment_utils::AlignmentUtils;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
-// use smith_waterman::bindings::*;
+use ndarray::Array2;
+use rust_htslib::bam::record::{Cigar, CigarString};
 use gkl::smithwaterman::{align, OverhangStrategy, Parameters};
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
-use reads::cigar_builder::CigarBuilder;
 use std::cmp::max;
 use std::convert::TryFrom;
+
+// use crate::smith_waterman::bindings::*;
+use crate::reads::alignment_utils::AlignmentUtils;
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 lazy_static! {
     pub static ref ORIGINAL_DEFAULT: Parameters = Parameters::new(3, -1, -4, -3);
@@ -79,7 +79,7 @@ impl SmithWatermanAligner {
                     }
                 }
 
-                let mut alignment_result;
+                let alignment_result;
 
                 match match_index {
                     None => {
@@ -145,7 +145,7 @@ impl SmithWatermanAligner {
         // we need to initialize the SW matrix with gap penalties if we want to keep track of indels at the edges of alignments
         match overhang_strategy {
             OverhangStrategy::InDel | OverhangStrategy::LeadingInDel => {
-                let current_value = parameters.gap_open_penalty;
+                let _current_value = parameters.gap_open_penalty;
 
                 // initialize the first row
                 {
@@ -277,7 +277,7 @@ impl SmithWatermanAligner {
     ) -> SmithWatermanAlignmentResult {
         // p holds the position we start backtracking from; we will be assembling a cigar in the backwards order
         let mut p1 = 0;
-        let mut p2 = 0;
+        let mut p2;
 
         let ref_length = sw.nrows() - 1;
         let alt_length = sw.ncols() - 1;
@@ -352,10 +352,9 @@ impl SmithWatermanAligner {
         let mut state = State::Match;
         loop {
             let btr = btrack[[p1 as usize, p2 as usize]];
-            let mut new_state;
+            let new_state;
             let mut step_length = 1;
             if btr > 0 {
-                new_state = State::Deletion;
                 new_state = State::Deletion;
                 step_length = btr;
             } else if btr < 0 {
@@ -409,7 +408,7 @@ impl SmithWatermanAligner {
         // last 3 bases of the read overlap with/align to the ref), the cigar will be still 5M if
         // DO_SOFTCLIP is false or 2S3M if DO_SOFTCLIP is true.
         // The consumers need to check for the alignment offset and deal with it properly.
-        let mut alignment_offset = 0;
+        let alignment_offset;
         match overhang_strategy {
             OverhangStrategy::SoftClip => {
                 lce.push(Self::make_element(state, segment_length as u32));

@@ -1,36 +1,20 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-extern crate bio;
-extern crate coverm;
-extern crate itertools;
-extern crate rand;
-extern crate term;
-
-use bio::io::fasta::IndexedReader;
-use bio::utils::Interval;
-use coverm::genomes_and_contigs::GenomesAndContigs;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::processing::lorikeet_engine::ReadType;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reference::reference_reader::ReferenceReader;
-use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
+use lorikeet_genome::reference::reference_reader_utils::{ReferenceReaderUtils, GenomesAndContigs};
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
 use lorikeet_genome::utils::interval_utils::IntervalUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
 use std::cmp::{max, min};
+
+#[macro_use]
+extern crate lazy_static;
 
 lazy_static! {
     pub static ref CONTIG_LEN: usize = ReferenceReaderUtils::generate_faidx(b37_reference_20_21)

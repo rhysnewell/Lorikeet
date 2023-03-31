@@ -1,14 +1,8 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate itertools;
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 #[macro_use]
 extern crate approx;
 

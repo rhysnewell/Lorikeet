@@ -1,7 +1,7 @@
 use indexmap::set::IndexSet;
-use model::byte_array_allele::Allele;
-use rayon::prelude::*;
 use std::hash::Hash;
+
+use crate::model::byte_array_allele::Allele;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlleleList<A: Allele + Send + Sync> {
