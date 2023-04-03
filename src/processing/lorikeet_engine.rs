@@ -75,8 +75,8 @@ impl<'a> LorikeetEngine<'a> {
     pub fn apply_per_reference(&self) {
         let parallel_genomes = *self
             .args
-            .get_one::<u32>("parallel-genomes")
-            .unwrap();
+            .get_one::<usize>("parallel-genomes")
+            .unwrap() as u32;
         let mut pool = Pool::new(parallel_genomes);
         let n_threads = std::cmp::max(
             self.threads / min(parallel_genomes as usize, self.references.len()),
@@ -1091,13 +1091,9 @@ pub fn start_lorikeet_engine<
         None => vec![],
     };
 
-    // let parallel_genomes: usize = *m.get_one::<usize>("parallel-genomes").unwrap();
-    // let mut run_in_parallel = false;
-    // if parallel_genomes > 1 && reference_count > 1 {
-    //     run_in_parallel = true;
-    // };
+
     // Finish each BAM source
-    if m.get_flag("longreads") || m.get_flag("longread-bam-files") {
+    if m.contains_id("longreads") || m.contains_id("longread-bam-files") {
         info!("Processing long reads...");
         finish_bams(
             longreads,
@@ -1105,16 +1101,16 @@ pub fn start_lorikeet_engine<
             &genomes_and_contigs,
             // run_in_parallel,
             m.get_flag("split-bams"),
-            !m.get_flag("longread-bam-files"),
+            !m.contains_id("longread-bam-files"),
         ).expect("Failed to finish BAMs");
     }
 
-    if m.get_flag("coupled")
-        || m.get_flag("interleaved")
-        || m.get_flag("read1")
-        || m.get_flag("read2")
-        || m.get_flag("single")
-        || m.get_flag("bam-files")
+    if m.contains_id("coupled")
+        || m.contains_id("interleaved")
+        || m.contains_id("read1")
+        || m.contains_id("read2")
+        || m.contains_id("single")
+        || m.contains_id("bam-files")
     {
         info!("Processing short reads...");
         finish_bams(
@@ -1123,7 +1119,7 @@ pub fn start_lorikeet_engine<
             &genomes_and_contigs,
             // run_in_parallel,
             false,
-            !m.get_flag("bam-files"),
+            !m.contains_id("bam-files"),
         ).expect("Failed to finish BAMs");
     }
 
@@ -1201,7 +1197,7 @@ pub fn run_summarize(args: &clap::ArgMatches) {
         .get_one::<i64>("depth-per-sample-filter")
         .unwrap();
 
-    let output_prefix = match args.get_flag("output") {
+    let output_prefix = match args.contains_id("output") {
         true => {
             match std::fs::create_dir_all(args.get_one::<String>("output").unwrap().to_string()) {
                 Ok(_) => {}

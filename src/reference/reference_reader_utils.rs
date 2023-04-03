@@ -210,6 +210,12 @@ impl ReferenceReaderUtils {
             reference_path
         );
         debug!("Queuing cmd_string: {}", cmd_string);
+        // check if {reference_path}.fai exists 
+        let fai_path = format!("{}.fai", reference_path);
+        if Path::new(&fai_path).exists() {
+            debug!("Found existing index file at {}", fai_path);
+            return IndexedReader::from_file(&reference_path).expect("Unable to generate index");
+        }
 
         std::process::Command::new("bash")
             .arg("-c")
@@ -218,7 +224,7 @@ impl ReferenceReaderUtils {
             .output()
             .expect("Unable to execute bash");
 
-        return IndexedReader::from_file(&reference_path).expect("Unable to generate index");
+        IndexedReader::from_file(&reference_path).expect("Unable to generate index")
     }
 
     // pub fn galah_command_line_definition() -> &'static GalahClustererCommandDefinition {

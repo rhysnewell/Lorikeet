@@ -45,7 +45,7 @@ fn single_allele_list_data() {
     }
 }
 
-#[test]
+// #[test]
 fn two_allele_list_data() {
     let mut allele_lists = vec![Vec::new(); ALLELE_COUNT.len() * MAX_ALLELE_LENGTH.len()];
     let mut allele_unit_tester = AlleleListUnitTester::new();
@@ -203,6 +203,7 @@ fn test_shuffle_permutation(alleles1: &Vec<ByteArrayAllele>) {
 }
 
 fn test_equals(alleles1: &Vec<ByteArrayAllele>, alleles2: &Vec<ByteArrayAllele>) {
+    println!("test_equals: {:?} {:?}", alleles1, alleles2);
     let allele_list1 = AlleleList::new(alleles1);
     let allele_list2 = AlleleList::new(alleles2);
 

@@ -47,8 +47,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      */
     fn is_threading_start(
         &self,
-        kmer: &Kmer,
-        start_threading_only_at_existing_vertex: bool,
+        kmer: &Kmer
     ) -> bool;
 
     // get the next kmerVertex for ChainExtension and validate if necessary.

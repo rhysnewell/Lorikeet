@@ -146,7 +146,7 @@ impl<'a> MappingParameters<'a> {
                     None => vec![],
                 },
             },
-            threads: *m.get_one::<u16>("threads").unwrap(),
+            threads: *m.get_one::<usize>("threads").unwrap() as u16,
             read1,
             read2,
             interleaved,
@@ -202,8 +202,8 @@ impl<'a> MappingParameters<'a> {
                 },
             },
             threads: *m
-                .get_one::<u16>("threads")
-                .unwrap(),
+                .get_one::<usize>("threads")
+                .unwrap() as u16,
             read1: vec![],
             read2: vec![],
             interleaved: vec![],

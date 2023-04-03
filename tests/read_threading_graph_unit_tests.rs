@@ -14,7 +14,7 @@ use lorikeet_genome::graphs::base_edge::BaseEdge;
 use lorikeet_genome::graphs::base_vertex::BaseVertex;
 use lorikeet_genome::graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
 use lorikeet_genome::read_threading::abstract_read_threading_graph::{
-    AbstractReadThreadingGraph, DanglingChainMergeHelper,
+    AbstractReadThreadingGraph, DanglingChainMergeHelper, SequenceForKmers,
 };
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
@@ -41,17 +41,19 @@ fn get_bytes(alignment: &str) -> String {
     return alignment.replace("-", "");
 }
 
-fn assert_non_uniques(assembler: &mut ReadThreadingGraph, non_uniques: HashSet<&str>) {
+fn assert_non_uniques(assembler: &mut ReadThreadingGraph, non_uniques: HashSet<Kmer>, pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers>>) {
     let mut actual = HashSet::new();
-    let mut pending = LinkedHashMap::new();
-    assembler.build_graph_if_necessary(&mut pending);
-    let mut non_uniques_from_graph = assembler
+    assembler.build_graph_if_necessary(pending);
+    println!("Pending: {:?}", pending);
+
+    let non_uniques_from_graph = assembler
         .get_non_uniques()
         .iter()
         .cloned()
         .collect::<Vec<Kmer>>();
-    for kmer in non_uniques_from_graph.iter_mut() {
-        actual.insert(std::str::from_utf8(kmer.bases(b"")).unwrap());
+    println!("Non-unique {:?}", &non_uniques_from_graph);
+    for kmer in non_uniques_from_graph {
+        actual.insert(kmer);
     }
 
     assert_eq!(non_uniques, actual);
@@ -143,7 +145,7 @@ fn test_non_unique_middle() {
         false,
     );
 
-    assert_non_uniques(&mut assembler, vec!["ACA", "CAC"].into_iter().collect());
+    assert_non_uniques(&mut assembler, vec![Kmer::new(b"ACA"), Kmer::new(b"CAC")].into_iter().collect(), &mut pending);
 }
 
 #[test]
@@ -184,7 +186,7 @@ fn test_read_creation_non_unique() {
         false,
     );
 
-    assert_non_uniques(&mut assembler, vec!["CAC"].into_iter().collect());
+    assert_non_uniques(&mut assembler, vec![Kmer::new(b"CAC")].into_iter().collect(), &mut pending);
 }
 
 #[test]

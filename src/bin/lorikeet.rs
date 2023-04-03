@@ -77,7 +77,6 @@ fn main() {
         }
         _ => {
             app.print_help().unwrap();
-            println!();
         }
     }
 }

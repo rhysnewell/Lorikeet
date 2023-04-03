@@ -935,9 +935,9 @@ impl AssemblyBasedCallerUtils {
         handle_soft_clips: bool,
     ) -> PairHMMLikelihoodCalculationEngine{
         //AlleleLikelihoods::normalizeLikelihoods uses std::f64::NEGATIVE_INFINITY as a flag to disable capping
-        let log10_global_read_mismapping_rate = if *args
-            .get_one::<f64>("phred-scaled-global-read-mismapping-rate")
-            .unwrap()
+        let log10_global_read_mismapping_rate = if (*args
+            .get_one::<u8>("phred-scaled-global-read-mismapping-rate")
+            .unwrap() as f64)
             < 0.0
         {
             std::f64::NEG_INFINITY

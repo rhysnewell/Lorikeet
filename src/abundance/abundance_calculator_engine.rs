@@ -388,8 +388,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         let mut file_open = match File::create(file_path) {
             Ok(coverage_file) => coverage_file,
             Err(e) => {
-                println!("Cannot create file {:?}", e);
-                std::process::exit(1)
+                panic!("Cannot create file {:?}", e);
             }
         };
 
@@ -449,8 +448,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         let mut file_open = match File::create(file_path) {
             Ok(coverage_file) => coverage_file,
             Err(e) => {
-                println!("Cannot create file {:?}", e);
-                std::process::exit(1)
+                panic!("Cannot create file {:?}", e);
             }
         };
 

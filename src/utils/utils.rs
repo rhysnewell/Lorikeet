@@ -443,7 +443,7 @@ pub fn setup_mapping_index(
             } else {
                 Some(generate_minimap2_index(
                     reference_wise_params.reference,
-                    Some(*m.get_one::<u16>("threads").unwrap()),
+                    Some(*m.get_one::<usize>("threads").unwrap() as u16),
                     Some(m.get_one::<String>("minimap2-params").map(|s| s.as_str()).unwrap_or_else(|| "")),
                     mapping_program,
                 ))

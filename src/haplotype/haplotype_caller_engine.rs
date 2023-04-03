@@ -833,8 +833,8 @@ impl HaplotypeCallerEngine {
         // let mut per_contig_activity_profiles = HashMap::new();
         let placeholder_vec = Vec::new();
         let depth_per_sample_filter = *args
-            .get_one::<i32>("depth-per-sample-filter")
-            .unwrap();
+            .get_one::<i64>("depth-per-sample-filter")
+            .unwrap() as i32;
 
         let inner_chunk_size = max(50000, max_assembly_region_size * 2);
         let variant_contexts = (0..chunk_location.size())
@@ -1084,7 +1084,8 @@ impl HaplotypeCallerEngine {
             args,
             reference_reader,
             &mut self.assembly_engine,
-            !args.get_flag("do-not-correct-overlapping-base-qualities"),
+            // !args.get_flag("do-not-correct-overlapping-base-qualities"),
+            true,
             sample_names,
         );
 
@@ -1111,7 +1112,8 @@ impl HaplotypeCallerEngine {
             self.ref_idx,
             region_without_reads,
             all_variation_events,
-            args.get_flag("enable-legacy-assembly-region-trimming"),
+            // args.get_flag("enable-legacy-assembly-region-trimming"),
+            false,
             &reference_reader,
             untrimmed_assembly_result
                 .full_reference_with_padding

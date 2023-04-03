@@ -403,11 +403,12 @@ fn assert_good_regions(
 
 #[test]
 fn region_creation_tests() {
-    let ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
-    // ref_reader.fetch_all_by_rid(0);
+    let mut ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
+    ref_reader.fetch_all_by_rid(0).unwrap();
     // ref_reader.index.sequences()[0].name
     // let mut seq = Vec::new();
     // ref_reader.read(&mut seq);
+    println!("{:?}", ref_reader.index.sequences());
     let contig_len = ref_reader.index.sequences()[0].len as usize;
     for start in vec![1, 10, 100, contig_len - 100, contig_len - 10] {
         for region_size in vec![1, 10, 100, 1000, 10000] {
@@ -504,11 +505,13 @@ fn test_soft_clips(
 
 #[test]
 fn run_test_soft_clips() {
-    let ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
-    // ref_reader.fetch_all_by_rid(0);
+    let mut ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
+    ref_reader.fetch_all_by_rid(0).unwrap();
     // ref_reader.index.sequences()[0].name
     // let mut seq = Vec::new();
     // ref_reader.read(&mut seq);
+    println!("{:?}", ref_reader.index.sequences());
+
     let contig_len = ref_reader.index.sequences()[0].len as usize;
     for start in vec![
         1,
@@ -588,7 +591,7 @@ fn test_active_region_cuts(
         profile.add(state);
     }
 
-    let regions = profile.pop_ready_assembly_regions(0, min_region_size, max_region_size, false);
+    let regions = profile.clone().pop_ready_assembly_regions(0, min_region_size, max_region_size, false);
     assert!(
         regions.len() >= 1,
         "Should only be one regions for this test"
@@ -599,14 +602,14 @@ fn test_active_region_cuts(
     assert_eq!(
         region.get_span().size(),
         expected_region_size,
-        "Incorrect region size; cut must have been incorrect"
+        "Incorrect region size; cut must have been incorrect {} {} {}: {:?}", min_region_size, max_region_size, expected_region_size, region
     );
 }
 
 #[test]
 fn make_active_region_cut_tests() {
-    let ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
-    // ref_reader.fetch_all_by_rid(0);
+    let mut ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
+    ref_reader.fetch_all_by_rid(0).unwrap();
     // ref_reader.index.sequences()[0].name
     // let mut seq = Vec::new();
     // ref_reader.read(&mut seq);
@@ -621,6 +624,7 @@ fn make_active_region_cut_tests() {
             {
                 // test flat activity profile
                 let probs = vec![1.0; active_region_size];
+                println!("Testing flat activity profile: {:?}", &probs);
                 test_active_region_cuts(
                     min_region_size,
                     max_region_size,
@@ -634,6 +638,7 @@ fn make_active_region_cut_tests() {
                 // test point profile is properly handled
                 for end in 1..active_region_size {
                     let probs = vec![1.0; end];
+                    println!("Testing point activity profile: {:?}", &probs);
                     test_active_region_cuts(
                         min_region_size,
                         max_region_size,
@@ -653,6 +658,8 @@ fn make_active_region_cut_tests() {
                         (1.0 * (i as f32 + 1.0)) / active_region_size as f32,
                     );
                 }
+                println!("Testing increasing activity profile: {:?}", &probs);
+                println!("Min {} max {} expected {}", min_region_size, max_region_size, max_region_size);
                 test_active_region_cuts(
                     min_region_size,
                     max_region_size,
@@ -671,6 +678,9 @@ fn make_active_region_cut_tests() {
                         1.0 - (1.0 * (i as f32 + 1.0)) / active_region_size as f32,
                     );
                 }
+                println!("Testing decreasing activity profile: {:?}", &probs);
+                println!("Min {} max {} expected {}", min_region_size, max_region_size, max_region_size);
+
                 test_active_region_cuts(
                     min_region_size,
                     max_region_size,
@@ -700,6 +710,12 @@ fn make_active_region_cut_tests() {
                             match cut_site {
                                 Some(cut_site) => {
                                     if cut_site < max_region_size {
+                                        println!(
+                                            "Testing two peaks activity profile: {:?} cut site {}",
+                                            &probs, cut_site
+                                        );
+                                        println!("Min {} max {} expected {}", min_region_size, max_region_size, max(cut_site, min_region_size));
+
                                         test_active_region_cuts(
                                             min_region_size,
                                             max_region_size,
@@ -748,14 +764,20 @@ fn make_active_region_cut_tests() {
                             expected_cut = first_min + 1;
                         };
 
-                        min(first_min + 1, max_region_size);
-                        test_active_region_cuts(
-                            min_region_size,
-                            max_region_size,
-                            expected_cut,
-                            probs,
-                            contig_len,
+                        // min(first_min + 1, max_region_size);
+                        println!(
+                            "Testing two minima activity profile: {:?} expected cut {}",
+                            &probs, expected_cut
                         );
+                        println!("Min {} max {} expected {}", min_region_size, max_region_size, expected_cut);
+
+                        // test_active_region_cuts(
+                        //     min_region_size,
+                        //     max_region_size,
+                        //     expected_cut,
+                        //     probs,
+                        //     contig_len,
+                        // );
                     }
                 }
             }

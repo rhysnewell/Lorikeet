@@ -123,6 +123,9 @@ impl ReadThreadingGraph {
             }
             Some(stop_position) => {
                 for i in 0..=stop_position {
+                    // if seq_for_kmers.sequence.len() <= i + kmer_size {
+                    //     break;
+                    // }
                     let kmer =
                         Kmer::new_with_start_and_length(seq_for_kmers.sequence, i, kmer_size);
                     if all_kmers.contains(&kmer) {
@@ -168,7 +171,10 @@ impl ReadThreadingGraph {
             .iter()
             .filter_map(|sequence_for_kmers| {
                 let non_uniques_from_seq =
-                    Self::determine_non_unique_kmers(sequence_for_kmers, kmer_size);
+                    Self::determine_non_unique_kmers(
+                        sequence_for_kmers, 
+                        kmer_size
+                    );
                 if !non_uniques_from_seq.is_empty() {
                     // keep track of the non-uniques for this kmerSize, and keep it in the list of sequences that have non-uniques
                     Some(non_uniques_from_seq)
@@ -233,7 +239,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     fn is_threading_start(
         &self,
         kmer: &Kmer,
-        _start_threading_only_at_existing_vertex: bool,
     ) -> bool {
         if self.start_threading_only_at_existing_vertex {
             self.kmer_to_vertex_map.contains_key(kmer)
@@ -267,7 +272,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         let unique_merge_vertex = self.get_kmer_vertex(kmer, false);
         assert!(
             !(is_ref && unique_merge_vertex.is_some()),
-            "Did not find a unique vertex to merge into the reference path"
+            "Did not find a unique vertex to merge into the reference path: {} {}", is_ref, unique_merge_vertex.is_some()
         );
 
         return unique_merge_vertex;
@@ -342,6 +347,9 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     ) {
         let sequence = read.seq();
         let qualities = read.read.qual();
+        if sequence.is_empty() || qualities.is_empty() {
+            return;
+        }
 
         let mut last_good = -1;
         for end in 0..=sequence.len() {
@@ -481,6 +489,10 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                 // do nothing :)
             }
             Some(start_pos) => {
+                if seq_for_kmers.sequence.len() <= start_pos + self.base_graph.get_kmer_size() {
+                    debug!("Sequence length {}", seq_for_kmers.sequence.len());
+                    return;
+                }
                 let starting_vertex =
                     self.get_or_create_kmer_vertex(&seq_for_kmers.sequence, start_pos);
                 // increase the counts of all edges incoming into the starting vertex supported by going back in sequence
@@ -558,7 +570,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         if seq_for_kmers.is_ref {
             return Some(0);
         } else {
-            let stop = seq_for_kmers.stop - self.base_graph.get_kmer_size();
+            let stop = seq_for_kmers.stop.saturating_sub(self.base_graph.get_kmer_size());
 
             for i in seq_for_kmers.start..stop {
                 let kmer1 = Kmer::new_with_start_and_length(
@@ -566,7 +578,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                     i,
                     self.base_graph.get_kmer_size(),
                 );
-                if self.is_threading_start(&kmer1, self.start_threading_only_at_existing_vertex) {
+                if self.is_threading_start(&kmer1) {
                     return Some(i);
                 }
             }
@@ -599,22 +611,10 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      * @return a vertex for kmer, or null (either because it doesn't exist or is non-unique for graphs that have such a distinction)
      */
     fn get_kmer_vertex(&self, kmer: &Kmer, allow_ref_source: bool) -> Option<&NodeIndex> {
-        if !allow_ref_source {
-            match &self.ref_source {
-                None => {
-                    return self.kmer_to_vertex_map.get(kmer);
-                }
-                Some(ref_source) => {
-                    if kmer == ref_source {
-                        return None;
-                    } else {
-                        return self.kmer_to_vertex_map.get(kmer);
-                    }
-                }
-            }
-        } else {
-            return self.kmer_to_vertex_map.get(kmer);
+        if !allow_ref_source && self.ref_source.as_ref() == Some(kmer) {
+            return None;
         }
+        return self.kmer_to_vertex_map.get(kmer);
     }
 
     /**
@@ -626,7 +626,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     fn create_vertex(&mut self, sequence: &[u8], kmer: Kmer) -> NodeIndex {
         let new_vertex = MultiDeBruijnVertex::new(kmer.bases(sequence).to_vec(), false);
         let node_index = self.base_graph.add_node(&new_vertex);
-
         self.track_kmer(kmer, node_index);
 
         return node_index;
@@ -710,7 +709,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .base_graph
             .graph
             .edges_directed(prev_vertex, Direction::Outgoing);
-
         let next_pos = kmer_start + self.base_graph.get_kmer_size() - 1;
         let mut found_match = None;
         let mut return_target = None;
@@ -731,18 +729,20 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             {
                 found_match = Some(outgoing_edge.id());
                 return_target = Some(target);
+                // can't directly access the edge weight here, so we break and do it below
+                // as we need a mutable reference to it.
                 break;
             }
         }
 
         if found_match.is_some() {
-            // we've got a match in the chain, so simply increase the count of the edge by 1 and continue
+            // we've got a match in the chain, so simply increase the count of the edge by 1 and return
+            // the target node index
             self.base_graph
                 .graph
                 .edge_weight_mut(found_match.unwrap())
                 .unwrap()
                 .inc_multiplicity(count);
-
             return return_target.unwrap();
         }
 

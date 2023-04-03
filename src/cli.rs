@@ -1369,7 +1369,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("genome-fasta-files")
-                        .short('r').long("genome-fasta-files")
+                        .short('f')
+                        .alias("reference")
+                        .long("genome-fasta-files")
                         .action(clap::ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&["genome-fasta-directory", "full-help", "full-help-roff"]),
@@ -1498,19 +1500,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("min-contig-size")
                         .long("min-contig-size")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u64))
                         .default_value("2500"),
                 )
                 .arg(
                     Arg::new("phred-scaled-global-read-mismapping-rate")
                         .long("phred-scaled-global-read-mismapping-rate")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("45"),
                 )
                 .arg(
                     Arg::new("pair-hmm-gap-continuation-penalty")
                         .long("pair-hmm-gap-continuation-penalty")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("10"),
                 )
                 .arg(
@@ -1582,7 +1584,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("active-probability-threshold")
                         .long("active-probability-threshold")
-                        .value_parser(clap::value_parser!(f64))
+                        .value_parser(clap::value_parser!(f32))
                         .default_value("0.002"),
                 )
                 .arg(
@@ -1608,7 +1610,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("128")
                         .hide(true),
                 )
@@ -1647,7 +1649,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("min-dangling-branch-length")
                         .long("min-dangling-branch-length")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("4"),
                 )
                 .arg(
@@ -1664,7 +1666,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("num-pruning-samples")
                         .long("num-pruning-samples")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("1"),
                 )
                 .arg(
@@ -1836,20 +1838,20 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("mapping-quality-threshold-for-genotyping")
                         .long("mapping-quality-threshold-for-genotyping")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("20"),
                 )
                 .arg(
                     Arg::new("min-sv-qual")
                         .long("min-sv-qual")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("3"),
                 )
                 .arg(Arg::new("do-not-call-svs").long("do-not-call-svs").action(clap::ArgAction::SetTrue))
                 .arg(
                     Arg::new("min-mapq")
                         .long("min-mapq")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("20"),
                 )
                 .arg(
@@ -1892,7 +1894,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i64))
                         .default_value("5"),
                 )
                 .arg(
@@ -2134,7 +2136,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("genome-fasta-files")
-                        .short('r').long("genome-fasta-files")
+                        .short('f')
+                        .alias("reference")
+                        .long("genome-fasta-files")
                         .action(clap::ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&["genome-fasta-directory", "full-help", "full-help-roff"]),
@@ -2263,19 +2267,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("min-contig-size")
                         .long("min-contig-size")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u64))
                         .default_value("2500"),
                 )
                 .arg(
                     Arg::new("phred-scaled-global-read-mismapping-rate")
                         .long("phred-scaled-global-read-mismapping-rate")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("45"),
                 )
                 .arg(
                     Arg::new("pair-hmm-gap-continuation-penalty")
                         .long("pair-hmm-gap-continuation-penalty")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("10"),
                 )
                 .arg(
@@ -2347,7 +2351,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("active-probability-threshold")
                         .long("active-probability-threshold")
-                        .value_parser(clap::value_parser!(f64))
+                        .value_parser(clap::value_parser!(f32))
                         .default_value("0.002"),
                 )
                 .arg(
@@ -2373,7 +2377,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("128")
                         .hide(true),
                 )
@@ -2412,7 +2416,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("min-dangling-branch-length")
                         .long("min-dangling-branch-length")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("4"),
                 )
                 .arg(
@@ -2429,7 +2433,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("num-pruning-samples")
                         .long("num-pruning-samples")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("1"),
                 )
                 .arg(
@@ -2595,20 +2599,20 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("mapping-quality-threshold-for-genotyping")
                         .long("mapping-quality-threshold-for-genotyping")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("20"),
                 )
                 .arg(
                     Arg::new("min-sv-qual")
                         .long("min-sv-qual")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("3"),
                 )
                 .arg(Arg::new("do-not-call-svs").long("do-not-call-svs").action(clap::ArgAction::SetTrue))
                 .arg(
                     Arg::new("min-mapq")
                         .long("min-mapq")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("20"),
                 )
                 .arg(
@@ -2651,7 +2655,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i64))
                         .default_value("5"),
                 )
                 .arg(
@@ -2893,7 +2897,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("genome-fasta-files")
-                        .short('r').long("genome-fasta-files")
+                        .short('f')
+                        .alias("reference")
+                        .long("genome-fasta-files")
                         .action(clap::ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&["genome-fasta-directory", "full-help", "full-help-roff"]),
@@ -3022,19 +3028,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("min-contig-size")
                         .long("min-contig-size")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u64))
                         .default_value("2500"),
                 )
                 .arg(
                     Arg::new("phred-scaled-global-read-mismapping-rate")
                         .long("phred-scaled-global-read-mismapping-rate")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("45"),
                 )
                 .arg(
                     Arg::new("pair-hmm-gap-continuation-penalty")
                         .long("pair-hmm-gap-continuation-penalty")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("10"),
                 )
                 .arg(
@@ -3106,7 +3112,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("active-probability-threshold")
                         .long("active-probability-threshold")
-                        .value_parser(clap::value_parser!(f64))
+                        .value_parser(clap::value_parser!(f32))
                         .default_value("0.002"),
                 )
                 .arg(
@@ -3132,7 +3138,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("128")
                         .hide(true),
                 )
@@ -3171,7 +3177,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("min-dangling-branch-length")
                         .long("min-dangling-branch-length")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("4"),
                 )
                 .arg(
@@ -3188,7 +3194,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("num-pruning-samples")
                         .long("num-pruning-samples")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i32))
                         .default_value("1"),
                 )
                 .arg(
@@ -3354,20 +3360,20 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("mapping-quality-threshold-for-genotyping")
                         .long("mapping-quality-threshold-for-genotyping")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("20"),
                 )
                 .arg(
                     Arg::new("min-sv-qual")
                         .long("min-sv-qual")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("3"),
                 )
                 .arg(Arg::new("do-not-call-svs").long("do-not-call-svs").action(clap::ArgAction::SetTrue))
                 .arg(
                     Arg::new("min-mapq")
                         .long("min-mapq")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(u8))
                         .default_value("20"),
                 )
                 .arg(
@@ -3410,7 +3416,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i64))
                         .default_value("5"),
                 )
                 .arg(
@@ -3543,7 +3549,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .value_parser(clap::value_parser!(usize))
+                        .value_parser(clap::value_parser!(i64))
                         .default_value("5"),
                 )
                 .arg(Arg::new("verbose").short('v').long("verbose").action(ArgAction::SetTrue)),

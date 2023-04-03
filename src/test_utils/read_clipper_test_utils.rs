@@ -115,9 +115,21 @@ impl ReadClipperTestUtils {
                     ); // create the cigar
                     if CigarUtils::is_good(&core_cigar) {
                         let mut builder = CigarBuilder::new(true);
-                        builder.add_all(leading_clip_elements.clone())?;
-                        builder.add_all(core_cigar.0)?;
-                        builder.add_all(trailing_clip_elements.clone())?;
+                        // Some of the tests create CIGAR elements that cause errors here. It is intentional, but we
+                        // don't want to return the error. Under normal circumstances, this should never happen and
+                        // the error will be caught and lorikeet will panic.
+                        match builder.add_all(leading_clip_elements.clone()) {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        };
+                        match builder.add_all(core_cigar.0) {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        };
+                        match builder.add_all(trailing_clip_elements.clone()) {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        };
                         match builder.make(false) {
                             Ok(cigar) => cigar_list.push(cigar),
                             Err(_) => {} // do nothing

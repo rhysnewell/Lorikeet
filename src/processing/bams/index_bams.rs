@@ -87,7 +87,7 @@ pub fn recover_bams(
     debug!("Bams are split {}", bams_are_split);
 
     // This is going to catch cached longread bam files from mapping
-    if m.get_flag("bam-files") {
+    if m.contains_id("bam-files") {
         let bam_paths = m
             .get_many::<String>("bam-files")
             .unwrap()
@@ -107,10 +107,10 @@ pub fn recover_bams(
                 ))
             }
         }
-    } else if m.get_flag("read1")
-        | m.get_flag("single")
-        | m.get_flag("coupled")
-        | m.get_flag("interleaved")
+    } else if m.contains_id("read1")
+        | m.contains_id("single")
+        | m.contains_id("coupled")
+        | m.contains_id("interleaved")
     {
         let mut all_bam_paths = vec![];
 
@@ -118,7 +118,7 @@ pub fn recover_bams(
             Some(ref _tmp_file) => {
                 let cache = format!(
                     "{}/short/{}/*.bam",
-                    match m.get_flag("bam-file-cache-directory") {
+                    match m.contains_id("bam-file-cache-directory") {
                         false => {
                             tmp_bam_file_cache.as_ref().unwrap()
                         }
@@ -148,7 +148,7 @@ pub fn recover_bams(
                 for ref_name in genomes_and_contigs.genomes.iter() {
                     let cache = format!(
                         "{}/short/{}*.bam",
-                        match m.get_flag("bam-file-cache-directory") {
+                        match m.contains_id("bam-file-cache-directory") {
                             false => {
                                 tmp_bam_file_cache.as_ref().unwrap()
                             }
@@ -180,7 +180,7 @@ pub fn recover_bams(
         bam_readers.extend(all_bam_paths);
     }
 
-    if m.get_flag("longread-bam-files") {
+    if m.contains_id("longread-bam-files") {
         let bam_paths = m
             .get_many::<String>("longread-bam-files")
             .unwrap()
@@ -200,14 +200,14 @@ pub fn recover_bams(
                 ))
             }
         }
-    } else if m.get_flag("longreads") {
+    } else if m.contains_id("longreads") {
         let mut all_bam_paths = vec![];
 
         match concatenated_genomes {
             Some(ref _tmp_file) => {
                 let cache = format!(
                     "{}/long/{}/*.bam",
-                    match m.get_flag("bam-file-cache-directory") {
+                    match m.contains_id("bam-file-cache-directory") {
                         false => {
                             tmp_bam_file_cache.as_ref().unwrap()
                         }
@@ -236,7 +236,7 @@ pub fn recover_bams(
                 for ref_name in genomes_and_contigs.genomes.iter() {
                     let cache = format!(
                         "{}/long/{}*.bam",
-                        match m.get_flag("bam-file-cache-directory") {
+                        match m.contains_id("bam-file-cache-directory") {
                             false => {
                                 tmp_bam_file_cache.as_ref().unwrap()
                             }

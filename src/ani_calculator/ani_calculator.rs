@@ -365,8 +365,7 @@ impl ANICalculator {
         let mut file_open = match File::create(file_path) {
             Ok(file) => file,
             Err(e) => {
-                println!("Cannot create file {:?}", e);
-                std::process::exit(1)
+                panic!("Cannot create file {:?}", e);
             }
         };
 
