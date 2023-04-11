@@ -118,7 +118,7 @@ impl AFCalculationResult {
         phred_scale_qual_threshold: f64,
     ) -> bool {
         (self.get_log10_posterior_of_allele_absent(allele) + AFCalculationResult::EPSILON)
-            < QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold as u8)
+            < QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold)
     }
 
     /**

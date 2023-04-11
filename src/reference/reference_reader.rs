@@ -269,11 +269,11 @@ impl ReferenceReader {
                     )) {
                         Ok(reference) => Ok(reference),
                         Err(e) => {
-                            debug!(
-                                "Cannot read sequence from {}: {}",
-                                std::str::from_utf8(&self.target_names[&tid]).unwrap(),
-                                e
-                            );
+                            // debug!(
+                            //     "Cannot read sequence from {}: {}",
+                            //     std::str::from_utf8(&self.target_names[&tid]).unwrap(),
+                            //     e
+                            // );
                             Err(e)
                         }
                     }

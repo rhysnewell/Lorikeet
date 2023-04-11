@@ -127,12 +127,12 @@ impl VertexBasedTransformerOptions {
                         if found_nodes_to_merge {
                             did_at_least_one_transform = true;
                             transformed_count += 1;
-                            debug!(
-                                "Transformed {} graph: V {} E {}",
-                                transformed_count,
-                                graph.base_graph.graph.node_count(),
-                                graph.base_graph.graph.edge_count()
-                            );
+                            // debug!(
+                            //     "Transformed {} graph: V {} E {}",
+                            //     transformed_count,
+                            //     graph.base_graph.graph.node_count(),
+                            //     graph.base_graph.graph.edge_count()
+                            // );
                             break;
                         }
                     }
@@ -163,12 +163,12 @@ impl VertexBasedTransformerOptions {
                         if found_nodes_to_merge {
                             did_at_least_one_transform = true;
                             transformed_count += 1;
-                            debug!(
-                                "Transformed {} graph: V {} E {}",
-                                transformed_count,
-                                graph.base_graph.graph.node_count(),
-                                graph.base_graph.graph.edge_count()
-                            );
+                            // debug!(
+                            //     "Transformed {} graph: V {} E {}",
+                            //     transformed_count,
+                            //     graph.base_graph.graph.node_count(),
+                            //     graph.base_graph.graph.edge_count()
+                            // );
                             break;
                         }
                     }
@@ -196,12 +196,12 @@ impl VertexBasedTransformerOptions {
                         if found_nodes_to_merge {
                             did_at_least_one_transform = true;
                             transformed_count += 1;
-                            debug!(
-                                "Transformed {} graph: V {} E {}",
-                                transformed_count,
-                                graph.base_graph.graph.node_count(),
-                                graph.base_graph.graph.edge_count()
-                            );
+                            // debug!(
+                            //     "Transformed {} graph: V {} E {}",
+                            //     transformed_count,
+                            //     graph.base_graph.graph.node_count(),
+                            //     graph.base_graph.graph.edge_count()
+                            // );
                             break;
                         }
                     }
@@ -229,12 +229,12 @@ impl VertexBasedTransformerOptions {
                         if found_nodes_to_merge {
                             did_at_least_one_transform = true;
                             transformed_count += 1;
-                            debug!(
-                                "Transformed {} graph: V {} E {}",
-                                transformed_count,
-                                graph.base_graph.graph.node_count(),
-                                graph.base_graph.graph.edge_count()
-                            );
+                            // debug!(
+                            //     "Transformed {} graph: V {} E {}",
+                            //     transformed_count,
+                            //     graph.base_graph.graph.node_count(),
+                            //     graph.base_graph.graph.edge_count()
+                            // );
                             break;
                         }
                     }

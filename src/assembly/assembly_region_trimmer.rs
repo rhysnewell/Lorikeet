@@ -118,10 +118,10 @@ impl AssemblyRegionTrimmer {
 
         let padded_variant_span = SimpleInterval::new(region.get_contig(), min_start, max_end)
             .intersect(&region.get_padded_span());
-        debug!(
-            "Padded and trimmed the region to this span: {:?}",
-            &padded_variant_span
-        );
+        // debug!(
+        //     "Padded and trimmed the region to this span: {:?}",
+        //     &padded_variant_span
+        // );
 
         return AssemblyRegionTrimmerResult::new(
             region,

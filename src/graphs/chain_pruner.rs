@@ -28,10 +28,10 @@ impl ChainPruner {
         graph: &mut BaseGraph<V, E>,
     ) {
         let chains = Self::find_all_chains(&graph);
-        debug!("Chains {}", chains.len());
+        // debug!("Chains {}", chains.len());
 
         let chains_to_remove = self.chains_to_remove(&chains, &graph);
-        debug!("Chains to remove {}", chains_to_remove.len());
+        // debug!("Chains to remove {}", chains_to_remove.len());
         chains_to_remove
             .into_iter()
             .for_each(|chain| graph.remove_all_edges(chain.get_edges()));
@@ -120,7 +120,7 @@ impl ChainPruner {
                     graph,
                     adaptive.initial_error_probability,
                 );
-                debug!("Probable error chains {}", probable_error_chains.len());
+                // debug!("Probable error chains {}", probable_error_chains.len());
 
                 let error_count = probable_error_chains
                     .into_par_iter()
@@ -137,7 +137,7 @@ impl ChainPruner {
                             .get_multiplicity()
                     })
                     .sum::<usize>();
-                debug!("Error count {}", error_count);
+                // debug!("Error count {}", error_count);
 
                 let total_bases = chains
                     .par_iter()
@@ -150,9 +150,9 @@ impl ChainPruner {
                     })
                     .sum::<usize>();
 
-                debug!("Total bases {}", total_bases);
+                // debug!("Total bases {}", total_bases);
                 let error_rate = error_count as f64 / total_bases as f64;
-                debug!("Error rate {}", error_rate);
+                // debug!("Error rate {}", error_rate);
                 adaptive
                     .likely_error_chains(&chains, graph, error_rate)
                     .into_par_iter()

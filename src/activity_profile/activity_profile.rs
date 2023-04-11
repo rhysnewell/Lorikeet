@@ -443,12 +443,12 @@ impl Profile for ActivityProfile {
                     // self.state_list.retain(|state| !states_to_trim_away.contains(state));
                     debug!("Span size {} states {}", span.size(), self.state_list.len());
                     if span.size() < self.state_list.len() {
-                        debug!(
-                            "Drained {}",
-                            self.state_list
-                                .drain(span.size()..self.state_list.len())
-                                .count()
-                        );
+                        // debug!(
+                        //     "Drained {}",
+                        //     self.state_list
+                        //         .drain(span.size()..self.state_list.len())
+                        //         .count()
+                        // );
                         // self.state_list = self.state_list[0..span.size()].to_vec();
                     }
                 }
@@ -460,10 +460,10 @@ impl Profile for ActivityProfile {
 
         // debug!("Active prob 0 {} Threshold {}", &self.state_list[0].is_active_prob(), &self.active_prob_threshold);
         let is_active_region = &self.state_list[0].is_active_prob() > &self.active_prob_threshold;
-        debug!(
-            "First {:?} active? {}",
-            &self.state_list[0], is_active_region
-        );
+        // debug!(
+        //     "First {:?} active? {}",
+        //     &self.state_list[0], is_active_region
+        // );
         let offset_of_next_region_end = self.find_end_of_region(
             is_active_region,
             min_region_size,

@@ -76,6 +76,7 @@ impl IndependentSamplesGenotypesModel {
                     None
                 }
                 Some(likelihoods_calculator) => {
+                    // debug!("Using cached likelihood calculator");
                     if sample_ploidy != likelihoods_calculator.ploidy {
                         self.get_likelihood_calculator(sample_ploidy, allele_count)
                     } else {
@@ -104,7 +105,7 @@ impl IndependentSamplesGenotypesModel {
             }
         }
 
-        debug!("Genotype likelihoods {:#?}", &genotype_likelihoods);
+        // debug!("Genotype likelihoods {:#?}", &genotype_likelihoods);
         return genotype_likelihoods;
     }
 

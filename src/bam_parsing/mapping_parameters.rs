@@ -126,10 +126,10 @@ impl<'a> MappingParameters<'a> {
             }
             false => None,
         };
-        debug!(
-            "Setting mapper {:?} options as '{:?}'",
-            mapping_program, mapping_options
-        );
+        // debug!(
+        //     "Setting mapper {:?} options as '{:?}'",
+        //     mapping_program, mapping_options
+        // );
 
         return MappingParameters {
             references: match reference_tempfile {
@@ -182,10 +182,10 @@ impl<'a> MappingParameters<'a> {
             }
             false => None,
         };
-        debug!(
-            "Setting mapper {:?} options as '{:?}'",
-            mapping_program, mapping_options
-        );
+        // debug!(
+        //     "Setting mapper {:?} options as '{:?}'",
+        //     mapping_program, mapping_options
+        // );
         return MappingParameters {
             references: match reference_tempfile {
                 Some(r) => vec![r.path().to_str().unwrap()],

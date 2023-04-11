@@ -138,12 +138,12 @@ impl HaplotypeCallerGenotypingEngine {
         let no_call_alleles = VariantContextUtils::no_call_alleles(ploidy);
         let read_qualifies_for_genotyping_predicate =
             Self::compose_read_qualifies_for_genotyping_predicate();
-        debug!("haplotypes at assignment {:?}", &haplotypes.len());
+        // debug!("haplotypes at assignment {:?}", &haplotypes.len());
 
         // let mut debug = false;
         for loc in start_pos_key_set {
 
-            debug!("Found loc {}", loc);
+            // debug!("Found loc {}", loc);
 
             if loc < active_region_window.get_start() || loc > active_region_window.get_end() {
                 continue;
@@ -157,11 +157,11 @@ impl HaplotypeCallerGenotypingEngine {
                     !args.get_flag("disable-spanning-event-genotyping"),
                 );
 
-            debug!(
-                "loc {} events at this loc {:?}",
-                loc,
-                &events_at_this_loc.len()
-            );
+            // debug!(
+            //     "loc {} events at this loc {:?}",
+            //     loc,
+            //     &events_at_this_loc.len()
+            // );
             let events_at_this_loc_with_span_dels_replaced = Self::replace_span_dels(
                 events_at_this_loc,
                 &ByteArrayAllele::new(
@@ -171,17 +171,10 @@ impl HaplotypeCallerGenotypingEngine {
                 loc,
             );
 
-
-            debug!(
-                "loc {} events at this loc dels replaced {:?}",
-                loc,
-                &events_at_this_loc_with_span_dels_replaced.len()
-            );
             let merged_vc = AssemblyBasedCallerUtils::make_merged_variant_context(
                 events_at_this_loc_with_span_dels_replaced,
             );
-            // debug!("merged vc {:?}", &merged_vc);
-            debug!("loc {} merged_vc {:?}", loc, &merged_vc);
+
             match merged_vc {
                 Some(mut merged_vc) => {
                     let merged_alleles_list_size_before_possible_trimming =
@@ -194,40 +187,24 @@ impl HaplotypeCallerGenotypingEngine {
                         !args.get_flag("disable-spanning-event-genotyping"),
                     );
 
-                    debug!("allele mapper {:?}", &allele_mapper);
-
-                    debug!(
-                        "Genotyping event at {} with alleles {:?} and genotypes {:?}",
-                        loc,
-                        merged_vc.get_alleles(),
-                        merged_vc.get_genotypes()
-                    );
                     self.remove_alt_alleles_if_too_many_genotypes(
                         ploidy,
                         &mut allele_mapper,
                         &mut merged_vc,
                     );
 
-                    debug!(
-                        "loc {} alleles in likelihood {:?} evidence {:?}",
-                        loc,
-                        &read_likelihoods.alleles.len(),
-                        (0..read_likelihoods.samples.len())
-                            .map(|s| read_likelihoods.sample_evidence_count(s))
-                            .collect::<Vec<usize>>()
-                    );
                     // }
-                    debug!("Alleles in read likelihoods {:?}", read_likelihoods.alleles);
+                    // debug!("Alleles in read likelihoods {:?}", read_likelihoods.alleles);
                     let mut read_allele_likelihoods = read_likelihoods
                         .marginalize(&allele_mapper, AlleleList::new(&merged_vc.alleles));
-                    debug!(
-                        "loc {} alleles in likelihood after marginal {:?} evidence {:?}",
-                        loc,
-                        &read_allele_likelihoods.alleles.len(),
-                        (0..read_allele_likelihoods.samples.len())
-                            .map(|s| read_allele_likelihoods.sample_evidence_count(s))
-                            .collect::<Vec<usize>>()
-                    );
+                    // debug!(
+                    //     "loc {} alleles in likelihood after marginal {:?} evidence {:?}",
+                    //     loc,
+                    //     &read_allele_likelihoods.alleles.len(),
+                    //     (0..read_allele_likelihoods.samples.len())
+                    //         .map(|s| read_allele_likelihoods.sample_evidence_count(s))
+                    //         .collect::<Vec<usize>>()
+                    // );
 
                     let variant_calling_relevant_overlap = SimpleInterval::new(
                         merged_vc.loc.tid,
@@ -249,37 +226,37 @@ impl HaplotypeCallerGenotypingEngine {
                         &variant_calling_relevant_overlap,
                     );
 
-                    debug!("loc {} merged vc loc {:?} relevant overlap {:?} alleles in likelihood after retain {:?} evidence {:?}",
-                            loc, &merged_vc.loc, &variant_calling_relevant_overlap, &read_allele_likelihoods.alleles.len(),
-                            (0..read_allele_likelihoods.samples.len()).map(|s| read_allele_likelihoods.sample_evidence_count(s)).collect::<Vec<usize>>());
+                    // debug!("loc {} merged vc loc {:?} relevant overlap {:?} alleles in likelihood after retain {:?} evidence {:?}",
+                    //         loc, &merged_vc.loc, &variant_calling_relevant_overlap, &read_allele_likelihoods.alleles.len(),
+                    //         (0..read_allele_likelihoods.samples.len()).map(|s| read_allele_likelihoods.sample_evidence_count(s)).collect::<Vec<usize>>());
                     
                     read_allele_likelihoods
                         .set_variant_calling_subset_used(&variant_calling_relevant_overlap);
 
                     // TODO: sample contamination downsampling occurs here. Won't worry about this for nmow
                     //      as it would require a clone of read_likelihoods
-                    debug!(
-                        "======================================================================="
-                    );
-                    debug!(
-                        "Event at: {:?} with {} reads and {:?} disqualified",
-                        &merged_vc.loc,
-                        read_allele_likelihoods.evidence_count(),
-                        read_allele_likelihoods
-                            .filtered_evidence_by_sample_index
-                            .iter()
-                            .map(|(k, v)| (*k, v.len()))
-                            .collect::<Vec<(usize, usize)>>()
-                    );
-                    debug!("Genotypes {:?}", &merged_vc.genotypes);
-                    debug!(
-                        "Merged vc {} read allele {}",
-                        merged_vc.alleles.len(),
-                        read_allele_likelihoods.alleles.len()
-                    );
-                    debug!(
-                        "======================================================================="
-                    );                
+                    // debug!(
+                    //     "======================================================================="
+                    // );
+                    // debug!(
+                    //     "Event at: {:?} with {} reads and {:?} disqualified",
+                    //     &merged_vc.loc,
+                    //     read_allele_likelihoods.evidence_count(),
+                    //     read_allele_likelihoods
+                    //         .filtered_evidence_by_sample_index
+                    //         .iter()
+                    //         .map(|(k, v)| (*k, v.len()))
+                    //         .collect::<Vec<(usize, usize)>>()
+                    // );
+                    // debug!("Genotypes {:?}", &merged_vc.genotypes);
+                    // debug!(
+                    //     "Merged vc {} read allele {}",
+                    //     merged_vc.alleles.len(),
+                    //     read_allele_likelihoods.alleles.len()
+                    // );
+                    // debug!(
+                    //     "======================================================================="
+                    // );                
 
                     if emit_reference_confidence {
                         // TODO: Deletes alleles and replaces with symbolic non ref?
@@ -293,7 +270,7 @@ impl HaplotypeCallerGenotypingEngine {
                         ref_bases,
                         loc - ref_loc.get_start(),
                     );
-                    debug!("New genotypes {:?}", &genotypes);
+                    // debug!("New genotypes {:?}", &genotypes);
 
                     // TODO: Some extra DRAGEN parameterization is possible here
                     let gpc = self.resolve_genotype_prior_calculator(
@@ -304,10 +281,10 @@ impl HaplotypeCallerGenotypingEngine {
 
                     let mut variant_context_builder = VariantContext::build_from_vc(&merged_vc);
                     variant_context_builder.genotypes = genotypes;
-                    debug!(
-                        "Variant context allele values {:?}",
-                        &variant_context_builder.alleles
-                    );
+                    // debug!(
+                    //     "Variant context allele values {:?}",
+                    //     &variant_context_builder.alleles
+                    // );
 
                     let call = self.genotyping_engine.calculate_genotypes(
                         variant_context_builder,
@@ -425,10 +402,10 @@ impl HaplotypeCallerGenotypingEngine {
             }
         }
 
-        debug!(
-            "Potential return calls {:?} and called haplotypes {:?}",
-            &return_calls, &called_haplotypes
-        );
+        // debug!(
+        //     "Potential return calls {:?} and called haplotypes {:?}",
+        //     &return_calls, &called_haplotypes
+        // );
         let phased_calls = if self.do_physical_phasing {
             AssemblyBasedCallerUtils::phase_calls(return_calls, &called_haplotypes)
         } else {
@@ -481,18 +458,18 @@ impl HaplotypeCallerGenotypingEngine {
 
         // TODO: This function does a bunch of annotation that I'm not sure we need to worry about
         //       Can revisit if it is causing issues. So we will skipf or not
-        debug!("Call length {}", call.get_alleles().len());
+        // debug!("Call length {}", call.get_alleles().len());
         let untrimmed_result = VariantAnnotationEngine::annotate_context(
             call,
             read_allele_likelihoods,
             Box::new(|_a: &Annotation| true),
         );
 
-        debug!(
-            "untrimmed len {} vs {}",
-            untrimmed_result.get_alleles().len(),
-            merged_alleles_list_size_before_possible_trimming
-        );
+        // debug!(
+        //     "untrimmed len {} vs {}",
+        //     untrimmed_result.get_alleles().len(),
+        //     merged_alleles_list_size_before_possible_trimming
+        // );
 
         if untrimmed_result.get_alleles_ref().len()
             == merged_alleles_list_size_before_possible_trimming
@@ -538,10 +515,10 @@ impl HaplotypeCallerGenotypingEngine {
                 AlleleList::new(vc_alleles)
             };
         // let allele_list = read_likelihoods.alleles.clone();
-        debug!(
-            "Read likelihood {:#?}",
-            read_likelihoods.values_by_sample_index
-        );
+        // debug!(
+        //     "Read likelihood {:#?}",
+        //     read_likelihoods.values_by_sample_index
+        // );
         let likelihoods = self.genotyping_model.calculate_likelihoods(
             &allele_list,
             read_likelihoods.get_allele_list_byte_array(),
@@ -551,7 +528,7 @@ impl HaplotypeCallerGenotypingEngine {
             offset_for_ref_into_event,
         );
 
-        debug!("Proposed likelihoods {:#?}", &likelihoods);
+        // debug!("Proposed likelihoods {:#?}", &likelihoods);
 
         let sample_count = self.genotyping_engine.samples.len();
         let mut result = GenotypesContext::create(sample_count);
@@ -609,11 +586,11 @@ impl HaplotypeCallerGenotypingEngine {
             );
             allele_mapper.retain(|allele, _| alleles_to_keep.contains(&allele));
 
-            debug!(
-                "At position {:?} removed alt alleles where ploidy is {} and original allele count \
-                is {}, whereas after trimming the allele count becomes {}. Alleles kept are: {:?}",
-                merged_vc.loc, ploidy, original_allele_count, practical_allele_count, &alleles_to_keep
-            );
+            // debug!(
+            //     "At position {:?} removed alt alleles where ploidy is {} and original allele count \
+            //     is {}, whereas after trimming the allele count becomes {}. Alleles kept are: {:?}",
+            //     merged_vc.loc, ploidy, original_allele_count, practical_allele_count, &alleles_to_keep
+            // );
 
             Self::remove_excess_alt_alleles_from_vc(merged_vc, alleles_to_keep)
         }

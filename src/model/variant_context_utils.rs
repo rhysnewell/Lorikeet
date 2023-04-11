@@ -396,7 +396,7 @@ impl VariantContextUtils {
             priority_list_of_vcs,
             &genotype_merge_options,
         );
-        debug!("Sorted vcs {:?}", &pre_filtered_vcs);
+        // debug!("Sorted vcs {:?}", &pre_filtered_vcs);
 
         // Make sure all variant contexts are padded with reference base in case of indels if necessary
         let mut VCs: Vec<VariantContext> = pre_filtered_vcs
@@ -413,7 +413,7 @@ impl VariantContextUtils {
         // let mut first: &mut VariantContext;
         // let name: &String;
         let ref_allele = Self::determine_reference_allele(&VCs, None).cloned();
-        debug!("Proposed ref allele: {:?}", &ref_allele);
+        // debug!("Proposed ref allele: {:?}", &ref_allele);
 
         let mut alleles = LinkedHashSet::new();
         let mut filters = HashSet::new();
@@ -650,7 +650,7 @@ impl VariantContextUtils {
                                             old_genotype.sample_name.clone(),
                                         );
                                         if old_genotype.gq >= 100 {
-                                            debug!("Old genotype {:?}", old_genotype);
+                                            // debug!("Old genotype {:?}", old_genotype);
                                             let new_depths = vec![
                                                 old_genotype.ad[0],
                                                 old_genotype.ad[alt_index + 1],
@@ -666,9 +666,9 @@ impl VariantContextUtils {
                                             new_genotype.ploidy = old_genotype.ploidy;
                                             new_genotype.ad = new_depths;
                                             new_genotype.pl = new_pls;
-                                            debug!("New genotype {:?}", &new_genotype);
+                                            // debug!("New genotype {:?}", &new_genotype);
                                         } else {
-                                            debug!("Old genotype {:?}", old_genotype);
+                                            // debug!("Old genotype {:?}", old_genotype);
                                             let new_depths = vec![old_genotype.ad[0], 0];
                                             let new_pls = vec![old_genotype.pl[0], 0];
 
@@ -677,7 +677,7 @@ impl VariantContextUtils {
                                             new_genotype.ploidy = old_genotype.ploidy;
                                             new_genotype.ad = new_depths;
                                             new_genotype.pl = new_pls;
-                                            debug!("New genotype {:?}", &new_genotype);
+                                            // debug!("New genotype {:?}", &new_genotype);
                                         }
 
                                         per_sample_genotypes.push(new_genotype);
@@ -691,13 +691,13 @@ impl VariantContextUtils {
                                             vec![ref_allele.clone(), alt_allele.clone()],
                                         );
                                         new_vc.attributes = vc.attributes.clone();
-                                        debug!("Old vc attributes {:?}", &new_vc.attributes);
+                                        // debug!("Old vc attributes {:?}", &new_vc.attributes);
                                         new_vc.set_attribute(
                                             VariantAnnotations::Depth.to_key().to_string(),
                                             AttributeObject::UnsizedInteger(new_depth as usize),
                                         );
                                         new_vc.remove_attributes_for_alt_by_index(alt_index + 1);
-                                        debug!("New vc attributes {:?}", &new_vc.attributes);
+                                        // debug!("New vc attributes {:?}", &new_vc.attributes);
                                         new_vc.genotypes =
                                             GenotypesContext::new(per_sample_genotypes);
                                         new_vc.log10_p_error = vc.log10_p_error;

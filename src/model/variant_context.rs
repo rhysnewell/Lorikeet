@@ -464,13 +464,13 @@ impl VariantContext {
             }
         }
 
-        debug!(
-            "Max Depth {} All depths {:?} Consensus {:?} genotypes {:?}",
-            current_max_depth,
-            self.genotypes.genotypes()[sample_index],
-            &current_consensus,
-            self.genotypes.genotypes()
-        );
+        // debug!(
+        //     "Max Depth {} All depths {:?} Consensus {:?} genotypes {:?}",
+        //     current_max_depth,
+        //     self.genotypes.genotypes()[sample_index],
+        //     &current_consensus,
+        //     self.genotypes.genotypes()
+        // );
 
         if current_max_depth == 0 {
             // no variant was found in this sample
@@ -496,13 +496,13 @@ impl VariantContext {
             }
         }
 
-        debug!(
-            "Max Depth {} All depths {:?} Consensus {:?} genotypes {:?}",
-            current_max_depth,
-            self.genotypes.genotypes()[sample_index],
-            &current_consensus,
-            self.genotypes.genotypes()
-        );
+        // debug!(
+        //     "Max Depth {} All depths {:?} Consensus {:?} genotypes {:?}",
+        //     current_max_depth,
+        //     self.genotypes.genotypes()[sample_index],
+        //     &current_consensus,
+        //     self.genotypes.genotypes()
+        // );
 
         if current_max_depth == 0 {
             // no variant was found in this sample
@@ -716,7 +716,7 @@ impl VariantContext {
                 return variant_contexts;
             }
             Err(_) => {
-                debug!("No VCF records found for {}", vcf_path);
+                // debug!("No VCF records found for {}", vcf_path);
                 return Vec::new();
             }
         }
@@ -725,7 +725,7 @@ impl VariantContext {
     pub fn retrieve_indexed_vcf_file(file: &str) -> IndexedReader {
         match IndexedReader::from_path(file) {
             Ok(vcf_reader) => {
-                debug!("Found readable VCF file");
+                // debug!("Found readable VCF file");
                 return vcf_reader;
             }
             Err(_e) => {
@@ -737,7 +737,7 @@ impl VariantContext {
 
     pub fn generate_vcf_index<S: AsRef<str>>(vcf_path: S) -> IndexedReader {
         check_for_bcftools();
-        debug!("Generating VCF index");
+        // debug!("Generating VCF index");
         let gzip_path = format!("{}.gz", vcf_path.as_ref());
         let cmd_string = if !Path::new(&gzip_path).exists() {
             format!(
@@ -754,7 +754,7 @@ impl VariantContext {
             )
         };
 
-        debug!("Queuing cmd_string: {}", cmd_string);
+        // debug!("Queuing cmd_string: {}", cmd_string);
 
         std::process::Command::new("bash")
             .arg("-c")
@@ -769,7 +769,7 @@ impl VariantContext {
     }
 
     pub fn from_vcf_record(record: &mut Record, with_depths: bool) -> Option<VariantContext> {
-        debug!("Found VCF record with {:?} alleles", record.allele_count());
+        // debug!("Found VCF record with {:?} alleles", record.allele_count());
         let variants = Self::collect_variants(record, false, false, None);
         if variants.len() == 0 {
             return None;
@@ -791,11 +791,11 @@ impl VariantContext {
                 .map(|g| g.len())
                 .max()
                 .unwrap();
-            debug!(
-                "Allele depths {:?} {:?}",
-                &allele_depths,
-                record.format(b"AD").integer().unwrap()
-            );
+            // debug!(
+            //     "Allele depths {:?} {:?}",
+            //     &allele_depths,
+            //     record.format(b"AD").integer().unwrap()
+            // );
             let genotypes = allele_depths
                 .iter()
                 .map(|depths| {
@@ -827,7 +827,7 @@ impl VariantContext {
                 &header.id_to_name(filter)[..],
             )));
         }
-        debug!("VC {:?}", &vc);
+        // debug!("VC {:?}", &vc);
         Some(vc)
     }
 
@@ -969,10 +969,10 @@ impl VariantContext {
             Ok(rid) => Some(rid),
             Err(_) => {
                 // Remove leading reference stem
-                debug!(
-                    "Attempting to find {:?}",
-                    std::str::from_utf8(ReferenceReader::split_contig_name(contig_name, '~' as u8))
-                );
+                // debug!(
+                //     "Attempting to find {:?}",
+                //     std::str::from_utf8(ReferenceReader::split_contig_name(contig_name, '~' as u8))
+                // );
                 match vcf_header
                     .name2rid(ReferenceReader::split_contig_name(contig_name, '~' as u8))
                 {

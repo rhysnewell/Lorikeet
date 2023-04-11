@@ -397,7 +397,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
             .node_indices()
             .filter(|v| self.is_singleton_orphan(*v))
             .collect::<HashSet<NodeIndex>>();
-        debug!("Orphans {}", to_remove.len());
+        // debug!("Orphans {}", to_remove.len());
         self.remove_all_vertices(&to_remove)
     }
 

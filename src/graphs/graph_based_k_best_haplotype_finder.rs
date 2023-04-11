@@ -67,10 +67,10 @@ impl GraphBasedKBestHaplotypeFinder {
         graph: &BaseGraph<V, E>,
     ) -> Vec<KBestHaplotype> {
         let mut result = Vec::new();
-        debug!(
-            "Sources {:?} Sinks {:?}",
-            &self.k_best_haplotype_finder.sources, &self.k_best_haplotype_finder.sinks
-        );
+        // debug!(
+        //     "Sources {:?} Sinks {:?}",
+        //     &self.k_best_haplotype_finder.sources, &self.k_best_haplotype_finder.sinks
+        // );
 
         let mut queue: BinaryHeap<KBestHaplotype> = self
             .k_best_haplotype_finder
@@ -79,17 +79,17 @@ impl GraphBasedKBestHaplotypeFinder {
             .map(|source| KBestHaplotype::new(*source, graph))
             .collect::<BinaryHeap<KBestHaplotype>>();
 
-        debug!("Graph {:?}", &graph);
+        // debug!("Graph {:?}", &graph);
         let mut vertex_counts = graph
             .graph
             .node_indices()
             .map(|v| (v, 0))
             .collect::<HashMap<NodeIndex, usize>>();
 
-        debug!(
-            "Sinks {:?} queue {:?} vertex counts {:?}",
-            &self.k_best_haplotype_finder.sinks, &queue, &vertex_counts
-        );
+        // debug!(
+        //     "Sinks {:?} queue {:?} vertex counts {:?}",
+        //     &self.k_best_haplotype_finder.sinks, &queue, &vertex_counts
+        // );
 
         while !queue.is_empty() && result.len() < max_number_of_haplotypes {
             let path_to_extend = queue.pop().unwrap();
@@ -126,7 +126,7 @@ impl GraphBasedKBestHaplotypeFinder {
             }
         }
 
-        debug!("Results {:?}", &result);
+        // debug!("Results {:?}", &result);
 
         return result;
     }

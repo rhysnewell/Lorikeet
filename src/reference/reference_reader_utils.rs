@@ -105,7 +105,7 @@ impl ReferenceReaderUtils {
             }
         };
 
-        debug!("Found paths {:?}", &genome_fasta_files_opt);
+        // debug!("Found paths {:?}", &genome_fasta_files_opt);
 
         let (concatenated_genomes, genomes_and_contigs_option) = match m.contains_id("genome-fasta-files") {
             true => match genome_fasta_files_opt {
@@ -131,7 +131,7 @@ impl ReferenceReaderUtils {
                 } else {
                     genome_fasta_files_opt.unwrap()
                 };
-                debug!("Profiling {} genomes", dereplicated_genomes.len());
+                // debug!("Profiling {} genomes", dereplicated_genomes.len());
 
                 let list_of_genome_fasta_files = &dereplicated_genomes;
 
@@ -153,7 +153,7 @@ impl ReferenceReaderUtils {
             }
         };
 
-        debug!("Found genome_and_contigs {:?}", &genomes_and_contigs_option);
+        // debug!("Found genome_and_contigs {:?}", &genomes_and_contigs_option);
         return (concatenated_genomes, genomes_and_contigs_option);
     }
 
@@ -161,7 +161,7 @@ impl ReferenceReaderUtils {
         let references = match m.get_many::<String>("genome-fasta-files") {
             Some(vec) => {
                 let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
-                debug!("Reference files {:?}", reference_paths);
+                // debug!("Reference files {:?}", reference_paths);
                 reference_paths
             }
             None => match m.get_one::<String>("genome-fasta-directory") {
@@ -177,7 +177,7 @@ impl ReferenceReaderUtils {
                                 .to_string()
                         })
                         .collect::<Vec<String>>();
-                    debug!("Reference files {:?}", reference_paths);
+                    // debug!("Reference files {:?}", reference_paths);
                     reference_paths
                 }
                 None => panic!("Can't find suitable references for variant calling"),
@@ -203,17 +203,17 @@ impl ReferenceReaderUtils {
 
     pub fn generate_faidx(reference_path: &str) -> IndexedReader<File> {
         external_command_checker::check_for_samtools();
-        debug!("Generating reference index");
+        // debug!("Generating reference index");
         let cmd_string = format!(
             "set -e -o pipefail; \
                      samtools faidx {}",
             reference_path
         );
-        debug!("Queuing cmd_string: {}", cmd_string);
+        // debug!("Queuing cmd_string: {}", cmd_string);
         // check if {reference_path}.fai exists 
         let fai_path = format!("{}.fai", reference_path);
         if Path::new(&fai_path).exists() {
-            debug!("Found existing index file at {}", fai_path);
+            // debug!("Found existing index file at {}", fai_path);
             return IndexedReader::from_file(&reference_path).expect("Unable to generate index");
         }
 

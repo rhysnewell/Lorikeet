@@ -149,11 +149,11 @@ impl<'a> AssemblyRegionIterator<'a> {
             records = records.into_iter().take(max_input_depth).collect();
         }
 
-        debug!(
-            "Region {:?} No. reads {}",
-            &region.padded_span,
-            records.len()
-        );
+        // debug!(
+        //     "Region {:?} No. reads {}",
+        //     &region.padded_span,
+        //     records.len()
+        // );
         records.par_sort_unstable();
         region.add_all(records);
     }

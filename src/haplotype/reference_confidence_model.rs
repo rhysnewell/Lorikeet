@@ -21,13 +21,13 @@ impl ReferenceConfidenceModel {
         ref_bases: &[u8],
         padded_reference_loc: &SimpleInterval,
     ) -> Haplotype<L> {
-        debug!(
-            "Active region span {:?} padded ref loc {:?} start {} -> {}",
-            active_region.get_padded_span(),
-            padded_reference_loc,
-            active_region.get_padded_span().get_start(),
-            padded_reference_loc.get_start()
-        );
+        // debug!(
+        //     "Active region span {:?} padded ref loc {:?} start {} -> {}",
+        //     active_region.get_padded_span(),
+        //     padded_reference_loc,
+        //     active_region.get_padded_span().get_start(),
+        //     padded_reference_loc.get_start()
+        // );
         let alignment_start = active_region.get_padded_span().get_start() as i64
             - padded_reference_loc.get_start() as i64;
         if alignment_start < 0 {

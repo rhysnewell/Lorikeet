@@ -282,19 +282,19 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      * Since we want to duplicate non-unique kmers in the graph code we must determine what those kmers are
      */
     fn preprocess_reads<'a>(&mut self, pending: &LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>) {
-        debug!(
-            "All pending before preprocess {}",
-            Self::get_all_pending_sequences(pending).len()
-        );
+        // debug!(
+        //     "All pending before preprocess {}",
+        //     Self::get_all_pending_sequences(pending).len()
+        // );
         self.non_unique_kmers = self.determine_non_uniques(
             self.base_graph.get_kmer_size(),
             Self::get_all_pending_sequences(pending),
         );
-        debug!(
-            "All pending after preprocess {}",
-            Self::get_all_pending_sequences(pending).len()
-        );
-        debug!("Non-uniques {}", self.non_unique_kmers.len());
+        // debug!(
+        //     "All pending after preprocess {}",
+        //     Self::get_all_pending_sequences(pending).len()
+        // );
+        // debug!("Non-uniques {}", self.non_unique_kmers.len());
     }
 
     // whether reads are needed after graph construction
@@ -428,7 +428,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         // let pending = self.get_pending();
         // go through the pending sequences, and add them to the graph
         for (name, sequences_for_samples) in pending.iter() {
-            debug!("Sample {} reads {}", *name, sequences_for_samples.len());
+            // debug!("Sample {} reads {}", *name, sequences_for_samples.len());
             for sequence_for_kmers in sequences_for_samples.iter() {
                 self.thread_sequence(sequence_for_kmers);
                 if Self::WRITE_GRAPH {
@@ -444,22 +444,22 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                 }
                 self.counter += 1;
             }
-            debug!(
-                "Threaded {} Nodes {} Edges {}",
-                self.counter,
-                self.base_graph.graph.node_count(),
-                self.base_graph.graph.edge_count()
-            );
+            // debug!(
+            //     "Threaded {} Nodes {} Edges {}",
+            //     self.counter,
+            //     self.base_graph.graph.node_count(),
+            //     self.base_graph.graph.edge_count()
+            // );
             // flush the single sample edge values from the graph
             for e in self.base_graph.graph.edge_weights_mut() {
                 e.flush_single_sample_multiplicity()
             }
-            debug!(
-                "Flushed {} Nodes {} Edges {}",
-                self.counter,
-                self.base_graph.graph.node_count(),
-                self.base_graph.graph.edge_count()
-            );
+            // debug!(
+            //     "Flushed {} Nodes {} Edges {}",
+            //     self.counter,
+            //     self.base_graph.graph.node_count(),
+            //     self.base_graph.graph.edge_count()
+            // );
         }
 
         // self.replace_pending(&mut pending);
@@ -490,7 +490,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             }
             Some(start_pos) => {
                 if seq_for_kmers.sequence.len() <= start_pos + self.base_graph.get_kmer_size() {
-                    debug!("Sequence length {}", seq_for_kmers.sequence.len());
+                    // debug!("Sequence length {}", seq_for_kmers.sequence.len());
                     return;
                 }
                 let starting_vertex =
@@ -809,7 +809,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             )
         }
 
-        debug!("Recovered {} of {} dangling tails", n_recovered, attempted);
+        // debug!("Recovered {} of {} dangling tails", n_recovered, attempted);
     }
 
     /**
@@ -854,7 +854,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             )
         }
 
-        debug!("Recovered {} of {} dangling heads", n_recovered, attempted);
+        // debug!("Recovered {} of {} dangling heads", n_recovered, attempted);
     }
 
     /**

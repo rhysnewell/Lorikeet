@@ -75,9 +75,9 @@ impl<'a> HaplotypeClusteringEngine<'a> {
                 .set_message(format!("{}: Running UMAP and HDBSCAN...", self.ref_name,));
         }
         self.run_flight(file_name);
-        debug!("Flight complete.");
+        // debug!("Flight complete.");
         self.apply_clusters();
-        debug!("Variant groups tagged.");
+        // debug!("Variant groups tagged.");
 
         // variant groups organized into potential strains
         {
@@ -86,7 +86,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
                 .set_message(format!("{}: Linking variant groups...", self.ref_name,));
         }
 
-        debug!("separation {:?}", &self.cluster_separation);
+        // debug!("separation {:?}", &self.cluster_separation);
         let grouped_contexts = self.group_contexts();
 
         let linkage_engine = LinkageEngine::new(
@@ -102,7 +102,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             &format!("{}/{}", self.output_prefix, self.ref_name),
             flag_filters,
         );
-        debug!("Potential strains {:?}", potential_strains);
+        // debug!("Potential strains {:?}", potential_strains);
 
         (
             potential_strains.len(),
@@ -127,15 +127,15 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             }
         }
 
-        debug!("Number of groups {}", grouped_contexts.len());
+        // debug!("Number of groups {}", grouped_contexts.len());
 
         for (strain_idx, groups_in_strain) in potential_strains.into_iter().enumerate() {
-            debug!(
-                "Strain index {} groups in strain {:?}",
-                strain_idx, &groups_in_strain
-            );
+            // debug!(
+            //     "Strain index {} groups in strain {:?}",
+            //     strain_idx, &groups_in_strain
+            // );
             for group in groups_in_strain {
-                debug!("Group {}", group);
+                // debug!("Group {}", group);
                 let variant_contexts = grouped_contexts.entry(group).or_insert(Vec::new());
                 for vc in variant_contexts {
                     let vc_strain = vc
@@ -207,7 +207,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
 
     /// Writes out a variant by sample depth array from the provided collection of variant contexts
     fn prepare_depth_file(&self) -> String {
-        debug!("Writing depth file...");
+        // debug!("Writing depth file...");
         let file_name = format!("{}/{}", self.output_prefix, self.ref_name,);
         // ensure path exists
         create_dir_all(self.output_prefix).expect("Unable to create output directory");

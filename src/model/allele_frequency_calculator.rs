@@ -343,7 +343,7 @@ impl AlleleFrequencyCalculator {
             MathUtils::ebe_add_in_place(&mut log10_p_of_zero_counts_by_allele, &log10_p_no_allele);
         }
 
-        debug!("zero counts {:?}", &log10_p_of_zero_counts_by_allele);
+        // debug!("zero counts {:?}", &log10_p_of_zero_counts_by_allele);
         // for biallelic the allele-specific qual equals the variant qual, and we short-circuited the calculation above
         if num_alleles == 2 && !spanning_deletion_present {
             log10_p_of_zero_counts_by_allele[1] = log10_p_no_variant

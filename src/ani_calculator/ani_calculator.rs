@@ -67,7 +67,7 @@ impl ANICalculator {
         let compared_bases =
             self.calculate_compared_bases(passing_sites, genome_size, sample_names.len());
 
-        debug!("Comparable bases \n{:?}", &compared_bases);
+        // debug!("Comparable bases \n{:?}", &compared_bases);
         self.calculate_from_contexts(
             contexts,
             genome_size,
@@ -357,7 +357,7 @@ impl ANICalculator {
         table: &Array2<f64>,
         table_name: &str,
     ) {
-        debug!("Printing ani calculations {}", reference_name);
+        // debug!("Printing ani calculations {}", reference_name);
         let file_name = format!("{}/{}_{}.tsv", output_prefix, reference_name, table_name);
 
         let file_path = Path::new(&file_name);

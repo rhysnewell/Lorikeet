@@ -377,10 +377,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
         maximum_likelihood_difference_cap: f64,
         symmetrically_normalize_alleles_to_reference: bool,
     ) {
-        debug!(
-            "about to normalize with max cap {}",
-            maximum_likelihood_difference_cap
-        );
+        // debug!(
+        //     "about to normalize with max cap {}",
+        //     maximum_likelihood_difference_cap
+        // );
         if maximum_likelihood_difference_cap != f64::NEG_INFINITY {
             let allele_count = self.alleles.len();
             // debug!("Allele count {}", allele_count);
@@ -647,6 +647,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             new_allele_count,
             &old_to_new_allele_index_map,
         );
+        // debug!("new liklelihood values {:#?}", &new_likelihood_values);
 
         let _sample_count = self.number_of_samples();
         // debug!("new liklelihood values {:?}", &new_likelihood_values);
@@ -692,7 +693,8 @@ impl<A: Allele> AlleleLikelihoods<A> {
     ) -> Vec<Array2<f64>> {
         let sample_count = self.samples.len();
         let mut result = vec![Array2::zeros((0, 0)); sample_count];
-        debug!("new allele count {}", new_allele_count);
+        // debug!("old allele count {}", old_allele_count);
+        // debug!("new allele count {}", new_allele_count);
 
         for s in 0..sample_count {
             let old_sample_values = &self.values_by_sample_index[s];
@@ -758,15 +760,15 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .filter(|(_, read)| !predicate(read, interval))
                 .map(|(idx, _)| idx)
                 .collect::<Vec<usize>>();
-            debug!(
-                "Before remove {}",
-                self.evidence_by_sample_index.get(&s).unwrap().len()
-            );
+            // debug!(
+            //     "Before remove {}",
+            //     self.evidence_by_sample_index.get(&s).unwrap().len()
+            // );
             self.remove_evidence_by_index(s, remove_indices);
-            debug!(
-                "After remove {}",
-                self.evidence_by_sample_index.get(&s).unwrap().len()
-            );
+            // debug!(
+            //     "After remove {}",
+            //     self.evidence_by_sample_index.get(&s).unwrap().len()
+            // );
 
             // If applicable also apply the predicate to the filters
             self.filtered_evidence_by_sample_index
@@ -873,7 +875,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         new_alleles: Vec<&'b usize>,
     ) -> Vec<Option<usize>> {
         let mut old_to_new_allele_index_map = vec![None; old_allele_count];
-        debug!("New alleles {:?}", &new_alleles);
+        // debug!("New alleles {:?}", &new_alleles);
         for new_index in 0..new_alleles.len() {
             let new_allele = new_alleles[new_index];
             for old_allele in new_to_old_allele_map.get(new_allele).unwrap() {
@@ -923,17 +925,27 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 }
                 let sample_evidence = self.evidence_by_sample_index.get(&sample_index).unwrap();
                 let number_of_evidence = sample_evidence.len();
-                debug!("Number of evidences {}", number_of_evidence);
+                // debug!("Number of evidences {}", number_of_evidence);
                 indexes_to_remove = (0..number_of_evidence)
                     .into_iter()
                     .filter(|i| {
+
                         // debug!(
                         //     "read value {} and thresh {} ",
                         //     self.maximum_likelihood_over_all_alleles(sample_index, *i),
                         //     (log10_min_true_likelihood)(&sample_evidence[*i])
                         // );
-                        self.maximum_likelihood_over_all_alleles(sample_index, *i)
-                            < (log10_min_true_likelihood)(&sample_evidence[*i])
+                        let passes = self.maximum_likelihood_over_all_alleles(sample_index, *i)
+                            < (log10_min_true_likelihood)(&sample_evidence[*i]);
+                        if !passes {
+                            // debug!(
+                            //     "Evidence {} removed because it has a likelihood of {} threshold {}",
+                            //     std::str::from_utf8(&sample_evidence[*i].name()).unwrap(),
+                            //     self.maximum_likelihood_over_all_alleles(sample_index, *i),
+                            //     (log10_min_true_likelihood)(&sample_evidence[*i])
+                            // );
+                        }
+                        passes
                     })
                     .collect::<Vec<usize>>();
             }
@@ -950,7 +962,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             .entry(sample_index)
             .or_insert_with(Vec::new);
 
-        debug!("Evidences to remove {}", evidences_to_remove.len());
+        // debug!("Evidences to remove {}", evidences_to_remove.len());
         let num_to_remove = evidences_to_remove.len();
         if num_to_remove > 0 {
             let old_evidence_count = self.number_of_evidences[sample_index];

@@ -365,11 +365,11 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
     }
 
     pub fn remove_all(mut self, reads: &Vec<BirdToolRead>) -> Self {
-        debug!(
-            "remove {} of {} reads",
-            reads.len(),
-            self.region_for_genotyping.reads.len()
-        );
+        // debug!(
+        //     "remove {} of {} reads",
+        //     reads.len(),
+        //     self.region_for_genotyping.reads.len()
+        // );
         self.region_for_genotyping = self.region_for_genotyping.remove_all(reads);
         return self;
     }
@@ -398,10 +398,10 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         let original_by_trimmed_haplotypes =
             self.calculate_original_by_trimmed_haplotypes(&trimmed_assembly_region.padded_span);
 
-        debug!(
-            "Original by trimmed haplotypes {:?}",
-            &original_by_trimmed_haplotypes
-        );
+        // debug!(
+        //     "Original by trimmed haplotypes {:?}",
+        //     &original_by_trimmed_haplotypes
+        // );
         let mut new_assembly_result_by_haplotype = HashMap::new();
         let mut new_haplotypes = LinkedHashSet::new();
 
@@ -442,13 +442,13 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         &'b mut self,
         span: &SimpleInterval,
     ) -> BTreeMap<Haplotype<SimpleInterval>, Haplotype<SimpleInterval>> {
-        debug!(
-            "Trimming active region {:?} {} reads with {} hapotypes -> cigar 1 {}",
-            &self.region_for_genotyping.active_span,
-            &self.region_for_genotyping.reads.len(),
-            self.haplotypes.len(),
-            self.haplotypes.iter().next().unwrap().cigar.to_string()
-        );
+        // debug!(
+        //     "Trimming active region {:?} {} reads with {} hapotypes -> cigar 1 {}",
+        //     &self.region_for_genotyping.active_span,
+        //     &self.region_for_genotyping.reads.len(),
+        //     self.haplotypes.len(),
+        //     self.haplotypes.iter().next().unwrap().cigar.to_string()
+        // );
         let haplotype_list = self
             .haplotypes
             .iter()
@@ -487,8 +487,8 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
                         if h.is_ref() {
                             panic!("Trimming eliminated the reference haplotype");
                         };
-                        debug!("Throwing out haplotype {:?} with cigar {:?} becuase it starts with or ends \
-                    with an insertion or deletion when trimmed to {:?}", &h, &h.cigar, span);
+                    //     debug!("Throwing out haplotype {:?} with cigar {:?} becuase it starts with or ends \
+                    // with an insertion or deletion when trimmed to {:?}", &h, &h.cigar, span);
                     }
                 },
             }

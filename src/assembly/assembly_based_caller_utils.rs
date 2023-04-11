@@ -113,7 +113,7 @@ impl AssemblyBasedCallerUtils {
         };
 
         let original_reads = region.move_reads();
-        debug!("Original reads {}", original_reads.len());
+        // debug!("Original reads {}", original_reads.len());
 
         let mut reads_to_use = original_reads
             .into_par_iter()
@@ -309,12 +309,12 @@ impl AssemblyBasedCallerUtils {
             correct_overlapping_base_qualities,
             args.get_flag("soft-clip-low-quality-ends"),
         );
-        debug!(
-            "Assembling {:?} with {} reads:    (with overlap region = {:?})",
-            region.get_span(),
-            region.get_reads().len(),
-            region.get_padded_span()
-        );
+        // debug!(
+        //     "Assembling {:?} with {} reads:    (with overlap region = {:?})",
+        //     region.get_span(),
+        //     region.get_reads().len(),
+        //     region.get_padded_span()
+        // );
 
         let full_reference_with_padding = region
             .get_assembly_region_reference(
@@ -328,7 +328,7 @@ impl AssemblyBasedCallerUtils {
             Self::REFERENCE_PADDING_FOR_ASSEMBLY,
             &reference_reader,
         );
-        debug!("Padded reference location {:?}", &padded_reference_loc);
+        // debug!("Padded reference location {:?}", &padded_reference_loc);
         let mut ref_haplotype = Self::create_reference_haplotype(
             &region,
             &padded_reference_loc,

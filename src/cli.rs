@@ -66,14 +66,6 @@ fn add_mapping_options(manual: Manual) -> Manual {
                         &monospace_roff("minimap2-no-preset"),
                         &format!("minimap2 with no '{}' option", &monospace_roff("-x"))
                     ],
-                    &[
-                        &monospace_roff("ngmlr-ont"),
-                        &format!("ngmlr with '{}' option", &monospace_roff("-x ont"))
-                    ],
-                    &[
-                        &monospace_roff("ngmlr-pb"),
-                        &format!("ngmlr with '{}' option", &monospace_roff("-x pb"))
-                    ],
                 ])
             )))
             .option(Opt::new("NAME").long("--longread-mapper").help(&format!(
@@ -97,14 +89,6 @@ fn add_mapping_options(manual: Manual) -> Manual {
                         &monospace_roff("minimap2-no-preset"),
                         &format!("minimap2 with no '{}' option", &monospace_roff("-x"))
                     ],
-                    &[
-                        &monospace_roff("ngmlr-ont"),
-                        &format!("ngmlr with '{}' option", &monospace_roff("-x ont"))
-                    ],
-                    &[
-                        &monospace_roff("ngmlr-pb"),
-                        &format!("ngmlr with '{}' option", &monospace_roff("-x pb"))
-                    ],
                 ])
             )))
             .option(Opt::new("PARAMS").long("--minimap2-params").help(&format!(
@@ -121,13 +105,6 @@ fn add_mapping_options(manual: Manual) -> Manual {
             ))
             .option(Opt::new("PARAMS").long("--bwa-params").help(
                 "Extra parameters to provide to BWA or BWA-MEM2. Note \
-        that usage of this parameter has security \
-        implications if untrusted input is specified. \
-        [default: none] \n",
-            ))
-            .option(Opt::new("PARAMS").long("--ngmlr-params").help(
-                "Extra parameters to provide to NGMLR. \
-        --bam-fix, -x ont, -t are already set. Note \
         that usage of this parameter has security \
         implications if untrusted input is specified. \
         [default: none] \n",
@@ -300,8 +277,8 @@ fn reference_options() -> Section {
     Section::new("Input reference options")
         .option(
             Opt::new("PATH")
-                .short("-r")
-                .long("--reference")
+                .short("-r,-f")
+                .long("--reference,--genome-fasta-files")
                 .help(&format!(
                     "FASTA files of contigs e.g. concatenated \
                     genomes or metagenome assembly
@@ -317,7 +294,7 @@ fn reference_options() -> Section {
                     "Directory containing FASTA files of contigs e.g. \
                     genomes or metagenome assembly
                     [required unless {} is specified] \n",
-                    monospace_roff("-r/--reference")
+                    monospace_roff("-r/--reference/-f/--genome-fasta-files")
                 )),
         )
         .option(
@@ -1229,8 +1206,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("bam-files")
                         .short('b')
                         .long("bam-files")
-                        .action(clap::ArgAction::Append)
-                        .num_args(1..)
+                        .action(ArgAction::Append)
                         .num_args(1..),
                 )
                 .arg(
@@ -1248,7 +1224,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("read1")
                         .short('1')
                         .long("read1")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .requires("read2")
                         .required_unless_present_any(&[
@@ -1267,8 +1243,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("read2")
                         .short('2')
                         .long("read2")
-                        .action(clap::ArgAction::Append)
-                        .num_args(1..)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .requires("read1")
                         .required_unless_present_any(&[
@@ -1287,7 +1262,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("coupled")
                         .short('c')
                         .long("coupled")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -1304,7 +1279,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("interleaved")
                         .long("interleaved")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -1321,7 +1296,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("single")
                         .long("single")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -1338,7 +1313,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("longreads")
                         .long("longreads")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -1354,7 +1329,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("longread-bam-files")
                         .short('l').long("longread-bam-files")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -1370,9 +1345,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("genome-fasta-files")
                         .short('f')
+                        .short_alias('r')
                         .alias("reference")
                         .long("genome-fasta-files")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
@@ -1604,6 +1580,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("kmer-sizes")
                         .short('k')
                         .action(ArgAction::Append)
+                        .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
                         .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
                 )
@@ -1996,8 +1973,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("bam-files")
                         .short('b')
                         .long("bam-files")
-                        .action(clap::ArgAction::Append)
-                        .num_args(1..)
+                        .action(ArgAction::Append)
                         .num_args(1..),
                 )
                 .arg(
@@ -2015,7 +1991,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("read1")
                         .short('1')
                         .long("read1")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .requires("read2")
                         .required_unless_present_any(&[
@@ -2034,8 +2010,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("read2")
                         .short('2')
                         .long("read2")
-                        .action(clap::ArgAction::Append)
-                        .num_args(1..)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .requires("read1")
                         .required_unless_present_any(&[
@@ -2054,7 +2029,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("coupled")
                         .short('c')
                         .long("coupled")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2071,7 +2046,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("interleaved")
                         .long("interleaved")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2088,7 +2063,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("single")
                         .long("single")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2105,7 +2080,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("longreads")
                         .long("longreads")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2121,7 +2096,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("longread-bam-files")
                         .short('l').long("longread-bam-files")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2137,9 +2112,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("genome-fasta-files")
                         .short('f')
+                        .short_alias('r')
                         .alias("reference")
                         .long("genome-fasta-files")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
@@ -2371,6 +2347,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("kmer-sizes")
                         .short('k')
                         .action(ArgAction::Append)
+                        .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
                         .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
                 )
@@ -2757,7 +2734,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("bam-files")
                         .short('b')
                         .long("bam-files")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .num_args(1..),
                 )
@@ -2776,7 +2753,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("read1")
                         .short('1')
                         .long("read1")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .requires("read2")
                         .required_unless_present_any(&[
@@ -2795,8 +2772,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("read2")
                         .short('2')
                         .long("read2")
-                        .action(clap::ArgAction::Append)
-                        .num_args(1..)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .requires("read1")
                         .required_unless_present_any(&[
@@ -2815,7 +2791,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("coupled")
                         .short('c')
                         .long("coupled")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2832,7 +2808,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("interleaved")
                         .long("interleaved")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2849,7 +2825,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("single")
                         .long("single")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2866,7 +2842,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("longreads")
                         .long("longreads")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2882,7 +2858,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("longread-bam-files")
                         .short('l').long("longread-bam-files")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&[
                             "bam-files",
@@ -2898,9 +2874,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("genome-fasta-files")
                         .short('f')
+                        .short_alias('r')
                         .alias("reference")
                         .long("genome-fasta-files")
-                        .action(clap::ArgAction::Append)
+                        .action(ArgAction::Append)
                         .num_args(1..)
                         .required_unless_present_any(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
@@ -3132,6 +3109,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("kmer-sizes")
                         .short('k')
                         .action(ArgAction::Append)
+                        .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
                         .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
                 )

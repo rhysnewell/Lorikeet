@@ -117,7 +117,7 @@ impl TemporaryIndexStruct {
         // Some BWA versions output log info to stdout. Ignore this.
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
-        debug!("Running DB indexing command: {:?}", cmd);
+        // debug!("Running DB indexing command: {:?}", cmd);
 
         let mut process = cmd.spawn().expect(&format!(
             "Failed to start {:?} index process",
@@ -156,10 +156,10 @@ impl MappingIndex for TemporaryIndexStruct {
 }
 impl Drop for TemporaryIndexStruct {
     fn drop(&mut self) {
-        debug!(
-            "Dropping index tempdir {}",
-            self.tempdir.path().to_string_lossy()
-        )
+        // debug!(
+        //     "Dropping index tempdir {}",
+        //     self.tempdir.path().to_string_lossy()
+        // )
     }
 }
 

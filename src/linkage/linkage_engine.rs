@@ -79,9 +79,9 @@ impl<'a> LinkageEngine<'a> {
     ) -> Vec<LinkedHashSet<i32>> {
         let read_ids_in_groups =
             self.get_reads_for_groups(indexed_bam_readers, flag_filters, n_threads);
-        debug!("group mean read depths {:?}", &self.grouped_mean_read_depth);
+        // debug!("group mean read depths {:?}", &self.grouped_mean_read_depth);
         let graph = self.build_graph(read_ids_in_groups);
-        debug!("Graph {} {}", graph.node_count(), graph.edge_count());
+        // debug!("Graph {} {}", graph.node_count(), graph.edge_count());
         if log_enabled!(Level::Debug) {
             let output_dot = format!("{}_vg_graph.dot", output_path);
             let file_path = Path::new(&output_dot);
@@ -146,7 +146,7 @@ impl<'a> LinkageEngine<'a> {
             // compute the minimum spanning tree
             // let mut mst = Graph::from_elements(min_spanning_tree(&component_graph));
             let mut mst = StableGraph::from(component_graph.clone());
-            debug!("MST {:?}", &mst);
+            // debug!("MST {:?}", &mst);
             if log_enabled!(Level::Debug) {
                 let output_dot = format!("{}_mst_{}.dot", output_path, idx);
                 let file_path = Path::new(&output_dot);
@@ -215,12 +215,12 @@ impl<'a> LinkageEngine<'a> {
 
             // Turn the vec into a BinaryHeap
             let mut starting_nodes = BinaryHeap::from(starting_nodes_vec);
-            debug!(
-                "Starting nodes {:?} highest depth node {:?} weight {}",
-                &starting_nodes,
-                highest_depth_node,
-                mst.node_weight(highest_depth_node).unwrap()
-            );
+            // debug!(
+            //     "Starting nodes {:?} highest depth node {:?} weight {}",
+            //     &starting_nodes,
+            //     highest_depth_node,
+            //     mst.node_weight(highest_depth_node).unwrap()
+            // );
 
             // Can't have more strains than nodes in the tree
             let mut strains = Vec::with_capacity(mst.node_count());
@@ -236,7 +236,7 @@ impl<'a> LinkageEngine<'a> {
                 let current_node = current_node_info.1;
                 let _end_nodes_iter = end_nodes_vec.iter();
                 if !mst.contains_node(current_node) {
-                    debug!("Node {:?} already pruned, skipping...", current_node);
+                    // debug!("Node {:?} already pruned, skipping...", current_node);
                     continue;
                 }
 
@@ -277,15 +277,15 @@ impl<'a> LinkageEngine<'a> {
                 let depth_being_added_to_other_nodes =
                     current_depth - current_node_cumulative_depth;
 
-                debug!(
-                    "Paths {:?} current node {:?} closest sink {:?} depth {} cumulative depth {} detection {}",
-                    &paths,
-                    current_node,
-                    closest_node,
-                    current_depth,
-                    current_node_cumulative_depth,
-                    1.0 - (current_node_cumulative_depth / current_depth)
-                );
+                // debug!(
+                //     "Paths {:?} current node {:?} closest sink {:?} depth {} cumulative depth {} detection {}",
+                //     &paths,
+                //     current_node,
+                //     closest_node,
+                //     current_depth,
+                //     current_node_cumulative_depth,
+                //     1.0 - (current_node_cumulative_depth / current_depth)
+                // );
                 if paths.len() == 0 {
                     continue;
                 }
@@ -295,7 +295,7 @@ impl<'a> LinkageEngine<'a> {
                     && depth_being_added_to_other_nodes > 0.0)
                     || !seen_nodes.contains(mst.node_weight(current_node).unwrap())
                 {
-                    debug!("Potential new strain");
+                    // debug!("Potential new strain");
                     // let mut path = paths.into_iter().next().unwrap();
                     // check if any of the nodes in this path have been consumed entirely
                     let consumed_nodes = self.check_nodes_in_path(
@@ -343,7 +343,7 @@ impl<'a> LinkageEngine<'a> {
                         }
                     }
                 } else {
-                    debug!("Node below the water. Update cumulative depths...");
+                    // debug!("Node below the water. Update cumulative depths...");
                     if current_node != highest_depth_node {
                         // let mut path = paths.into_iter().next().unwrap();
                         paths.into_iter().enumerate().for_each(|(_idx, node)| {
@@ -527,10 +527,10 @@ impl<'a> LinkageEngine<'a> {
             // Only one strain shared the most nodes with this path, so easy merge
             let strain_to_merge_into = current_closest_strain_indices.into_iter().next().unwrap();
 
-            debug!(
-                "Merging vgs {:?} into strain {}",
-                &groups_in_path, strain_to_merge_into
-            );
+            // debug!(
+            //     "Merging vgs {:?} into strain {}",
+            //     &groups_in_path, strain_to_merge_into
+            // );
 
             // merge and update cumulative depths for unseen nodes
             self.merge_path_and_update_unseen(
@@ -543,10 +543,10 @@ impl<'a> LinkageEngine<'a> {
                 mst,
             );
         } else if current_closest_strain_indices.len() > 1 {
-            debug!(
-                "Multiple close strains: {}",
-                current_closest_strain_indices.len()
-            );
+            // debug!(
+            //     "Multiple close strains: {}",
+            //     current_closest_strain_indices.len()
+            // );
             let original_node_indices_for_new_path = groups_in_path
                 .iter()
                 .map(|group| self.node_weight_to_node_index(component_graph, group))
@@ -629,13 +629,13 @@ impl<'a> LinkageEngine<'a> {
             if max_edge_count >= previous_max_edge_count {
                 if max_edge_count == previous_max_edge_count {
                     if cumulative_edge_weights_max <= cumulative_edge_weights_previous {
-                        debug!(
-                            "using max edge count {} weights {}: Merging vgs {:?} into strain {}",
-                            max_edge_count,
-                            cumulative_edge_weights_max,
-                            &groups_in_path,
-                            index_of_max
-                        );
+                        // debug!(
+                        //     "using max edge count {} weights {}: Merging vgs {:?} into strain {}",
+                        //     max_edge_count,
+                        //     cumulative_edge_weights_max,
+                        //     &groups_in_path,
+                        //     index_of_max
+                        // );
 
                         // merge into this max
                         self.merge_path_and_update_unseen(
@@ -648,13 +648,13 @@ impl<'a> LinkageEngine<'a> {
                             mst,
                         );
                     } else {
-                        debug!(
-                            "using max edge count {} weights {}: Merging vgs {:?} into strain {}",
-                            previous_max_edge_count,
-                            cumulative_edge_weights_previous,
-                            &groups_in_path,
-                            index_of_previous
-                        );
+                        // debug!(
+                        //     "using max edge count {} weights {}: Merging vgs {:?} into strain {}",
+                        //     previous_max_edge_count,
+                        //     cumulative_edge_weights_previous,
+                        //     &groups_in_path,
+                        //     index_of_previous
+                        // );
                         // merge into previous max
                         self.merge_path_and_update_unseen(
                             path,
@@ -667,10 +667,10 @@ impl<'a> LinkageEngine<'a> {
                         );
                     }
                 } else {
-                    debug!(
-                        "using max edge count {} weights {}: Merging vgs {:?} into strain {}",
-                        max_edge_count, cumulative_edge_weights_max, &groups_in_path, index_of_max
-                    );
+                    // debug!(
+                    //     "using max edge count {} weights {}: Merging vgs {:?} into strain {}",
+                    //     max_edge_count, cumulative_edge_weights_max, &groups_in_path, index_of_max
+                    // );
                     self.merge_path_and_update_unseen(
                         path,
                         seen_nodes,
@@ -682,13 +682,13 @@ impl<'a> LinkageEngine<'a> {
                     );
                 }
             } else {
-                debug!(
-                    "using max edge count {} weights {}: Merging vgs {:?} into strain {}",
-                    previous_max_edge_count,
-                    cumulative_edge_weights_previous,
-                    &groups_in_path,
-                    index_of_previous
-                );
+                // debug!(
+                //     "using max edge count {} weights {}: Merging vgs {:?} into strain {}",
+                //     previous_max_edge_count,
+                //     cumulative_edge_weights_previous,
+                //     &groups_in_path,
+                //     index_of_previous
+                // );
                 // should never reach here?
                 self.merge_path_and_update_unseen(
                     path,
@@ -788,10 +788,10 @@ impl<'a> LinkageEngine<'a> {
                 || (&updated_depth > threshold && *node_cumulative_depth > 0.0)
             {
                 // more efficient than division
-                debug!(
-                    "Node at capacity {:?} vg {} cumulative depth {} capacity {}",
-                    node, variant_group, *node_cumulative_depth, *threshold
-                );
+                // debug!(
+                //     "Node at capacity {:?} vg {} cumulative depth {} capacity {}",
+                //     node, variant_group, *node_cumulative_depth, *threshold
+                // );
                 match &mut nodes_at_capacity {
                     None => nodes_at_capacity = Some(vec![*node]),
                     Some(nodes_at_capacity) => nodes_at_capacity.push(*node),
@@ -1113,12 +1113,12 @@ impl<'a> LinkageEngine<'a> {
                         if weight < 0.98 {
                             // variant groups connected by reads are favoured
 
-                            debug!(
-                                "{}:{} weight {} intersection {} union {}",
-                                group1, group2, weight, intersection, union
-                            );
+                            // debug!(
+                            //     "{}:{} weight {} intersection {} union {}",
+                            //     group1, group2, weight, intersection, union
+                            // );
                             weight = weight + weight * depth_factor;
-                            debug!("updated weight {}", weight);
+                            // debug!("updated weight {}", weight);
                             if depth_1 > depth_2 {
                                 graph.add_edge(node1, node2, weight);
                             } else {
@@ -1126,12 +1126,12 @@ impl<'a> LinkageEngine<'a> {
                             }
                         } else if under_sep_thresh {
                             let mut weight = self.cluster_separations[[ind1, ind2]];
-                            debug!(
-                                "{}:{} weight {} intersection {} union {} under sep {}",
-                                group1, group2, weight, intersection, union, under_sep_thresh
-                            );
+                            // debug!(
+                            //     "{}:{} weight {} intersection {} union {} under sep {}",
+                            //     group1, group2, weight, intersection, union, under_sep_thresh
+                            // );
                             weight = weight + weight * depth_factor;
-                            debug!("updated weight {}", weight);
+                            // debug!("updated weight {}", weight);
                             if depth_1 > depth_2 {
                                 graph.add_edge(node1, node2, weight);
                             } else {

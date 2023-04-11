@@ -100,7 +100,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
         false => {
             let tmp_direct = tempdir::TempDir::new("lorikeet_fifo")
                 .expect("Unable to create temporary directory");
-            debug!("Temp directory {}", tmp_direct.as_ref().to_str().unwrap());
+            // debug!("Temp directory {}", tmp_direct.as_ref().to_str().unwrap());
             std::fs::create_dir(format!("{}/long", &tmp_direct.as_ref().to_str().unwrap()))
                 .unwrap();
             std::fs::create_dir(format!("{}/short", &tmp_direct.as_ref().to_str().unwrap()))
@@ -118,7 +118,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
 
     let (concatenated_genomes, genomes_and_contigs_option) =
         ReferenceReaderUtils::setup_genome_fasta_files(&m);
-    debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
+    // debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
     if m.contains_id("bam-files") {
         let bam_files: Vec<&str> = m.get_many::<String>("bam-files").unwrap().map(|s| &**s).collect();
 
@@ -234,7 +234,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
         external_command_checker::check_for_samtools();
 
         if filter_params.doing_filtering() {
-            debug!("Filtering..");
+            // debug!("Filtering..");
             let readtype = ReadType::Short;
             let generator_sets = get_streamed_filtered_bam_readers(
                 m,
@@ -253,7 +253,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     all_generators.push(g)
                 }
             }
-            debug!("Finished collecting generators.");
+            // debug!("Finished collecting generators.");
             if m.contains_id("longread-bam-files") {
                 let bam_files = m.get_many::<String>("longread-bam-files").unwrap().map(|s| &**s).collect();
                 let long_readers =
@@ -300,7 +300,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 );
             }
         } else {
-            debug!("Not filtering..");
+            // debug!("Not filtering..");
             let readtype = ReadType::Short;
             let generator_sets = get_streamed_bam_readers(
                 m,

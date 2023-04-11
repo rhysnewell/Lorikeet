@@ -1,4 +1,4 @@
-use num::traits::Float;
+use num::traits::{Float, AsPrimitive};
 use rayon::prelude::*;
 use std::cmp::{max, min};
 
@@ -30,8 +30,9 @@ impl QualityUtils {
      * @param qual a phred-scaled quality score encoded as a double
      * @return log of probability (0.0-1.0)
      */
-    pub fn qual_to_error_prob_log10(qual: u8) -> f64 {
-        (qual as f64) * -0.1
+    pub fn qual_to_error_prob_log10<P: AsPrimitive<f64>>(qual: P) -> f64 {
+        let float_val = qual.as_();
+        float_val * -0.1
     }
 
     pub fn qual_to_prob_log10(qual: u8) -> f64 {

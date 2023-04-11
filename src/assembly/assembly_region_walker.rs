@@ -127,7 +127,7 @@ impl AssemblyRegionWalker {
         let limiting_interval = IntervalUtils::parse_limiting_interval(args);
         match features {
             Some(indexed_vcf_reader) => {
-                debug!("Attempting to extract features...");
+                // debug!("Attempting to extract features...");
 
                 let contexts = pending_regions
                     .into_par_iter()
@@ -169,7 +169,7 @@ impl AssemblyRegionWalker {
                             //     }
                             // }
 
-                            debug!("Feature variants {:?}", &feature_variants);
+                            // debug!("Feature variants {:?}", &feature_variants);
 
                             assembly_region_iter.fill_next_assembly_region_with_reads(
                                 &mut assembly_region,
@@ -238,7 +238,7 @@ impl AssemblyRegionWalker {
                                     Vec::new()
                                 };
 
-                            debug!("Filling with reads...");
+                            // debug!("Filling with reads...");
                             assembly_region_iter.fill_next_assembly_region_with_reads(
                                 &mut assembly_region,
                                 flag_filters,
@@ -277,7 +277,7 @@ fn retrieve_feature_variants(
     assembly_region: &AssemblyRegion,
 ) -> Vec<VariantContext> {
     let mut indexed_vcf_reader = VariantContext::retrieve_indexed_vcf_file(indexed_vcf_reader);
-    debug!("Retrieved indexed VCF...");
+    // debug!("Retrieved indexed VCF...");
 
     let vcf_rid = VariantContext::get_contig_vcf_tid(
         indexed_vcf_reader.header(),
@@ -285,7 +285,7 @@ fn retrieve_feature_variants(
             .retrieve_contig_name_from_tid(assembly_region.get_contig())
             .unwrap(),
     );
-    debug!("VCF Rid {:?}", &vcf_rid);
+    // debug!("VCF Rid {:?}", &vcf_rid);
 
     match vcf_rid {
         Some(rid) => VariantContext::process_vcf_in_region(

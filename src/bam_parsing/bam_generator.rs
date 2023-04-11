@@ -242,11 +242,11 @@ pub struct StreamingNamedBamReaderGenerator {
 
 impl NamedBamReaderGenerator<StreamingNamedBamReader> for StreamingNamedBamReaderGenerator {
     fn start(self) -> StreamingNamedBamReader {
-        debug!("Starting mapping processes");
+        // debug!("Starting mapping processes");
         let mut processes = vec![];
         let mut i = 0;
         for mut preprocess in self.pre_processes {
-            debug!("Running mapping command: {}", self.command_strings[i]);
+            // debug!("Running mapping command: {}", self.command_strings[i]);
             i += 1;
             processes.push(preprocess.spawn().expect("Unable to execute bash"));
         }
@@ -292,18 +292,18 @@ pub fn complete_processes(
     let mut failed_any = false;
     let mut overall_stderrs = vec![];
     for mut process in processes {
-        debug!("Finishing process...");
+        // debug!("Finishing process...");
         let es = process
             .wait()
             .expect("Failed to glean exitstatus from mapping process");
-        debug!("Finshed {:?}", es.success());
+        // debug!("Finshed {:?}", es.success());
         let failed = !es.success();
         if failed || log_enabled!(log::Level::Debug) {
             if failed {
                 failed_any = true;
                 error!("Error when running mapping process. Exitstatus was {:?}. Command run was: {:?}", es, command_strings);
             } else {
-                debug!("Successfully finished process {:?}", process);
+                // debug!("Successfully finished process {:?}", process);
             }
             let mut err = String::new();
             process
@@ -311,7 +311,7 @@ pub fn complete_processes(
                 .expect("Failed to grab stderr from failed mapping process")
                 .read_to_string(&mut err)
                 .expect("Failed to read stderr into string");
-            debug!("The overall STDERR was: {:?}", err);
+            // debug!("The overall STDERR was: {:?}", err);
             overall_stderrs.push(err);
         }
     }
@@ -324,20 +324,20 @@ pub fn complete_processes(
             if failed_any {
                 error!("The STDERR for the {:} part was: {}", description, contents);
             } else {
-                debug!("The STDERR for the {:} part was: {}", description, contents);
+                // debug!("The STDERR for the {:} part was: {}", description, contents);
             }
         }
     }
     if failed_any {
         panic!("Cannot continue since mapping failed.");
     }
-    debug!("Process finished without error.");
+    // debug!("Process finished without error.");
 
     // There's (maybe) a (difficult to reproduce) single-thread issue where the
     // tempdir gets dropped before the process is finished. Hopefully putting a
     // compiler fence here stops this.
     compiler_fence(Ordering::SeqCst);
-    debug!("After fence, for tempdir {:?}", tempdir);
+    // debug!("After fence, for tempdir {:?}", tempdir);
 }
 
 impl NamedBamReader for StreamingNamedBamReader {
@@ -548,7 +548,7 @@ pub fn generate_named_bam_readers_from_reads(
         // Caching (or not)
         cached_bam_file_args
     );
-    debug!("Queuing cmd_string: {}", cmd_string);
+    // debug!("Queuing cmd_string: {}", cmd_string);
     let mut cmd = std::process::Command::new("bash");
     cmd.arg("-c")
         .arg(&cmd_string)
@@ -738,7 +738,7 @@ impl NamedBamReaderGenerator<StreamingFilteredNamedBamReader>
     for StreamingFilteredNamedBamReaderGenerator
 {
     fn start(self) -> StreamingFilteredNamedBamReader {
-        debug!("Starting mapping processes");
+        // debug!("Starting mapping processes");
         let mut processes = vec![];
         for mut preprocess in self.pre_processes {
             processes.push(preprocess.spawn().expect("Unable to execute bash"));
@@ -807,10 +807,10 @@ impl NamedBamReader for StreamingFilteredNamedBamReader {
     }
 
     fn finish(self) {
-        debug!(
-            "Finishing StreamingFilteredNamedBamReader. Tempdir is {:?}",
-            self.tempdir.path()
-        );
+        // debug!(
+        //     "Finishing StreamingFilteredNamedBamReader. Tempdir is {:?}",
+        //     self.tempdir.path()
+        // );
         complete_processes(
             self.processes,
             self.command_strings,
@@ -973,7 +973,7 @@ pub fn generate_bam_maker_generator_from_reads(
             .to_str()
             .expect("Failed to convert tempfile path to str")
     );
-    debug!("Queuing cmd_string: {}", cmd_string);
+    // debug!("Queuing cmd_string: {}", cmd_string);
     let mut cmd = std::process::Command::new("bash");
     cmd.arg("-c")
         .arg(&cmd_string)
@@ -1009,11 +1009,11 @@ pub fn generate_bam_maker_generator_from_reads(
 
 impl NamedBamReaderGenerator<NamedBamMaker> for NamedBamMakerGenerator {
     fn start(self) -> NamedBamMaker {
-        debug!("Starting mapping processes");
+        // debug!("Starting mapping processes");
         let mut processes = vec![];
         let mut i = 0;
         for mut preprocess in self.pre_processes {
-            debug!("Running mapping command: {}", self.command_strings[i]);
+            // debug!("Running mapping command: {}", self.command_strings[i]);
             i += 1;
             processes.push(preprocess.spawn().expect("Unable to execute bash"));
         }
@@ -1035,7 +1035,7 @@ impl NamedBamMaker {
     pub fn complete(&self) {}
 
     pub fn finish(self) {
-        debug!("Finishing NamedBamMaker...");
+        // debug!("Finishing NamedBamMaker...");
         complete_processes(
             self.processes,
             self.command_strings,

@@ -25,7 +25,6 @@ use crate::assembly::assembly_region_walker::AssemblyRegionWalker;
 use crate::reference::reference_reader_utils::GenomesAndContigs;
 use crate::external_command_checker::{check_for_bcftools, check_for_svim};
 use crate::haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
-use crate::model::fst_calculator::calculate_fst;
 use crate::model::variant_context::VariantContext;
 use crate::model::variant_context_utils::VariantContextUtils;
 use crate::processing::bams::index_bams::*;
@@ -34,6 +33,8 @@ use crate::reference::reference_reader_utils::ReferenceReaderUtils;
 use crate::reference::reference_writer::ReferenceWriter;
 use crate::utils::errors::BirdToolError;
 use crate::utils::utils::get_cleaned_sample_names;
+#[cfg(feature = "fst")]
+use crate::model::fst_calculator::calculate_fst;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -117,6 +118,7 @@ impl<'a> LorikeetEngine<'a> {
                 };
                 let genomes_and_contigs = self.genomes_and_contigs.clone();
 
+                #[cfg(feature = "fst")]
                 let ploidy = *self.args.get_one::<usize>("ploidy").unwrap();
 
                 let output_prefix = format!(
@@ -166,7 +168,8 @@ impl<'a> LorikeetEngine<'a> {
                                     &multi_inner,
                                     "Calculating evolutionary rates...",
                                 );
-
+                                
+                                #[cfg(feature = "fst")]
                                 let depth_per_sample_filter: i64 = *self
                                     .args
                                     .get_one::<i64>("depth-per-sample-filter")
@@ -438,6 +441,7 @@ impl<'a> LorikeetEngine<'a> {
                         .unwrap()
                         / -10.0;
 
+                    #[cfg(feature = "fst")]
                     let vcf_path = format!(
                         "{}/{}.vcf",
                         &output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx]
@@ -1212,9 +1216,12 @@ pub fn run_summarize(args: &clap::ArgMatches) {
         let reader = rust_htslib::bcf::Reader::from_path(vcf_path).unwrap();
         let header = reader.header();
         let mut variant_contexts = VariantContext::process_vcf_from_path(vcf_path, true);
+
+        #[cfg(feature = "fst")]
         let mut ploidy = 2;
 
         // workout ploidy
+        #[cfg(feature = "fst")]
         match variant_contexts.first_mut() {
             Some(record) => ploidy = record.genotypes.get_max_ploidy(2),
             None => {}
@@ -1251,6 +1258,7 @@ pub fn run_summarize(args: &clap::ArgMatches) {
             depth_per_sample_filter,
         );
 
+        #[cfg(feature = "fst")]
         calculate_fst(
             output_prefix,
             Path::new(vcf_path).file_stem().unwrap().to_str().unwrap(),
@@ -1297,7 +1305,7 @@ fn check_for_gff(
             &reference,
             m.get_one::<String>("prodigal-params").map(|s| &**s).unwrap_or_else(|| ""),
         );
-        debug!("Queuing cmd_string: {}", cmd_string);
+        // debug!("Queuing cmd_string: {}", cmd_string);
         finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")

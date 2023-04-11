@@ -281,7 +281,7 @@ impl AssemblyRegion {
     ) -> AssemblyRegion {
         let new_active_span = self.get_span().intersect(&span);
         let new_padded_span = self.get_padded_span().intersect(&padded_span);
-        debug!("new padded span {:?}", &new_padded_span);
+        // debug!("new padded span {:?}", &new_padded_span);
         let mut result = AssemblyRegion::new_with_padded_span(
             new_active_span,
             new_padded_span.clone(),
@@ -449,7 +449,7 @@ impl AssemblyRegion {
             reference_reader.update_current_sequence_without_capacity();
             // Update all contig information
 
-            debug!("Fetching interval... {:?}", &interval);
+            // debug!("Fetching interval... {:?}", &interval);
             reference_reader.fetch_reference_context(self.ref_idx, &interval);
             reference_reader.read_sequence_to_vec();
             reference_reader.current_sequence =

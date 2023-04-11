@@ -158,7 +158,7 @@ impl SmithWatermanAligner {
                         top_row[i] = current_value;
                     }
                 }
-                debug!("Top row values {:?}", &sw.row(0));
+                // debug!("Top row values {:?}", &sw.row(0));
 
                 // initialize the first column
                 {
@@ -171,7 +171,7 @@ impl SmithWatermanAligner {
                 }
                 // sw.column_mut(0)
                 //     .accumulate_axis_inplace(Axis(0), |&prev, curr| *curr = prev + current_value);
-                debug!("first column values {:?}", &sw.column(0));
+                // debug!("first column values {:?}", &sw.column(0));
             }
             _ => {
                 // pass

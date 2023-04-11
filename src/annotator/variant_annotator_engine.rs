@@ -38,11 +38,11 @@ impl VariantAnnotationEngine {
         let mut builder = VariantContext::build_from_vc(vc);
         // genotype context annotation here
         builder.genotypes = Self::add_genotype_annotations(&mut builder, read_likelihoods);
-        debug!(
-            "genotypes {:?} empty {}",
-            &builder.genotypes,
-            builder.genotypes.is_empty()
-        );
+        // debug!(
+        //     "genotypes {:?} empty {}",
+        //     &builder.genotypes,
+        //     builder.genotypes.is_empty()
+        // );
         let info_annot_map =
             Self::add_info_annotations(&mut builder, read_likelihoods, add_annotation);
 

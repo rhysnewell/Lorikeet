@@ -102,14 +102,14 @@ impl ReferenceSortedBamFilter {
         else {
             if self.known_next_read.is_none() {
                 while self.reader.read(&mut record) == Some(Ok(())) {
-                    debug!("record: {:?}", record);
+                    // debug!("record: {:?}", record);
 
-                    debug!(
-                        "passed flags, {} {} {}",
-                        record.is_secondary(),
-                        record.is_supplementary(),
-                        !record.is_proper_pair()
-                    );
+                    // debug!(
+                    //     "passed flags, {} {} {}",
+                    //     record.is_secondary(),
+                    //     record.is_supplementary(),
+                    //     !record.is_proper_pair()
+                    // );
 
                     if !record.is_supplementary() && !record.is_secondary() {
                         self.num_detected_primary_alignments += 1;
@@ -153,7 +153,7 @@ impl ReferenceSortedBamFilter {
 
                     match self.first_set.remove(&qname) {
                         None => {
-                            debug!("Processing qname1 {}", qname);
+                            // debug!("Processing qname1 {}", qname);
                             if record.mtid() == self.current_reference {
                                 // if tlen is +ve and < threshold
                                 // add to first read set
@@ -171,7 +171,7 @@ impl ReferenceSortedBamFilter {
                             }
                         }
                         Some(record1) => {
-                            debug!("Testing qname2 {}", qname);
+                            // debug!("Testing qname2 {}", qname);
                             // if filtering single and paired reads then
                             // both must pass QC, as well as the pair
                             // together.
@@ -197,16 +197,16 @@ impl ReferenceSortedBamFilter {
                             if (passes_filter && self.filter_out)
                                 || (!passes_filter && !self.filter_out)
                             {
-                                debug!("Read pair passed QC");
+                                // debug!("Read pair passed QC");
                                 self.known_next_read = Some(record.clone());
                                 record.clone_from(
                                     &Arc::try_unwrap(record1)
                                         .expect("Cannot get strong ARC pointer"),
                                 );
-                                debug!("Returning..");
+                                // debug!("Returning..");
                                 return Some(Ok(()));
                             } else {
-                                debug!("Read pair did not pass QC");
+                                // debug!("Read pair did not pass QC");
                             }
                         }
                     }
@@ -251,13 +251,13 @@ fn single_read_passes_filter(
         }
     }
 
-    debug!(
-        "num_bases {}, distance {}, perc id {}, percent aligned {}",
-        aligned,
-        edit_distance1,
-        1.0 - edit_distance1 as f32 / aligned as f32,
-        aligned as f32 / record.seq().len() as f32
-    );
+    // debug!(
+    //     "num_bases {}, distance {}, perc id {}, percent aligned {}",
+    //     aligned,
+    //     edit_distance1,
+    //     1.0 - edit_distance1 as f32 / aligned as f32,
+    //     aligned as f32 / record.seq().len() as f32
+    // );
 
     return aligned >= min_aligned_length_single
         && aligned as f32 / record.seq().len() as f32 >= min_aligned_percent_single
@@ -294,15 +294,15 @@ fn read_pair_passes_filter(
     }
 
     let aligned = aligned_length1 + aligned_length2;
-    debug!(
-        "num_bases {} {}, edit distances {} {}, perc id {}, percent aligned {}",
-        aligned_length1,
-        aligned_length2,
-        edit_distance1,
-        edit_distance2,
-        1.0 - ((edit_distance1 + edit_distance2) as f32 / aligned as f32),
-        aligned as f32 / ((record1.seq().len() + record2.seq().len()) as f32)
-    );
+    // debug!(
+    //     "num_bases {} {}, edit distances {} {}, perc id {}, percent aligned {}",
+    //     aligned_length1,
+    //     aligned_length2,
+    //     edit_distance1,
+    //     edit_distance2,
+    //     1.0 - ((edit_distance1 + edit_distance2) as f32 / aligned as f32),
+    //     aligned as f32 / ((record1.seq().len() + record2.seq().len()) as f32)
+    // );
 
     return aligned >= min_aligned_length_pair
         && aligned as f32 / (record1.seq().len() + record2.seq().len()) as f32

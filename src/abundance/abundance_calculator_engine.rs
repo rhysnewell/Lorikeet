@@ -63,7 +63,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             &per_sample_reference_presence,
         );
 
-        debug!("Strain presences {:?}", &strain_presences);
+        // debug!("Strain presences {:?}", &strain_presences);
 
         let mut abundance_vectors;
         loop {
@@ -74,15 +74,15 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                 strain_id_key.insert(abundance_index, *strain_index);
             }
 
-            debug!(
-                "Populating sample_vec with genotypes... {:?}",
-                &abundance_key,
-            );
+            // debug!(
+            //     "Populating sample_vec with genotypes... {:?}",
+            //     &abundance_key,
+            // );
 
-            debug!(
-                "Per sample reference presences {:?}",
-                &per_sample_reference_presence
-            );
+            // // debug!(
+            //     "Per sample reference presences {:?}",
+            //     &per_sample_reference_presence
+            // );
 
             let capacity = self.variant_contexts.len() * 2;
 
@@ -96,10 +96,10 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                 })
                 .collect::<Vec<Vec<StrainAbundanceCalculator>>>();
 
-            debug!(
-                "Number of genotypes {} and genotype vectors {:?}",
-                n_strains, abundance_vectors
-            );
+            // debug!(
+            //     "Number of genotypes {} and genotype vectors {:?}",
+            //     n_strains, abundance_vectors
+            // );
 
             for (sample_index, sample_vector) in abundance_vectors.iter_mut().enumerate() {
                 let mut vi = 0; // variant index
@@ -278,15 +278,15 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                 }
             }
 
-            debug!("Calculating abundances...");
+            // debug!("Calculating abundances...");
 
             abundance_vectors
                 .par_iter_mut()
                 .enumerate()
                 .for_each(|(idx, sample_calculators)| {
-                    debug!("Genotype Vector before EM {} {:?}", idx, sample_calculators);
+                    // debug!("Genotype Vector before EM {} {:?}", idx, sample_calculators);
                     StrainAbundanceCalculator::calculate_abundances(sample_calculators, eps);
-                    debug!("Genotype Vector after EM {} {:?}", idx, sample_calculators);
+                    // debug!("Genotype Vector after EM {} {:?}", idx, sample_calculators);
                 });
 
             // Vector of counters for each genotype
@@ -317,7 +317,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         })
                 });
 
-            debug!("strain removal counts {:?}", &strains_to_remove);
+            // debug!("strain removal counts {:?}", &strains_to_remove);
 
             for (strain_index, count) in strains_to_remove.into_iter().enumerate() {
                 if count == n_samples {
@@ -350,7 +350,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             if !something_removed {
                 break;
             } else {
-                debug!("Something removed, rerunning abundance calculations");
+                // debug!("Something removed, rerunning abundance calculations");
             }
         }
 
@@ -377,7 +377,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
     // }
 
     fn print_strain_coverages(&self, abundance_vectors: Vec<Vec<StrainAbundanceCalculator>>) {
-        debug!("Printing strain coverages {}", self.reference_name);
+        // debug!("Printing strain coverages {}", self.reference_name);
         let file_name = format!(
             "{}/{}_strain_coverages.tsv",
             self.output_prefix, self.reference_name,
@@ -437,7 +437,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
     }
 
     pub fn print_single_strain_coverage(&self) {
-        debug!("Printing strain coverages {}", self.reference_name);
+        // debug!("Printing strain coverages {}", self.reference_name);
         let file_name = format!(
             "{}/{}_strain_coverages.tsv",
             self.output_prefix, self.reference_name,

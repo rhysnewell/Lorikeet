@@ -139,10 +139,10 @@ impl PairHMMLikelihoodCalculationEngine {
         modify_soft_clipped_bases: bool,
         avx_mode: AVXMode,
     ) -> PairHMMLikelihoodCalculationEngine {
-        assert!(
-            base_quality_score_threshold >= QualityUtils::MIN_USABLE_Q_SCORE,
-            "base_quality_score_threshold must be greater than or equal to 6"
-        );
+        // assert!(
+        //     base_quality_score_threshold >= QualityUtils::MIN_USABLE_Q_SCORE,
+        //     "base_quality_score_threshold must be greater than or equal to 6"
+        // );
 
         let mut result = PairHMMLikelihoodCalculationEngine {
             // constant_gcp,

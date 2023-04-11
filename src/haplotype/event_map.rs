@@ -99,7 +99,7 @@ impl EventMap {
         let mut alignment_pos = 0;
         for cigar_index in 0..cigar.0.len() {
             let ce = &cigar.0[cigar_index];
-            // debug!("Cigar {:?}", ce);
+            // // debug!("Cigar {:?}", ce);
 
             match ce {
                 Cigar::Ins(len) => {
@@ -238,7 +238,7 @@ impl EventMap {
             };
         }
 
-        debug!("Found {} events", proposed_events.len());
+        // debug!("Found {} events", proposed_events.len());
         for proposed_event in proposed_events {
             // debug!("Adding event {:?}", &proposed_event);
             self.add_vc(proposed_event, true)
@@ -369,7 +369,7 @@ impl EventMap {
     {
         // Using the cigar from each called haplotype figure out what events need to be written out in a VCF file
         let mut hap_number = 0;
-        debug!("=== Best Haplotypes ===");
+        // debug!("=== Best Haplotypes ===");
         // let debug = ref_loc.get_start() <= 1102345 && ref_loc.get_end() >= 1102335;
         let mut start_pos_key_set = BTreeSet::new();
         for h in haplotypes.into_iter() {
@@ -399,9 +399,9 @@ impl EventMap {
                 }
             }
 
-            debug!("{:?}", &h.genome_location);
-            debug!("> Cigar {:?}", &h.cigar);
-            debug!(">> Events = {:?}", &h.event_map);
+            // debug!("{:?}", &h.genome_location);
+            // debug!("> Cigar {:?}", &h.cigar);
+            // debug!(">> Events = {:?}", &h.event_map);
         }
 
         return Ok(start_pos_key_set);

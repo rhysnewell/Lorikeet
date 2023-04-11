@@ -123,7 +123,7 @@ impl HaplotypeCallerEngine {
             Some(vals) => vals
                 .map(|k_size| *k_size)
                 .collect::<Vec<usize>>(),
-            _ => vec![10, 25],
+            _ => vec![17, 25],
         };
 
         let mut assembly_engine = ReadThreadingAssembler::new(
@@ -273,7 +273,7 @@ impl HaplotypeCallerEngine {
             .unwrap();
 
         let limiting_interval = IntervalUtils::parse_limiting_interval(m);
-        debug!("Limiting {:?}", &limiting_interval);
+        // debug!("Limiting {:?}", &limiting_interval);
 
         let ploidy: usize = max(
             *m.get_one::<usize>("ploidy").unwrap(),
@@ -749,9 +749,7 @@ impl HaplotypeCallerEngine {
                     // we need to check each position in
                     // these cigars
                     for _ in 0..*len as usize {
-                        // if pos == 97055 {
-                        //     count += 1;
-                        // }
+                        
                         if pos < bound_start {
                             // read not within bounds yet
                             read_cursor += 1;
@@ -849,7 +847,7 @@ impl HaplotypeCallerEngine {
                             chunk_location.start + i * inner_chunk_size,
                             chunk_location.end + i * inner_chunk_size,
                         );
-                        debug!("Position limit {:?}", &position_limit);
+                        // debug!("Position limit {:?}", &position_limit);
                         position_limit.overlaps(limit)
                     }
                     None => true,
@@ -860,14 +858,14 @@ impl HaplotypeCallerEngine {
                         self.active_region_evaluation_genotyper_engine.clone();
 
                     // Create bandpass
-                    debug!("Created bandpass profile");
-                    debug!(
-                        "Calculating activity on {} of {:?} {} {}",
-                        tid,
-                        chunk_location,
-                        positions[0],
-                        positions.last().unwrap()
-                    );
+                    // debug!("Created bandpass profile");
+                    // debug!(
+                    //     "Calculating activity on {} of {:?} {} {}",
+                    //     tid,
+                    //     chunk_location,
+                    //     positions[0],
+                    //     positions.last().unwrap()
+                    // );
                     let mut activity_profile = BandPassActivityProfile::new(
                         max_prob_propagation,
                         active_prob_threshold,
@@ -973,12 +971,12 @@ impl HaplotypeCallerEngine {
                             None => 0.0,
                         };
 
-                        debug!(
-                            "{}-{} Active Prob {}",
-                            chunk_location.start + pos,
-                            chunk_location.start + pos,
-                            is_active_prob
-                        );
+                        // debug!(
+                        //     "{}-{} Active Prob {}",
+                        //     chunk_location.start + pos,
+                        //     chunk_location.start + pos,
+                        //     is_active_prob
+                        // );
 
                         let activity_profile_state = ActivityProfileState::new(
                             SimpleInterval::new(
@@ -1028,7 +1026,7 @@ impl HaplotypeCallerEngine {
             })
             .collect::<Vec<(Vec<VariantContext>, Vec<Vec<i32>>)>>();
 
-        debug!("Finished {} of length {}", tid, length);
+        // debug!("Finished {} of length {}", tid, length);
 
         Ok(variant_contexts)
     }
@@ -1050,30 +1048,30 @@ impl HaplotypeCallerEngine {
         flag_filters: &'b FlagFilter,
     ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
-        debug!(
-            "Region of size {} with {} reads",
-            region.padded_span.size(),
-            region.reads.len()
-        );
+        // debug!(
+        //     "Region of size {} with {} reads",
+        //     region.padded_span.size(),
+        //     region.reads.len()
+        // );
         if !region.is_active() && given_alleles.is_empty() {
-            debug!("Region was not active");
+            // debug!("Region was not active");
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
         if given_alleles.is_empty() && region.len() == 0 {
-            debug!("Region was of length 0");
+            // debug!("Region was of length 0");
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
         // let debug = region.padded_span.start <= 1709882 && region.padded_span.end >= 1709882;
 
         // if debug {
-        debug!(
-            "loc {:?} padded Loc {:?} reads {}",
-            &region.active_span,
-            &region.padded_span,
-            region.reads.len()
-        );
+        // debug!(
+        //     "loc {:?} padded Loc {:?} reads {}",
+        //     &region.active_span,
+        //     &region.padded_span,
+        //     region.reads.len()
+        // );
         // }
         let region_without_reads = region.clone_without_reads();
 
@@ -1102,11 +1100,11 @@ impl HaplotypeCallerEngine {
             }
         };
 
-        debug!(
-            "Region {:?} All variation events  {:?}",
-            &untrimmed_assembly_result.padded_reference_loc,
-            &all_variation_events.len()
-        );
+        // debug!(
+        //     "Region {:?} All variation events  {:?}",
+        //     &untrimmed_assembly_result.padded_reference_loc,
+        //     &all_variation_events.len()
+        // );
 
         let mut trimming_result = self.assembly_region_trimmer.trim(
             self.ref_idx,
@@ -1120,7 +1118,7 @@ impl HaplotypeCallerEngine {
                 .as_slice(),
         );
 
-        debug!("Trim complete!");
+        // debug!("Trim complete!");
 
         if !trimming_result.is_variation_present() && !args.get_flag("disable-optimizations") {
             return self.reference_model_for_no_variation(
@@ -1130,20 +1128,20 @@ impl HaplotypeCallerEngine {
             );
         }
 
-        debug!("Moving reads....");
+        // debug!("Moving reads....");
         trimming_result.original_region.reads =
             untrimmed_assembly_result.region_for_genotyping.move_reads();
-        debug!(
-            "Move complete! {}",
-            trimming_result.original_region.reads.len()
-        );
+        // debug!(
+        //     "Move complete! {}",
+        //     trimming_result.original_region.reads.len()
+        // );
         let assembly_result =
             untrimmed_assembly_result.trim_to(trimming_result.get_variant_region());
 
-        debug!(
-            "Assembly result allele order after region trimming {:?}",
-            &assembly_result.haplotypes
-        );
+        // debug!(
+        //     "Assembly result allele order after region trimming {:?}",
+        //     &assembly_result.haplotypes
+        // );
 
         let read_stubs = assembly_result
             .region_for_genotyping
@@ -1156,11 +1154,11 @@ impl HaplotypeCallerEngine {
             .cloned()
             .collect::<Vec<BirdToolRead>>();
         let assembly_result = assembly_result.remove_all(&read_stubs);
-        debug!(
-            "Assembly result allele order after stub filter {:?} -> read stubs {}",
-            &assembly_result.haplotypes.len(),
-            read_stubs.len()
-        );
+        // debug!(
+        //     "Assembly result allele order after stub filter {:?} -> read stubs {}",
+        //     &assembly_result.haplotypes.len(),
+        //     read_stubs.len()
+        // );
 
         // filter out reads from genotyping which fail mapping quality based criteria
         //TODO - why don't do this before any assembly is done? Why not just once at the beginning of this method
@@ -1170,11 +1168,11 @@ impl HaplotypeCallerEngine {
         let (mut assembly_result, filtered_reads) =
             self.filter_non_passing_reads(assembly_result, flag_filters);
         // let filtered_reads = Vec::new();
-        debug!("Filtered reads {}", filtered_reads.len());
-        debug!(
-            "Assembly result allele order after read filter {:?}",
-            &assembly_result.haplotypes.len()
-        );
+        // debug!("Filtered reads {}", filtered_reads.len());
+        // debug!(
+        //     "Assembly result allele order after read filter {:?}",
+        //     &assembly_result.haplotypes.len()
+        // );
         let per_sample_filtered_read_list =
             AssemblyBasedCallerUtils::split_reads_by_sample(filtered_reads);
 
@@ -1186,50 +1184,50 @@ impl HaplotypeCallerEngine {
             );
         };
 
-        debug!("==========================================================================");
-        debug!(
-            "              Assembly region {:?} \n\
-                           Alleles {:?}",
-            &assembly_result.region_for_genotyping, &assembly_result.haplotypes
-        );
-        debug!("==========================================================================");
+        // debug!("==========================================================================");
+        // debug!(
+        //     "              Assembly region {:?} \n\
+        //                    Alleles {:?}",
+        //     &assembly_result.region_for_genotyping, &assembly_result.haplotypes
+        // );
+        // debug!("==========================================================================");
         let reads = AssemblyBasedCallerUtils::split_reads_by_sample(
             assembly_result.region_for_genotyping.move_reads(),
         );
 
-        debug!(
-            "Before change: {}",
-            reads.values().map(|r| r.len()).sum::<usize>()
-        );
+        // debug!(
+        //     "Before change: {}",
+        //     reads.values().map(|r| r.len()).sum::<usize>()
+        // );
         let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
             .likelihood_calculation_engine
             .compute_read_likelihoods(&mut assembly_result, sample_names.to_vec(), reads);
 
         // if debug {
-        debug!(
-            "Read by sample after compute: {:?}",
-            (0..sample_names.len())
-                .map(|s| read_likelihoods.sample_evidence_count(s))
-                .collect::<Vec<usize>>()
-        );
+        // debug!(
+        //     "Read by sample after compute: {:?}",
+        //     (0..sample_names.len())
+        //         .map(|s| read_likelihoods.sample_evidence_count(s))
+        //         .collect::<Vec<usize>>()
+        // );
         // }
 
-        debug!(
-            "Read likelihoods first {:?} {:?} {:?}",
-            read_likelihoods.alleles.len(),
-            read_likelihoods
-                .alleles
-                .list
-                .iter()
-                .map(|a| a.is_ref())
-                .collect::<Vec<bool>>(),
-            read_likelihoods
-                .alleles
-                .list
-                .iter()
-                .map(|a| std::str::from_utf8(a.get_bases()).unwrap())
-                .collect::<Vec<&str>>()
-        );
+        // debug!(
+        //     "Read likelihoods first {:?} {:?} {:?}",
+        //     read_likelihoods.alleles.len(),
+        //     read_likelihoods
+        //         .alleles
+        //         .list
+        //         .iter()
+        //         .map(|a| a.is_ref())
+        //         .collect::<Vec<bool>>(),
+        //     read_likelihoods
+        //         .alleles
+        //         .list
+        //         .iter()
+        //         .map(|a| std::str::from_utf8(a.get_bases()).unwrap())
+        //         .collect::<Vec<&str>>()
+        // );
         if read_likelihoods.alleles.len() == 1 {
             return self.reference_model_for_no_variation(
                 &mut assembly_result.region_for_genotyping,
@@ -1251,18 +1249,18 @@ impl HaplotypeCallerEngine {
         read_likelihoods.change_evidence(read_alignments);
 
         // if debug {
-        debug!(
-            "After change {:?}",
-            (0..sample_names.len())
-                .map(|s| read_likelihoods.sample_evidence_count(s))
-                .collect::<Vec<usize>>()
-        );
-        // }
+        // debug!(
+        //     "After change {:?}",
+        //     (0..sample_names.len())
+        //         .map(|s| read_likelihoods.sample_evidence_count(s))
+        //         .collect::<Vec<usize>>()
+        // );
+        // // }
 
-        debug!(
-            "Read likelihoods after change evidence {:?}",
-            read_likelihoods.alleles.len()
-        );
+        // debug!(
+        //     "Read likelihoods after change evidence {:?}",
+        //     read_likelihoods.alleles.len()
+        // );
 
         // Note: we used to subset down at this point to only the "best" haplotypes in all samples for genotyping, but there
         //  was a bad interaction between that selection and the marginalization that happens over each event when computing
@@ -1408,37 +1406,7 @@ impl HaplotypeCallerEngine {
             );
         }
 
-        // if debug {
-        //     println!(
-        //         "{} {} {} {} {} {} {} {:?}",
-        //         std::str::from_utf8(record.qname()).unwrap(),
-        //         is_alt,
-        //         if !(alignment.is_del || alignment.is_refskip) {
-        //             record.seq()[*qpos.as_ref().unwrap()].to_ascii_uppercase() != refr_base.to_ascii_uppercase()
-        //         } else { true },
-        //         if !(alignment.is_del || alignment.is_refskip) {
-        //             Self::next_to_soft_clip_or_indel(
-        //                 record,
-        //                 *qpos.as_ref().unwrap(),
-        //                 None,
-        //                 false,
-        //                 Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
-        //             )
-        //         } else { true },
-        //         if !(alignment.is_del || alignment.is_refskip) {
-        //             Self::next_to_soft_clip_or_indel(
-        //                 record,
-        //                 *qpos.as_ref().unwrap(),
-        //                 None,
-        //                 true,
-        //                 Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
-        //             )
-        //         } else { true },
-        //         refr_base as char,
-        //         record.seq()[*qpos.as_ref().unwrap()] as char,
-        //         &qpos
-        //     );
-        // }
+        
         // add hq soft clips if possible
         if is_alt && Self::next_to_soft_clip(record, cig_index, alignment.qpos) {
             // TODO: Counts are different to GATK. hq soft clips seems to cap out
@@ -1783,7 +1751,7 @@ impl HaplotypeCallerEngine {
     ) {
         header.push_record(format!("##source=lorikeet-v{}", env!("CARGO_PKG_VERSION")).as_bytes());
 
-        debug!("samples {:?}", &sample_names);
+        // debug!("samples {:?}", &sample_names);
         for sample_idx in 0..sample_names.len() {
             // remove tmp file name from sample id
             header.push_record(
