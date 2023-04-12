@@ -407,11 +407,11 @@ fn variant_calling_section_basic() -> Section {
         .option(Opt::new("INT ..").long("--kmer-sizes").short("-k").help(
             "K-mer sizes used to generate DeBruijn Graphs. \
                      Multiple values at once are accepted and encouraged \
-                     e.g. 10 25 [default: 10 25] \n",
+                     e.g. 17 21 [default: 17 21] \n",
         ))
         .option(Opt::new("INT").long("--ploidy").help(
             "Sets the default ploidy for the analysis to N. \
-                    [default: 1] \n",
+                    [default: 2] \n",
         ))
         .flag(
             Flag::new()
@@ -599,11 +599,11 @@ fn variant_calling_options_advanced() -> Section {
         )
         .option(Opt::new("INT").long("--min-dangling-branch-length").help(
             "Minimum length of a dangling branch to \
-                     attempt recovery. [default: 4] \n",
+                     attempt recovery. [default: 1] \n",
         ))
         .option(Opt::new("INT").long("--min-prune-factor").help(
             "Minimum support to not prune paths in the graph. \
-                     [default: 2] \n",
+                     [default: 1] \n",
         ))
         .flag(Flag::new().long("--use-adaptive-pruning").help(
             "Use more advanced pruning algorithm to prune paths in
@@ -757,7 +757,7 @@ pub fn genotype_full_help() -> Manual {
         Example::new()
             .text("Map paired reads to a reference and generate genotypes")
             .command(
-                "lorikeet genotype --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 10 25 51",
+                "lorikeet genotype --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 17 25 51",
             ),
     );
     manual = manual.example(
@@ -1136,12 +1136,12 @@ See lorikeet genotype --full-help for further options and further detail.
 
 {}
 
-  lorikeet call --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 10 25
+  lorikeet call --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 17 25
 
 {}
 
   lorikeet genotype --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
-    --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10 --kmer-sizes 10 25
+    --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10 --kmer-sizes 17 25
 
 See lorikeet genotype --full-help for further options and further detail.
 ",
@@ -1582,7 +1582,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["17", "21"]), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -1627,7 +1627,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-dangling-branch-length")
                         .long("min-dangling-branch-length")
                         .value_parser(clap::value_parser!(i32))
-                        .default_value("4"),
+                        .default_value("1"),
                 )
                 .arg(
                     Arg::new("graph-output")
@@ -1650,7 +1650,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-prune-factor")
                         .long("min-prune-factor")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("2"),
+                        .default_value("1"),
                 )
                 .arg(Arg::new("use-adaptive-pruning").long("use-adaptive-pruning").action(clap::ArgAction::SetTrue))
                 .arg(
@@ -1929,7 +1929,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("ploidy")
                         .long("ploidy")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("1"),
+                        .default_value("2"),
                 )
                 .arg(
                     Arg::new("calculate-dnds")
@@ -2349,7 +2349,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["17", "21"]), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -2394,7 +2394,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-dangling-branch-length")
                         .long("min-dangling-branch-length")
                         .value_parser(clap::value_parser!(i32))
-                        .default_value("4"),
+                        .default_value("1"),
                 )
                 .arg(
                     Arg::new("graph-output")
@@ -2417,7 +2417,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-prune-factor")
                         .long("min-prune-factor")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("2"),
+                        .default_value("1"),
                 )
                 .arg(Arg::new("use-adaptive-pruning").long("use-adaptive-pruning").action(clap::ArgAction::SetTrue))
                 .arg(
@@ -2690,7 +2690,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("ploidy")
                         .long("ploidy")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("1"),
+                        .default_value("2"),
                 )
                 .arg(
                     Arg::new("calculate-dnds")
@@ -3111,7 +3111,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["10", "25"]), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["17", "21"]), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -3156,7 +3156,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-dangling-branch-length")
                         .long("min-dangling-branch-length")
                         .value_parser(clap::value_parser!(i32))
-                        .default_value("4"),
+                        .default_value("1"),
                 )
                 .arg(
                     Arg::new("graph-output")
@@ -3179,7 +3179,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-prune-factor")
                         .long("min-prune-factor")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("2"),
+                        .default_value("1"),
                 )
                 .arg(Arg::new("use-adaptive-pruning").long("use-adaptive-pruning").action(clap::ArgAction::SetTrue))
                 .arg(
@@ -3452,7 +3452,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("ploidy")
                         .long("ploidy")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("1"),
+                        .default_value("2"),
                 )
                 .arg(
                     Arg::new("calculate-dnds")

@@ -3,11 +3,6 @@
     non_snake_case
 )]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::assembly::assembly_result::{AssemblyResult, Status};
 use lorikeet_genome::assembly::assembly_result_set::AssemblyResultSet;
@@ -15,12 +10,8 @@ use lorikeet_genome::graphs::base_edge::BaseEdgeStruct;
 use lorikeet_genome::graphs::seq_graph::SeqGraph;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::byte_array_allele::Allele;
-use lorikeet_genome::read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
-use lorikeet_genome::reads::cigar_builder::CigarBuilder;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::test_utils::random_dna::RandomDNA;
-use lorikeet_genome::utils::errors::BirdToolError::CigarBuilderError;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
 use rand::rngs::ThreadRng;
 use rust_htslib::bam::record::Cigar;
@@ -67,7 +58,7 @@ fn test_trim_to(
         original_location.get_start() + (length) / 2,
         original_location.get_end() - (length) / 2,
     );
-    let mut new_region = original.trim_with_padded_span(new_location.clone(), new_location.clone());
+    let new_region = original.trim_with_padded_span(new_location.clone(), new_location.clone());
 
     let mut original_haplotypes_by_trimmed = HashMap::new();
     for h in haplotype_and_result_sets.keys().cloned() {
@@ -84,13 +75,13 @@ fn test_trim_to(
 
 #[test]
 fn trimming_data() {
-    let mut rng = ThreadRng::default();
-    let mut active_region =
+    let rng = ThreadRng::default();
+    let active_region =
         AssemblyRegion::new(SimpleInterval::new(0, 1000, 1100), true, 25, 1000000, 0, 0);
     let length = active_region.get_padded_span().size();
     let mut rnd = RandomDNA::new(rng);
     let reference = rnd.next_bases(length);
-    let mut reference_bases = reference.as_bytes().to_vec();
+    let reference_bases = reference.as_bytes().to_vec();
     let mut ref_hap = Haplotype::new(reference.as_bytes(), true);
     ref_hap.set_genome_location(active_region.get_padded_span());
     ref_hap.set_cigar(vec![Cigar::Match(reference_bases.len() as u32)]);

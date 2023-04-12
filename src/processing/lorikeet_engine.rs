@@ -1072,14 +1072,12 @@ pub fn start_lorikeet_engine<
     debug!("Parsing reference info...done. ({} references)", references.len());
     let references = references.par_iter().map(|p| &**p).collect::<Vec<&str>>();
     debug!("Retrieving references...");
+    let concatenated_temp_file_name = match concatenated_genomes {
+        Some(ref file) => file.path().to_str().unwrap().to_string(),
+        None => "".to_string(),
+    };
     ReferenceReaderUtils::retrieve_reference(&Some(
-        concatenated_genomes
-            .as_ref()
-            .unwrap()
-            .path()
-            .to_str()
-            .unwrap()
-            .to_string(),
+        concatenated_temp_file_name.clone(),
     ));
 
     // All different counts of samples I need. Changes depends on when using concatenated genomes or not
@@ -1185,6 +1183,13 @@ pub fn start_lorikeet_engine<
 
         lorikeet_engine.apply_per_reference();
     }
+
+    // cleanup temp files .fai index file
+    if Path::new(format!("{}.fai", concatenated_temp_file_name).as_str()).exists() {
+        std::fs::remove_file(format!("{}.fai", concatenated_temp_file_name).as_str())
+            .expect("Failed to remove temp file");
+    }
+
     Ok(())
 }
 

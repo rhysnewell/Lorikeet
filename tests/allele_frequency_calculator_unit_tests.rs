@@ -81,7 +81,7 @@ fn test_symmetries() {
         FAIRLY_CONFIDENT_PL,
         sample,
     );
-    sample += 1;
+    // sample += 1;
 
     let switch_b_with_c_pairs = vec![
         (
@@ -110,7 +110,7 @@ fn test_symmetries() {
         ),
     ];
 
-    for (i, pair) in switch_b_with_c_pairs.into_iter().enumerate() {
+    for (_, pair) in switch_b_with_c_pairs.into_iter().enumerate() {
         let vc1 = pair.0;
         let vc2 = pair.1;
         let result1 = af_calc.calculate(vc1, DEFAULT_PLOIDY);
@@ -150,8 +150,8 @@ fn test_MLE_counts() {
     let BB =
         genotype_with_obvious_call(DIPLOID, TRIALLELIC, vec![1, 2], FAIRLY_CONFIDENT_PL, sample);
     sample += 1;
-    let CC =
-        genotype_with_obvious_call(DIPLOID, TRIALLELIC, vec![2, 2], FAIRLY_CONFIDENT_PL, sample);
+    // let CC =
+    //     genotype_with_obvious_call(DIPLOID, TRIALLELIC, vec![2, 2], FAIRLY_CONFIDENT_PL, sample);
     sample += 1;
     let AB = genotype_with_obvious_call(
         DIPLOID,
@@ -185,7 +185,7 @@ fn test_MLE_counts() {
         FAIRLY_CONFIDENT_PL,
         sample,
     );
-    sample += 1;
+    // sample += 1;
 
     let vc_with_expected_counts = vec![
         (
@@ -229,7 +229,7 @@ fn test_MLE_counts() {
         ),
     ];
 
-    for (i, pair) in vc_with_expected_counts.into_iter().enumerate() {
+    for (_, pair) in vc_with_expected_counts.into_iter().enumerate() {
         let vc = pair.0;
         let expected = pair.1;
         let actual = af_calc
@@ -254,7 +254,7 @@ fn test_many_samples_with_low_confidence() {
     // for five samples we should have one
     // for ten samples we will have more than twice as many as for five since the counts fromt he samples start to influence
     // the estimated allele frequency
-    let mut AB =
+    let AB =
         genotype_with_obvious_call(DIPLOID, BIALLELIC, vec![0, 1, 1, 1], FAIRLY_CONFIDENT_PL, 0);
 
     let vcs_with_different_numbers_of_samples = (1..11)
@@ -280,7 +280,7 @@ fn test_many_very_confident_samples() {
     let mut af_calc = AlleleFrequencyCalculator::new(1.0, 1.0, 1.0, DEFAULT_PLOIDY);
     let alleles = vec![A.clone(), B.clone(), C.clone()];
 
-    let mut AC = genotype_with_obvious_call(
+    let AC = genotype_with_obvious_call(
         DIPLOID,
         TRIALLELIC,
         vec![0, 1, 2, 1],
@@ -327,12 +327,12 @@ fn test_approximate_multiplicative_confidence() {
     sample += 1;
     let BB =
         genotype_with_obvious_call(DIPLOID, TRIALLELIC, vec![1, 2], FAIRLY_CONFIDENT_PL, sample);
-    sample += 1;
+    // sample += 1;
 
     let mut vcs_with_different_numbers_of_samples = Vec::new();
     let mut genotype_list = Vec::new();
 
-    for n in 0..10 {
+    for _ in 0..10 {
         genotype_list.push(AA.clone());
         genotype_list.push(BB.clone()); //adding both keeps the flat prior.  Thus the posterior will equal the likelihood
         vcs_with_different_numbers_of_samples.push(make_vc(alleles.clone(), genotype_list.clone()));
@@ -340,7 +340,7 @@ fn test_approximate_multiplicative_confidence() {
 
     // since we maintain a flat allele frequency distribution, the probability of being ref as each successive sample is added
     // is multiplied by the probability of any one.  Thus we get an arithmetic series in log space
-    let mut log10_p_refs = vcs_with_different_numbers_of_samples
+    let log10_p_refs = vcs_with_different_numbers_of_samples
         .into_iter()
         .map(|vc| {
             af_calc
@@ -378,7 +378,7 @@ fn test_many_ref_samples_dont_kill_good_variant() {
         EXTREMELY_CONFIDENT_PL,
         sample,
     );
-    sample += 1;
+    // sample += 1;
 
     for num_ref in vec![1, 10, 100, 1000, 10000, 100000] {
         let mut genotype_list = vec![AA.clone(); num_ref];
@@ -409,7 +409,7 @@ fn test_spanning_deletion_is_not_considered_variant() {
     let span_del = make_genotype(ploidy, sample, span_del_pls);
     sample += 1;
     let low_qual_snp = make_genotype(ploidy, sample, low_qual_snp_pls);
-    sample += 1;
+    // sample += 1;
 
     // first test the span del genotype alone.  Its best PL containing the SNP is 100, so we expect a variant probability
     // of about 10^(-100/10) -- a bit less due to the prior bias in favor of the reference
@@ -472,7 +472,7 @@ fn test_spanning_deletion_is_not_considered_variant() {
             make_genotype(1, sample + 1, haploid_ref_pls_without_span_del),
         ],
     );
-    sample += 2;
+    // sample += 2;
     let no_span_del_qual_score = af_calc
         .calculate(vc_no_span_del, ploidy)
         .log10_prob_variant_present();
@@ -525,14 +525,14 @@ fn test_spanning_deletion_with_very_unlikely_alt_allele() {
         10000, 10000,
     ];
     let vc = make_vc(alleles, vec![make_genotype(ploidy, 0, pls)]);
-    let log10_p_variant = af_calc.calculate(vc, ploidy).log10_prob_variant_present();
+    let _log10_p_variant = af_calc.calculate(vc, ploidy).log10_prob_variant_present();
 }
 
 #[test]
 fn test_single_sample_biallelic_shortcut() {
     // in the haploid case, if the AF calc has equal pseudocounts of ref and alt, the posterior is proportional to the likelihoods:
     for pseudo_count in vec![1.0, 5.0, 10.0] {
-        let mut af_calc = AlleleFrequencyCalculator::new(
+        let af_calc = AlleleFrequencyCalculator::new(
             pseudo_count,
             pseudo_count,
             pseudo_count,
@@ -549,7 +549,7 @@ fn test_single_sample_biallelic_shortcut() {
 
     // in the diploid case, we roughly multiply the prior by the likelihoods -- it's not exact because the allele frequency is a random variable and not a single value
     for heterozygosity in vec![0.1, 0.01, 0.001] {
-        let mut af_calc = AlleleFrequencyCalculator::new(
+        let af_calc = AlleleFrequencyCalculator::new(
             100.0,
             100.0 * heterozygosity,
             100.0 * heterozygosity,

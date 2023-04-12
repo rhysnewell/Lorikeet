@@ -249,7 +249,7 @@ pub fn generate_minimap2_index(
 
 pub fn generate_concatenated_fasta_file(fasta_file_paths: &Vec<String>) -> NamedTempFile {
     let tmpfile: NamedTempFile = Builder::new()
-        .prefix("coverm-concatenated-fasta")
+        .prefix("lorikeet-concatenated-fasta")
         .tempfile()
         .unwrap();
     let mut something_written_at_all = false;

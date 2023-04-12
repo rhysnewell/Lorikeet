@@ -165,12 +165,12 @@ fn test_assembly_region_reads(loc: SimpleInterval, read: BirdToolRead) {
     assert_eq!(region.len(), 1);
     assert_eq!(&region.get_padded_span(), &loc);
 
-    let mut region = region.remove_all(&dummy_reads);
+    let region = region.remove_all(&dummy_reads);
     assert_eq!(region.get_reads(), &dummy_reads_with_one);
     assert_eq!(region.len(), 1);
     assert_eq!(&region.get_padded_span(), &loc);
 
-    let mut region = region.remove_all(&dummy_reads_with_one);
+    let region = region.remove_all(&dummy_reads_with_one);
     assert_eq!(region.get_reads(), &dummy_reads);
     assert_eq!(region.len(), 0);
     assert_eq!(&region.get_padded_span(), &loc);
@@ -183,11 +183,11 @@ fn test_assembly_region_reads(loc: SimpleInterval, read: BirdToolRead) {
 fn make_assembly_region_reads() {
     println!("Assembly region reading in ref...");
 
-    let mut ref_reader = ReferenceReader::new_with_target_names(
-        &Some(b37_reference_20_21.to_string()),
-        GenomesAndContigs::new(),
-        vec![b"20", b"21"],
-    );
+    // let mut ref_reader = ReferenceReader::new_with_target_names(
+    //     &Some(b37_reference_20_21.to_string()),
+    //     GenomesAndContigs::new(),
+    //     vec![b"20", b"21"],
+    // );
 
     for start in vec![0, 10, 100, *CONTIG_LEN as i64 - 10, *CONTIG_LEN as i64 - 1] {
         for read_start_offset in vec![-100, -10, 0, 10, 100] {
@@ -295,9 +295,9 @@ fn test_trim_assembly_region(
     extension: usize,
     desired_span: SimpleInterval,
     expected_assembly_region: SimpleInterval,
-    expected_extension: usize,
+    _expected_extension: usize,
 ) {
-    let mut region = AssemblyRegion::new(region_loc, true, extension, *CONTIG_LEN, 0, 0);
+    let region = AssemblyRegion::new(region_loc, true, extension, *CONTIG_LEN, 0, 0);
     let trimmed = region.trim_with_padded_span(desired_span.clone(), desired_span.clone());
     assert_eq!(
         trimmed.get_span(),

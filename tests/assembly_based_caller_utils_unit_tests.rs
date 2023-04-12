@@ -5,8 +5,6 @@
 
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate approx;
 
 use gkl::smithwaterman::Parameters;
 use hashlink::LinkedHashMap;
@@ -19,16 +17,10 @@ use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
 use lorikeet_genome::model::variant_context::{VariantContext, VariantType};
 use lorikeet_genome::processing::lorikeet_engine::ReadType;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
-};
+use lorikeet_genome::smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
 use lorikeet_genome::test_utils::variant_context_test_utils::VariantContextTestUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use rust_htslib::bam::record::{Cigar, CigarString};
 use rust_htslib::{bam, bam::Read};
-use std::collections::HashMap;
-use std::convert::TryFrom;
-
 lazy_static! {
     static ref HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS: Parameters = *NEW_SW_PARAMETERS;
 }
@@ -43,7 +35,7 @@ fn test_finalize_region() {
     let header = SimpleInterval::new(0, 1, 100000000);
     // NOTE: These reads are mates that overlap one-another without agreement which means they should have modified base qualities after calling finalize()
     //       Read2 has a clean cigar, and thus will not be copied by the clipping code before being fed to the overlapping bases code. This test asserts that its still copied.
-    let mut bam =
+    let bam =
         bam::Reader::from_path("tests/resources/small/test_finalize_region_reads.sam").unwrap();
     let bam_header = bam::Header::from_template(bam.header());
     // let bam_header = bam::Header::new();
@@ -62,7 +54,7 @@ fn test_finalize_region() {
     let org_read1 = bam::Record::from_sam(&mut bam::HeaderView::from_header(&bam_header), "HWI-ST807:461:C2P0JACXX:4:2204:18080:5857\t83\t1\t42596803\t39\t1S95M5S\t=\t42596891\t-7\tGAATCATCATCAAATGGAATCTAATGGAATCATTGAACAGAATTGAATGGAATCGTCATCGAATGAATTGAATGCAATCATCGAATGGTCTCGAATAGAAT\tDAAAEDCFCCGEEDDBEDDDGCCDEDECDDFDCEECCFEECDCEDBCDBDBCC>DCECC>DBCDDBCBDDBCDDEBCCECC>DBCDBDBGC?FCCBDB>>?".as_bytes()).unwrap();
     let org_read2 = bam::Record::from_sam(&mut bam::HeaderView::from_header(&bam_header), "HWI-ST807:461:C2P0JACXX:4:2204:18080:5857\t163\t1\t42596891\t39\t101M\t=\t42596803\t7\tCTCGAATGGAATCATTTTCTACTGGAAAGGAATGGAATCATCGCATAGAATCGAATGGAATTAACATGGAATGGAATCGAATGTAATCATCATCAAATGGA\t>@>:ABCDECCCEDCBBBDDBDDEBCCBEBBCBEBCBCDDCD>DECBGCDCF>CCCFCDDCBABDEDFCDCDFFDDDG?DDEGDDFDHFEGDDGECB@BAA".as_bytes()).unwrap();
 
-    let mut reads = vec![
+    let reads = vec![
         BirdToolRead::new(org_read1.clone(), 0, ReadType::Short),
         BirdToolRead::new(org_read2.clone(), 0, ReadType::Short),
     ];
@@ -119,7 +111,7 @@ fn get_vcs_at_this_location_from_given_alleles_data() {
         ByteArrayAllele::new(b"A", true),
         ByteArrayAllele::new(b"G", false),
     ];
-    let mut snp_vc_builder = VariantContext::build(20, 1000, 1000, snp_alleles);
+    let snp_vc_builder = VariantContext::build(20, 1000, 1000, snp_alleles);
     snp_haplotype.set_event_map(EventMap::state_for_testing(vec![snp_vc_builder.clone()]));
 
     // this one matches the snp haplotype above (to test duplicate removal)
@@ -129,12 +121,12 @@ fn get_vcs_at_this_location_from_given_alleles_data() {
         ByteArrayAllele::new(b"A", true),
         ByteArrayAllele::new(b"G", false),
     ];
-    let mut snp_vc_builder2 = VariantContext::build(20, 1000, 1000, snp_alleles2);
+    let snp_vc_builder2 = VariantContext::build(20, 1000, 1000, snp_alleles2);
     let snp_alleles3 = vec![
         ByteArrayAllele::new(b"T", true),
         ByteArrayAllele::new(b"A", false),
     ];
-    let mut snp_vc_builder3 = VariantContext::build(20, 1020, 1020, snp_alleles3);
+    let snp_vc_builder3 = VariantContext::build(20, 1020, 1020, snp_alleles3);
     snp_haplotype_duplicate.set_event_map(EventMap::state_for_testing(vec![
         snp_vc_builder2,
         snp_vc_builder3,
@@ -235,7 +227,7 @@ fn get_vcs_at_this_location_from_given_alleles_data() {
         vec![del_vc_expected.clone(), snp_vc_expected.clone()],
     );
 
-    let mut del_vc_no_span_expected = deletion_vc_no_span.clone();
+    // let mut del_vc_no_span_expected = deletion_vc_no_span.clone();
     // del_vc_no_span_expected.source =
     test_get_variant_contexts_from_given_alleles(
         1000,

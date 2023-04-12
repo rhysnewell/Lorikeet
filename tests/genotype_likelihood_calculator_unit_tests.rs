@@ -16,7 +16,9 @@ use std::cmp::min;
 
 lazy_static! {
     static ref MAXIMUM_ALLELE: Vec<usize> = vec![1, 2, 5, 6];
+    // static ref MAXIMUM_ALLELE: Vec<usize> = vec![5];
     static ref PLOIDY: Vec<usize> = vec![1, 2, 3, 20];
+    // static ref PLOIDY: Vec<usize> = vec![20];
     static ref READ_COUNTS: Vec<Vec<usize>> = vec![
         vec![10, 100, 50],
         vec![0, 100, 10, 1, 50],
@@ -93,9 +95,9 @@ fn test_likelihood_calculation(ploidy: usize, allele_count: usize, read_count: &
         // println!("sample {}", s);
         for i in 0..test_genotype_count {
             let genotype_allele_counts = calculator.genotype_allele_counts_at(i as usize);
-            if i == 999 {
-                println!("i {} distinct {} genotype count {}", i, genotype_allele_counts.distinct_allele_count(), genotype_count);
-                // continue
+            
+            if i == 999 || i == 998 || i == 10 {
+                println!("i {} distinct {} genotype count {} index {}", i, genotype_allele_counts.distinct_allele_count(), genotype_count, genotype_allele_counts.index());
             }
             // println!("i {} distinct {} genotype count {}", i, genotype_allele_counts.distinct_allele_count(), genotype_count);
             let mut read_genotype_likelihoods = vec![0.0; number_of_evidences];
@@ -106,6 +108,9 @@ fn test_likelihood_calculation(ploidy: usize, allele_count: usize, read_count: &
                     let a_count = genotype_allele_counts.allele_count_at(ar);
                     
                     let read_lk = sample_likelihoods[[a, r]];
+                    if i == 999  {
+                        println!("ar {} a {} a_count {} read_lk {}", ar, a, a_count, read_lk);
+                    }
                     components[ar] = read_lk + (a_count as f64).log10();
                 }
                 read_genotype_likelihoods[r] = MathUtils::approximate_log10_sum_log10_vec(
@@ -115,8 +120,10 @@ fn test_likelihood_calculation(ploidy: usize, allele_count: usize, read_count: &
                 ) - (ploidy as f64).log10();
             }
             let genotype_likelihood = read_genotype_likelihoods.iter().sum::<f64>();
-            if i == 999 {
+            if i == 999  {
+                println!("read_genotype_likelihoods {:?}", read_genotype_likelihoods);
                 println!("Before test expect {} actual {} index {}", genotype_likelihood, genotype_likelihoods_doubles[i as usize], i);
+                println!("Ploidy {} allele count {} read count {:?}", ploidy, allele_count, &read_count);
             }
             assert!(
                 relative_eq!(

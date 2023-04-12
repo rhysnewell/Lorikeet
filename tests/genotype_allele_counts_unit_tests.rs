@@ -10,19 +10,10 @@ extern crate approx;
 
 use lorikeet_genome::genotype::genotype_allele_counts::GenotypeAlleleCounts;
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
-
-
-
-
 use lorikeet_genome::utils::math_utils::MathUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable};
-
-
 
 use std::cmp::{max, Ordering};
-use std::collections::{HashSet};
-
-
+use std::collections::HashSet;
 use std::sync::Mutex;
 
 lazy_static! {

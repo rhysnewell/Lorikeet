@@ -3,10 +3,6 @@
     non_snake_case
 )]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
 
 use lorikeet_genome::bam_parsing::bam_generator::generate_indexed_named_bam_readers_from_bam_files;
 use lorikeet_genome::bam_parsing::bam_generator::IndexedNamedBamReader;
@@ -34,7 +30,7 @@ fn test_fetch_coordinates() {
 
     let mut records = Vec::new();
     let mut record = Record::new();
-    let mut first = true;
+    // let mut first = true;
     while bam_generated.read(&mut record) == true {
         assert!(record.pos() <= stop);
         records.push(record.clone());

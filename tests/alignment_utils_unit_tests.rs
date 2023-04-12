@@ -409,7 +409,7 @@ fn mutate_sequence(hap_in: &str, mut mutations: Vec<Mutation>) -> MutatedSequenc
 }
 
 fn test_read_aligned_to_ref_complex_alignment(
-    test_index: usize,
+    _test_index: usize,
     read: &BirdToolRead,
     reference: &str,
     haplotype: &Haplotype<SimpleInterval>,
@@ -676,7 +676,7 @@ fn test_trim_cigar(cigar_string: &str, start: usize, length: usize, expected_cig
         // pass
     } else {
         let mut expected_cigar = CigarBuilder::new(true);
-        expected_cigar.add_all(expected_cigar_raw.0);
+        expected_cigar.add_all(expected_cigar_raw.0).unwrap();
         let expected_cigar = expected_cigar.make(false).unwrap();
         let actual_cigar =
             AlignmentUtils::trim_cigar_by_reference(cigar, start as u32, length as u32).cigar;

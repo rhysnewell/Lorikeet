@@ -9,6 +9,9 @@ lazy_static! {
     static ref MIN_PHRED_SCALED_QUAL: f64 = -10.0 * *MIN_LOG10_SCALED_QUAL;
 }
 
+pub const TEN: f64 = 10.0;
+pub const ONE: f64 = 1.0;
+
 pub struct QualityUtils {}
 
 impl QualityUtils {
@@ -19,6 +22,7 @@ impl QualityUtils {
      */
     pub const MIN_USABLE_Q_SCORE: u8 = 6;
     pub const MAX_QUAL: u8 = 254;
+
 
     /**
      * Convert a phred-scaled quality score to its log10 probability of being wrong (Q30 => log10(0.001))
@@ -36,7 +40,7 @@ impl QualityUtils {
     }
 
     pub fn qual_to_prob_log10(qual: u8) -> f64 {
-        (1.0 - 10.0.powf((qual as f64) / -10.0)).log10()
+        (ONE - TEN.powf((qual as f64) / -TEN)).log10()
     }
 
     pub fn get_phred_score_from_obs_and_errors(probability: f64) -> u8 {
