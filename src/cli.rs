@@ -1233,7 +1233,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -1252,7 +1252,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -1270,7 +1270,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -1287,7 +1287,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -1304,7 +1304,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2000,7 +2000,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2019,7 +2019,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2037,7 +2037,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2054,7 +2054,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2071,7 +2071,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2762,7 +2762,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2781,7 +2781,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2799,7 +2799,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2816,7 +2816,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])
@@ -2833,7 +2833,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "longreads",
-                            "longreads-bam-files",
+                            "longread-bam-files",
                             "full-help",
                             "full-help-roff",
                         ])

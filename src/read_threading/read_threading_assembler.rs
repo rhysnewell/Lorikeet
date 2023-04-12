@@ -662,7 +662,7 @@ impl ReadThreadingAssembler {
         // graph: &BaseGraph<V, E>,
         assembly_result: &'b mut AssemblyResult<SimpleInterval, A>,
         ref_haplotype: &'b Haplotype<SimpleInterval>,
-        ref_loc: &'b SimpleInterval,
+        _ref_loc: &'b SimpleInterval,
         active_region_window: &'b SimpleInterval,
         haplotype_to_reference_sw_parameters: &Parameters,
         result_set: &mut AssemblyResultSet<A>,
@@ -955,14 +955,14 @@ impl ReadThreadingAssembler {
         let mut count = 0;
 
         let mut sample_count = LinkedHashMap::new();
-        let mut read_debugging = false;
+        // let mut read_debugging = false;
         for read in reads {
             let s_count = sample_count.entry(read.sample_index).or_insert(0);
             *s_count += 1;
-            if read.name() == b"DFDW01000005.1-5" {
-                // debug!("Read {:?}", read);
-                read_debugging = true;
-            };
+            // if read.name() == b"DFDW01000005.1-5" {
+            //     // debug!("Read {:?}", read);
+            //     read_debugging = true;
+            // };
             rt_graph.add_read(read, sample_names, &mut count, &mut pending)
         }
         // debug!("1.5 - Count {} -> {:?}", count, sample_count);

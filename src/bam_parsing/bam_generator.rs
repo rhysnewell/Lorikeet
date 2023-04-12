@@ -244,10 +244,10 @@ impl NamedBamReaderGenerator<StreamingNamedBamReader> for StreamingNamedBamReade
     fn start(self) -> StreamingNamedBamReader {
         // debug!("Starting mapping processes");
         let mut processes = vec![];
-        let mut i = 0;
+        // let mut i = 0;
         for mut preprocess in self.pre_processes {
             // debug!("Running mapping command: {}", self.command_strings[i]);
-            i += 1;
+            // i += 1;
             processes.push(preprocess.spawn().expect("Unable to execute bash"));
         }
         let bam_reader = match bam::Reader::from_path(&self.fifo_path) {
@@ -287,7 +287,7 @@ pub fn complete_processes(
     command_strings: Vec<String>,
     log_file_descriptions: Vec<String>,
     log_files: Vec<tempfile::NamedTempFile>,
-    tempdir: Option<TempDir>,
+    _tempdir: Option<TempDir>,
 ) {
     let mut failed_any = false;
     let mut overall_stderrs = vec![];
@@ -1011,15 +1011,15 @@ impl NamedBamReaderGenerator<NamedBamMaker> for NamedBamMakerGenerator {
     fn start(self) -> NamedBamMaker {
         // debug!("Starting mapping processes");
         let mut processes = vec![];
-        let mut i = 0;
+        // let mut i = 0;
         for mut preprocess in self.pre_processes {
             // debug!("Running mapping command: {}", self.command_strings[i]);
-            i += 1;
+            // i += 1;
             processes.push(preprocess.spawn().expect("Unable to execute bash"));
         }
         return NamedBamMaker {
             stoit_name: self.stoit_name,
-            processes: processes,
+            processes,
             command_strings: self.command_strings,
             log_file_descriptions: self.log_file_descriptions,
             log_files: self.log_files,

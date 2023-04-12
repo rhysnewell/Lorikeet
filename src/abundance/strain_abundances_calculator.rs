@@ -41,7 +41,7 @@ impl StrainAbundanceCalculator {
 
         let mut theta_prev;
         let mut theta_curr = vec![1.; sample_genotypes.len()];
-        let mut n = 0;
+        // let mut n = 0;
 
         while omega > eps {
             // Update theta values
@@ -150,7 +150,7 @@ impl StrainAbundanceCalculator {
             //     "Theta Current {:?} Prev {:?} Omega {}",
             //     &theta_curr, &theta_prev, &omega,
             // );
-            n += 1;
+            // n += 1;
         }
         // debug!("EM Algorithm Finished in {} iterations", n);
     }

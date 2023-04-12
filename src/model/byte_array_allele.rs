@@ -190,11 +190,15 @@ impl ByteArrayAllele {
             // return true if there are any unacceptable bases, so take conjugate value
             !bases.iter().any(|base| {
                 let base = *base as char;
-                match base {
+                let result = match base {
                     'A' | 'C' | 'T' | 'G' | 'a' | 'c' | 't' | 'g' | 'N' | 'n' | 'R' | 'Y' | 'K'
                     | 'M' | 'S' | 'W' | 'B' | 'D' | 'H' | 'V' | 'U' => false,
                     _ => true,
+                };
+                if result {
+                    debug!("Base {} is not acceptable", base);
                 }
+                result
             })
         }
     }

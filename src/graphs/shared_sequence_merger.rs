@@ -112,9 +112,9 @@ impl SharedSequenceMerger {
         };
 
         let first = incoming_vertices.iter().next().unwrap();
-        let mut count = 0;
+        // let mut count = 0;
         for prev in incoming_vertices {
-            count += 1;
+            // count += 1;
             // debug!(
             //     "{count} {} -> {}",
             //     std::str::from_utf8(

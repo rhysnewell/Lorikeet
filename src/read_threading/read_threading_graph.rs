@@ -427,7 +427,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
 
         // let pending = self.get_pending();
         // go through the pending sequences, and add them to the graph
-        for (name, sequences_for_samples) in pending.iter() {
+        for (_name, sequences_for_samples) in pending.iter() {
             // debug!("Sample {} reads {}", *name, sequences_for_samples.len());
             for sequence_for_kmers in sequences_for_samples.iter() {
                 self.thread_sequence(sequence_for_kmers);
@@ -796,17 +796,18 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .filter(|v| self.base_graph.out_degree_of(*v) == 0 && !self.base_graph.is_ref_sink(*v))
             .collect::<Vec<NodeIndex>>();
 
-        let mut attempted = 0;
-        let mut n_recovered = 0;
+        // let mut attempted = 0;
+        // let mut n_recovered = 0;
         for v in dangling_tails {
-            attempted += 1;
-            n_recovered += self.recover_dangling_tail(
+            // attempted += 1;
+            // n_recovered += 
+            self.recover_dangling_tail(
                 v,
                 prune_factor,
                 min_dangling_branch_length,
                 recover_all,
                 dangling_end_sw_parameters,
-            )
+            );
         }
 
         // debug!("Recovered {} of {} dangling tails", n_recovered, attempted);
@@ -841,17 +842,18 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .collect::<Vec<NodeIndex>>();
 
         // now we can try to recover the dangling heads
-        let mut attempted = 0;
-        let mut n_recovered = 0;
+        // let mut attempted = 0;
+        // let mut n_recovered = 0;
         for v in dangling_heads {
-            attempted += 1;
-            n_recovered += self.recover_dangling_head(
+            // attempted += 1;
+            // n_recovered += 
+            self.recover_dangling_head(
                 v,
                 prune_factor,
                 min_dangling_branch_length,
                 recover_all,
                 dangling_head_sw_parameters,
-            )
+            );
         }
 
         // debug!("Recovered {} of {} dangling heads", n_recovered, attempted);

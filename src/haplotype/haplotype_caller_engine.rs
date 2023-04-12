@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::fs::create_dir_all;
 
 use crate::model::allele_likelihoods::AlleleLikelihoods;
-use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::model::byte_array_allele::ByteArrayAllele;
 use crate::model::variant_context::VariantContext;
 use crate::activity_profile::activity_profile::Profile;
 use crate::activity_profile::activity_profile_state::{ActivityProfileState, Type};

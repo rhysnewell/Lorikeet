@@ -1,4 +1,3 @@
-use petgraph::algo::is_cyclic_directed;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;

@@ -110,7 +110,7 @@ impl VertexBasedTransformerOptions {
             Self::MergeDiamonds => {
                 let mut did_at_least_one_transform = false;
                 let mut found_nodes_to_merge = true;
-                let mut transformed_count = 0;
+                // let mut transformed_count = 0;
                 while found_nodes_to_merge {
                     found_nodes_to_merge = false;
                     let node_indices = graph
@@ -126,7 +126,7 @@ impl VertexBasedTransformerOptions {
                         .try_to_transform(v);
                         if found_nodes_to_merge {
                             did_at_least_one_transform = true;
-                            transformed_count += 1;
+                            // transformed_count += 1;
                             // debug!(
                             //     "Transformed {} graph: V {} E {}",
                             //     transformed_count,
@@ -144,7 +144,7 @@ impl VertexBasedTransformerOptions {
                 let mut did_at_least_one_transform = false;
                 let mut found_nodes_to_merge = true;
                 let mut already_split = LinkedHashSet::new();
-                let mut transformed_count = 0;
+                // let mut transformed_count = 0;
                 while found_nodes_to_merge {
                     found_nodes_to_merge = false;
                     let node_indices = graph
@@ -162,7 +162,7 @@ impl VertexBasedTransformerOptions {
 
                         if found_nodes_to_merge {
                             did_at_least_one_transform = true;
-                            transformed_count += 1;
+                            // transformed_count += 1;
                             // debug!(
                             //     "Transformed {} graph: V {} E {}",
                             //     transformed_count,
@@ -179,7 +179,7 @@ impl VertexBasedTransformerOptions {
             Self::MergeCommonSuffices => {
                 let mut did_at_least_one_transform = false;
                 let mut found_nodes_to_merge = true;
-                let mut transformed_count = 0;
+                // let mut transformed_count = 0;
                 while found_nodes_to_merge {
                     found_nodes_to_merge = false;
                     let node_indices = graph
@@ -195,7 +195,7 @@ impl VertexBasedTransformerOptions {
                         .try_to_transform(v);
                         if found_nodes_to_merge {
                             did_at_least_one_transform = true;
-                            transformed_count += 1;
+                            // transformed_count += 1;
                             // debug!(
                             //     "Transformed {} graph: V {} E {}",
                             //     transformed_count,
@@ -212,7 +212,7 @@ impl VertexBasedTransformerOptions {
             Self::MergeTails => {
                 let mut did_at_least_one_transform = false;
                 let mut found_nodes_to_merge = true;
-                let mut transformed_count = 0;
+                // let mut transformed_count = 0;
                 while found_nodes_to_merge {
                     found_nodes_to_merge = false;
                     let node_indices = graph
@@ -228,7 +228,7 @@ impl VertexBasedTransformerOptions {
                         .try_to_transform(v);
                         if found_nodes_to_merge {
                             did_at_least_one_transform = true;
-                            transformed_count += 1;
+                            // transformed_count += 1;
                             // debug!(
                             //     "Transformed {} graph: V {} E {}",
                             //     transformed_count,

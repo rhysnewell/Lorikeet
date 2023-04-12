@@ -10,7 +10,7 @@ use lorikeet_genome::reference::reference_reader_utils::{ReferenceReaderUtils, G
 use lorikeet_genome::utils::errors::BirdToolError;
 use lorikeet_genome::bam_parsing::FlagFilter;
 
-use log::{info, warn, debug};
+use log::{info, warn};
 use std::env;
 use tempfile::NamedTempFile;
 use clap_complete::{generate, Shell};

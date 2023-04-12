@@ -283,7 +283,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             abundance_vectors
                 .par_iter_mut()
                 .enumerate()
-                .for_each(|(idx, sample_calculators)| {
+                .for_each(|(_idx, sample_calculators)| {
                     // debug!("Genotype Vector before EM {} {:?}", idx, sample_calculators);
                     StrainAbundanceCalculator::calculate_abundances(sample_calculators, eps);
                     // debug!("Genotype Vector after EM {} {:?}", idx, sample_calculators);

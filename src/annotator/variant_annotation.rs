@@ -284,7 +284,7 @@ impl VariantAnnotations {
                     //     allele_index,
                     //     allele_counts.get(&allele_index)
                     // );
-                    // counts[vec_index + 1] = *allele_counts.get(&allele_index).unwrap();
+                    counts[vec_index + 1] = *allele_counts.get(&allele_index).unwrap();
                 }
 
                 // debug!("{:?}", &counts);
