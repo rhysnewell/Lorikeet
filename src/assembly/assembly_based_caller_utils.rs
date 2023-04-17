@@ -956,7 +956,7 @@ impl AssemblyBasedCallerUtils {
             PCRErrorModel::new(args),
             *args.get_one::<u8>("base-quality-score-threshold")
                 .unwrap(),
-            args.get_flag("enable-dynamic-read-disqualification-for-genotyping"),
+            !args.get_flag("disable-dynamic-read-disqualification-for-genotyping"),
             *args.get_one::<f64>("dynamic-read-disqualification-threshold")
                 .unwrap(),
             *args.get_one::<f64>("expected-mismatch-rate-for-read-disqualification")

@@ -404,10 +404,16 @@ fn add_verbosity_flags(manual: Manual) -> Manual {
 
 fn variant_calling_section_basic() -> Section {
     Section::new("Variant calling options (Basic)")
+        .option(Opt::new("STR").long("--profile").help(
+            "Assembly profile to use for variant calling. Overrides --kmer-sizes and --min-prune-factor. \
+            Possible options include: 'fast', 'very-fast', 'sensitive', 'precise' \
+            Default parameters similar to 'fast' are already set.
+                     [default: not_set] \n",
+        ))
         .option(Opt::new("INT ..").long("--kmer-sizes").short("-k").help(
             "K-mer sizes used to generate DeBruijn Graphs. \
-                     Multiple values at once are accepted and encouraged \
-                     e.g. 17 21 [default: 17 21] \n",
+            Multiple values at once are accepted and encouraged at a cost to increased runtime \
+                     e.g. 17 21 25 [default: 21] \n",
         ))
         .option(Opt::new("INT").long("--ploidy").help(
             "Sets the default ploidy for the analysis to N. \
@@ -536,7 +542,7 @@ fn variant_calling_options_advanced() -> Section {
                 .short("-C")
                 .help(
                     "The minimum phred-scaled confidence threshold at \
-                     which variants should be called. [default: 30.0] \n",
+                     which variants should be called. [default: 25.0] \n",
                 ),
         )
         .flag(Flag::new().long("--use-posteriors-to-calculate-qual").help(
@@ -585,7 +591,9 @@ fn variant_calling_options_advanced() -> Section {
         .flag(
             Flag::new()
                 .long("--allow-non-unique-kmers-in-ref")
-                .help("Allow graphs that have non-unique kmers in the reference. \n"),
+                .help(
+                    "Allow graphs that have non-unique kmers in the reference. \
+                    Useful if variants are occuring in repeat regions of the genome. \n"),
         )
         .flag(
             Flag::new()
@@ -602,7 +610,9 @@ fn variant_calling_options_advanced() -> Section {
                      attempt recovery. [default: 1] \n",
         ))
         .option(Opt::new("INT").long("--min-prune-factor").help(
-            "Minimum support to not prune paths in the graph. \
+            "Minimum read support to not prune paths in the graph. \
+            Lower values like 1 or 0 will drastically increase runtime, but recover more variants. \
+            For faster performance, set this to 2 or 3 at a cost to recall. \
                      [default: 1] \n",
         ))
         .flag(Flag::new().long("--use-adaptive-pruning").help(
@@ -1229,7 +1239,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("read2")
                         .required_unless_present_any(&[
                             "bam-files",
-                            "read1",
+                            "single",
                             "coupled",
                             "interleaved",
                             "longreads",
@@ -1248,7 +1258,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("read1")
                         .required_unless_present_any(&[
                             "bam-files",
-                            "read1",
+                            "single",
                             "coupled",
                             "interleaved",
                             "longreads",
@@ -1269,6 +1279,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
+                            "single",
                             "longreads",
                             "longread-bam-files",
                             "full-help",
@@ -1285,6 +1296,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "bam-files",
                             "read1",
                             "coupled",
+                            "single",
                             "interleaved",
                             "longreads",
                             "longread-bam-files",
@@ -1533,7 +1545,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("standard-min-confidence-threshold-for-calling")
                         .short('C')
                         .value_parser(clap::value_parser!(f64))
-                        .default_value("30.0"),
+                        .default_value("25.0"),
                 )
                 .arg(
                     Arg::new("genotype-assignment-method")
@@ -1582,7 +1594,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["17", "21"]), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["17", "21", "25"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -1875,24 +1887,24 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("5"),
                 )
                 .arg(
-                    Arg::new("enable-dynamic-read-disqualification-for-genotyping")
-                        .long("enable-dynamic-read-disqualification-for-genotyping")
+                    Arg::new("disable-dynamic-read-disqualification-for-genotyping")
+                        .long("disable-dynamic-read-disqualification-for-genotyping")
                         .action(clap::ArgAction::SetTrue)
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("dynamic-read-disqualification-threshold")
                         .long("dynamic-read-disqualification-threshold")
                         .value_parser(clap::value_parser!(f64))
                         .default_value("1.0")
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("expected-mismatch-rate-for-read-disqualification")
                         .long("expected-mismatch-rate-for-read-disqualification")
                         .value_parser(clap::value_parser!(f64))
                         .default_value("0.02")
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("allele-informative-reads-overlap-margin")
@@ -1951,6 +1963,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("limiting-interval")
                         .required(false),
                 )
+                .arg(
+                    Arg::new("profile")
+                        .long("profile")
+                        .value_parser(["fast", "very-fast", "sensitive", "precise"])
+                        .required(false)
+                )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("verbose").short('v').long("verbose").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("quiet").long("quiet").action(clap::ArgAction::SetTrue)),
@@ -1996,7 +2014,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("read2")
                         .required_unless_present_any(&[
                             "bam-files",
-                            "read1",
+                            "single",
                             "coupled",
                             "interleaved",
                             "longreads",
@@ -2015,7 +2033,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("read1")
                         .required_unless_present_any(&[
                             "bam-files",
-                            "read1",
+                            "single",
                             "coupled",
                             "interleaved",
                             "longreads",
@@ -2036,6 +2054,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
+                            "single",
                             "longreads",
                             "longread-bam-files",
                             "full-help",
@@ -2052,6 +2071,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "bam-files",
                             "read1",
                             "coupled",
+                            "single",
                             "interleaved",
                             "longreads",
                             "longread-bam-files",
@@ -2300,7 +2320,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("standard-min-confidence-threshold-for-calling")
                         .short('C')
                         .value_parser(clap::value_parser!(f64))
-                        .default_value("30.0"),
+                        .default_value("25.0"),
                 )
                 .arg(
                     Arg::new("genotype-assignment-method")
@@ -2349,7 +2369,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["17", "21"]), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["17", "21", "25"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -2636,24 +2656,24 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("5"),
                 )
                 .arg(
-                    Arg::new("enable-dynamic-read-disqualification-for-genotyping")
-                        .long("enable-dynamic-read-disqualification-for-genotyping")
+                    Arg::new("disable-dynamic-read-disqualification-for-genotyping")
+                        .long("disable-dynamic-read-disqualification-for-genotyping")
                         .action(clap::ArgAction::SetTrue)
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("dynamic-read-disqualification-threshold")
                         .long("dynamic-read-disqualification-threshold")
                         .value_parser(clap::value_parser!(f64))
                         .default_value("1.0")
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("expected-mismatch-rate-for-read-disqualification")
                         .long("expected-mismatch-rate-for-read-disqualification")
                         .value_parser(clap::value_parser!(f64))
                         .default_value("0.02")
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("allele-informative-reads-overlap-margin")
@@ -2711,6 +2731,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("limiting-interval")
                         .long("limiting-interval")
                         .required(false),
+                )
+                .arg(
+                    Arg::new("profile")
+                        .long("profile")
+                        .value_parser(["fast", "very-fast", "sensitive", "precise"])
+                        .required(false)
                 )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("verbose").short('v').long("verbose").action(clap::ArgAction::SetTrue))
@@ -2758,7 +2784,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("read2")
                         .required_unless_present_any(&[
                             "bam-files",
-                            "read1",
+                            "single",
                             "coupled",
                             "interleaved",
                             "longreads",
@@ -2777,7 +2803,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("read1")
                         .required_unless_present_any(&[
                             "bam-files",
-                            "read1",
+                            "single",
                             "coupled",
                             "interleaved",
                             "longreads",
@@ -2798,6 +2824,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
+                            "single",
                             "longreads",
                             "longread-bam-files",
                             "full-help",
@@ -2814,6 +2841,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "bam-files",
                             "read1",
                             "coupled",
+                            "single",
                             "interleaved",
                             "longreads",
                             "longread-bam-files",
@@ -3062,7 +3090,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("standard-min-confidence-threshold-for-calling")
                         .short('C')
                         .value_parser(clap::value_parser!(f64))
-                        .default_value("30.0"),
+                        .default_value("25.0"),
                 )
                 .arg(
                     Arg::new("genotype-assignment-method")
@@ -3111,7 +3139,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["17", "21"]), //TODO: Wait for clap v3 and change this to default_values
+                        .default_values(&["17", "21", "25"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -3398,24 +3426,24 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("5"),
                 )
                 .arg(
-                    Arg::new("enable-dynamic-read-disqualification-for-genotyping")
-                        .long("enable-dynamic-read-disqualification-for-genotyping")
+                    Arg::new("disable-dynamic-read-disqualification-for-genotyping")
+                        .long("disable-dynamic-read-disqualification-for-genotyping")
                         .action(clap::ArgAction::SetTrue)
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("dynamic-read-disqualification-threshold")
                         .long("dynamic-read-disqualification-threshold")
                         .value_parser(clap::value_parser!(f64))
                         .default_value("1.0")
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("expected-mismatch-rate-for-read-disqualification")
                         .long("expected-mismatch-rate-for-read-disqualification")
                         .value_parser(clap::value_parser!(f64))
                         .default_value("0.02")
-                        .hide(true),
+                        .hide(false),
                 )
                 .arg(
                     Arg::new("allele-informative-reads-overlap-margin")
@@ -3473,6 +3501,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("limiting-interval")
                         .long("limiting-interval")
                         .required(false),
+                )
+                .arg(
+                    Arg::new("profile")
+                        .long("profile")
+                        .value_parser(["fast", "very-fast", "sensitive", "precise"])
+                        .required(false)
                 )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("verbose").short('v').long("verbose").action(clap::ArgAction::SetTrue))

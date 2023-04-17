@@ -35,10 +35,7 @@ bstr = "^0.2.17"
 clap = { version="^4", features = ["cargo"] } # cargo feature required for crate_version!
 clap_complete = "^4"
 compare = "^0.1"
-# coverm = {git = "https://github.com/rhysnewell/CoverM", branch = "main"}
-# galah = { git = "https://github.com/wwood/galah" }
 hashlink = "^0.7"
-# hts-sys = "2.0.3"
 enum-ordinalize = "^3.1"
 env_logger = "^0.6"
 glob = "^0.3"
@@ -55,8 +52,6 @@ ndarray = {version = "^0.15", features = ["rayon"]}
 needletail = "^0.5"
 nix = "0.26.2"
 num = "0.4.0"
-# openssl-sys = "^0.9"
-# openssl = {version = "^0.10", features = ["vendored"]}
 ordered-float = "1"
 partitions = "^0.2"
 petgraph = {version = "^0.6", features = ["stable_graph"]}
@@ -76,8 +71,6 @@ term = "^0.7"
 indicatif = "^0.17"
 scoped_threadpool = "^0.1.9"
 anyhow = "1.0.70"
-# hts-sys = "2.0.3"
-# curl-sys = "0.4.61"
 
 
 [lib]

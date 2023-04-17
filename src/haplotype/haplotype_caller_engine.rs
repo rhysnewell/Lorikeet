@@ -119,12 +119,20 @@ impl HaplotypeCallerEngine {
         do_allele_specific_calcs: bool,
         sample_ploidy: usize,
     ) -> HaplotypeCallerEngine {
-        let kmer_sizes = match args.get_many::<usize>("kmer-sizes") {
+        let mut kmer_sizes = match args.get_many::<usize>("kmer-sizes") {
             Some(vals) => vals
                 .map(|k_size| *k_size)
                 .collect::<Vec<usize>>(),
             _ => vec![17, 25],
         };
+
+        let mut prune_factor = if args.get_flag("use-adaptive-pruning") {
+            0
+        } else {
+            *args.get_one::<usize>("min-prune-factor").unwrap()
+        };
+
+        Self::set_assembly_profile(args, &mut kmer_sizes, &mut prune_factor);
 
         let mut assembly_engine = ReadThreadingAssembler::new(
             *args.get_one::<i32>("max-allowed-path-for-read-threading-assembler")
@@ -134,11 +142,7 @@ impl HaplotypeCallerEngine {
             args.get_flag("allow-non-unique-kmers-in-ref"),
             *args.get_one::<i32>("num-pruning-samples")
                 .unwrap(),
-            if args.get_flag("use-adaptive-pruning") {
-                0
-            } else {
-                *args.get_one::<usize>("min-prune-factor").unwrap()
-            },
+            prune_factor,
             args.get_flag("use-adaptive-pruning"),
             *args.get_one::<f64>("initial-error-rate-for-pruning")
                 .unwrap(),
@@ -220,6 +224,40 @@ impl HaplotypeCallerEngine {
             mapping_quality_threshold: *args
                 .get_one::<u8>("mapping-quality-threshold-for-genotyping")
                 .unwrap(),
+        }
+    }
+
+    fn set_assembly_profile(args: &clap::ArgMatches, kmer_sizes: &mut Vec<usize>, prune_factor: &mut usize) {
+        if !args.contains_id("profile") {
+            return
+        }
+
+        let profile = args.get_one::<String>("profile").unwrap().to_lowercase();
+        match profile.as_str() {
+            "very-fast" => {
+                *prune_factor = 2;
+                if kmer_sizes.len() > 1 {
+                    *kmer_sizes = vec![21];
+                }
+            },
+            "fast" => {
+                *prune_factor = 1;
+                if kmer_sizes.len() > 1 {
+                    *kmer_sizes = vec![21];
+                }
+            },
+            "precise" => {
+                *prune_factor = 2;
+                *kmer_sizes = vec![17, 21, 25];
+            },
+            "sensitive" => {
+                *prune_factor = 0;
+                *kmer_sizes = vec![17, 21, 25];
+            },
+            _ => {
+                // just use defaults or what is already set
+                warn!("Unknown assembly profile: {}", profile);
+            }
         }
     }
 
