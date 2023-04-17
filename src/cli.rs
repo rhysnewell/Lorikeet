@@ -1594,7 +1594,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["17", "21", "25"]),
+                        .default_values(&["21"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -2369,7 +2369,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["17", "21", "25"]),
+                        .default_values(&["21"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -3139,7 +3139,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["17", "21", "25"]),
+                        .default_values(&["21"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
