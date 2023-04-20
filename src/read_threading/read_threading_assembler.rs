@@ -54,7 +54,7 @@ pub struct ReadThreadingAssembler {
 
 impl ReadThreadingAssembler {
     const DEFAULT_NUM_PATHS_PER_GRAPH: usize = 128;
-    const KMER_SIZE_ITERATION_INCREASE: usize = 10;
+    const KMER_SIZE_ITERATION_INCREASE: usize = 13;
     const MAX_KMER_ITERATIONS_TO_ATTEMPT: usize = 6;
 
     /**
@@ -379,6 +379,10 @@ impl ReadThreadingAssembler {
         if results.is_empty() && !self.dont_increase_kmer_sizes_for_cycles {
             let mut kmer_size =
                 *self.kmer_sizes.iter().max().unwrap() + Self::KMER_SIZE_ITERATION_INCREASE;
+            // if kmer_size is even, add 1 to make it odd
+            if kmer_size % 2 == 0 {
+                kmer_size += 1;
+            }
             let mut num_iterations = 1;
             while results.is_empty() && num_iterations <= Self::MAX_KMER_ITERATIONS_TO_ATTEMPT {
                 // on the last attempt we will allow low complexity graphs

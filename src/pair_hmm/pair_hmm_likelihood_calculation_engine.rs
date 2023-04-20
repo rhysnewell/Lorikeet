@@ -95,9 +95,9 @@ impl PCRErrorModel {
 
 impl PairHMMLikelihoodCalculationEngine {
     // const DEFAULT_DYNAMIC_DISQUALIFICATION_SCALE_FACTOR: f64 = 1.0;
-    const MAX_STR_UNIT_LENGTH: usize = 8;
-    const MAX_REPEAT_LENGTH: usize = 20;
-    const MIN_ADJUSTED_QSCORE: usize = 10;
+    const MAX_STR_UNIT_LENGTH: usize = 20;
+    const MAX_REPEAT_LENGTH: usize = 100;
+    const MIN_ADJUSTED_QSCORE: usize = 6;
     const MAXIMUM_DYNAMIC_QUAL_THRESHOLD_ENTRY_BASEQ: usize = 40;
     const DYNAMIC_QUAL_THRESHOLD_TABLE_ENTRY_LENGTH: usize = 3;
     const DYNAMIC_QUAL_THRESHOLD_TABLE_ENTRY_MEAN_OFFSET: usize = 1;
@@ -109,7 +109,7 @@ impl PairHMMLikelihoodCalculationEngine {
     //
     // For example, if this is 0.01, then we'd expect 1 error per 100 bp.
     //
-    pub const DEFAULT_EXPECTED_ERROR_RATE_PER_BASE: f64 = 0.02;
+    pub const DEFAULT_EXPECTED_ERROR_RATE_PER_BASE: f64 = 0.001;
 
     /**
      * Create a new PairHMMLikelihoodCalculationEngine using provided parameters and hmm to do its calculations

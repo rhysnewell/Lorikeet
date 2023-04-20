@@ -314,13 +314,13 @@ fn threads_options() -> Section {
             Opt::new("INT")
                 .long("--threads")
                 .short("-t")
-                .help("Maximum number of threads used. [default: 8] \n"),
+                .help("Maximum number of threads used. [default: 10] \n"),
         )
         .option(Opt::new("INT").long("--parallel-genomes").short("-p").help(
             "Number of genomes to run in parallel. \
                      Increases memory usage linearly. \
                      Thread usage qill not exceed the value \
-                     provided by --threads [default 4] \n",
+                     provided by --threads [default 10] \n",
         ))
 }
 
@@ -405,15 +405,15 @@ fn add_verbosity_flags(manual: Manual) -> Manual {
 fn variant_calling_section_basic() -> Section {
     Section::new("Variant calling options (Basic)")
         .option(Opt::new("STR").long("--profile").help(
-            "Assembly profile to use for variant calling. Overrides --kmer-sizes and --min-prune-factor. \
-            Possible options include: 'fast', 'very-fast', 'sensitive', 'precise' \
-            Default parameters similar to 'fast' are already set.
+            "Assembly profile to use for variant calling. \
+            Overrides --kmer-sizes, --min-prune-factor, --allow-non-unique-kmers-in-ref, and --recover-all-dangling-branches. \
+            Possible options include: 'fast', 'very-fast', 'sensitive', 'precise', 'super-sensitive' \
                      [default: not_set] \n",
         ))
         .option(Opt::new("INT ..").long("--kmer-sizes").short("-k").help(
             "K-mer sizes used to generate DeBruijn Graphs. \
             Multiple values at once are accepted and encouraged at a cost to increased runtime \
-                     e.g. 17 21 25 [default: 21] \n",
+                     e.g. 17 21 25 [default: 21 33] \n",
         ))
         .option(Opt::new("INT").long("--ploidy").help(
             "Sets the default ploidy for the analysis to N. \
@@ -486,9 +486,7 @@ fn variant_calling_section_basic() -> Section {
             "The minimum contig size to call variants on. Smaller \
                     contigs can often contain highly variable regions that \
                     mostly represent noise. Call variants on them can often \
-                    be slow and not produce anything fruitful. If you \
-                    wish to call variants on all available contigs, \
-                    then set this to 0. [default: 2500] \n",
+                    be slow and not produce anything fruitful. [default: 0] \n",
         ))
         .option(Opt::new("INT").long("--min-sv-qual").help(
             "Minimum structural variants quality returned by svim \
@@ -593,7 +591,7 @@ fn variant_calling_options_advanced() -> Section {
                 .long("--allow-non-unique-kmers-in-ref")
                 .help(
                     "Allow graphs that have non-unique kmers in the reference. \
-                    Useful if variants are occuring in repeat regions of the genome. \n"),
+                    Can increase runtime and sensitivity in repeat regions. \n"),
         )
         .flag(
             Flag::new()
@@ -1396,13 +1394,13 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("threads")
                         .short('t').long("threads")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("8"),
+                        .default_value("10"),
                 )
                 .arg(
                     Arg::new("parallel-genomes")
                         .short('p').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("4"),
+                        .default_value("10"),
                 )
                 .arg(
                     Arg::new("mapper")
@@ -1489,7 +1487,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-contig-size")
                         .long("min-contig-size")
                         .value_parser(clap::value_parser!(u64))
-                        .default_value("2500"),
+                        .default_value("0"),
                 )
                 .arg(
                     Arg::new("phred-scaled-global-read-mismapping-rate")
@@ -1594,7 +1592,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["21"]),
+                        .default_values(&["21", "33"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -1966,7 +1964,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("profile")
                         .long("profile")
-                        .value_parser(["fast", "very-fast", "sensitive", "precise"])
+                        .value_parser(["fast", "sensitive", "precise", "super-sensitive"])
                         .required(false)
                 )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))
@@ -2171,13 +2169,13 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("threads")
                         .short('t').long("threads")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("8"),
+                        .default_value("10"),
                 )
                 .arg(
                     Arg::new("parallel-genomes")
                         .short('p').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("4"),
+                        .default_value("10"),
                 )
                 .arg(
                     Arg::new("mapper")
@@ -2264,7 +2262,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-contig-size")
                         .long("min-contig-size")
                         .value_parser(clap::value_parser!(u64))
-                        .default_value("2500"),
+                        .default_value("0"),
                 )
                 .arg(
                     Arg::new("phred-scaled-global-read-mismapping-rate")
@@ -2369,7 +2367,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["21"]),
+                        .default_values(&["21", "33"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -2735,7 +2733,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("profile")
                         .long("profile")
-                        .value_parser(["fast", "very-fast", "sensitive", "precise"])
+                        .value_parser(["fast", "sensitive", "precise", "super-sensitive"])
                         .required(false)
                 )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))
@@ -2941,13 +2939,13 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("threads")
                         .short('t').long("threads")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("8"),
+                        .default_value("10"),
                 )
                 .arg(
                     Arg::new("parallel-genomes")
                         .short('p').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("4"),
+                        .default_value("10"),
                 )
                 .arg(
                     Arg::new("mapper")
@@ -3034,7 +3032,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-contig-size")
                         .long("min-contig-size")
                         .value_parser(clap::value_parser!(u64))
-                        .default_value("2500"),
+                        .default_value("0"),
                 )
                 .arg(
                     Arg::new("phred-scaled-global-read-mismapping-rate")
@@ -3139,7 +3137,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .action(ArgAction::Append)
                         .num_args(1..)
                         .value_parser(clap::value_parser!(usize))
-                        .default_values(&["21"]),
+                        .default_values(&["21", "33"]),
                 )
                 .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
@@ -3505,7 +3503,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("profile")
                         .long("profile")
-                        .value_parser(["fast", "very-fast", "sensitive", "precise"])
+                        .value_parser(["fast", "sensitive", "precise", "super-sensitive"])
                         .required(false)
                 )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))

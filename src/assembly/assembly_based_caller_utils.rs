@@ -213,6 +213,7 @@ impl AssemblyBasedCallerUtils {
     ) -> HashMap<ReadIndexer, BirdToolRead> {
         let best_alleles = original_read_likelihoods
             .best_alleles_breaking_ties_main(Self::haplotype_alignment_tiebreaking_priority());
+        debug!("Best alleles {:?}", best_alleles.iter().map(|x| x.allele_index).collect::<Vec<_>>());
         return best_alleles
             .iter()
             .map(|best_allele| {
@@ -741,6 +742,7 @@ impl AssemblyBasedCallerUtils {
 
         for h in haplotypes {
             let spanning_events = h.event_map.as_ref().unwrap().get_overlapping_events(loc);
+            
 
             if spanning_events.is_empty() {
                 let allele_vec = result.entry(ref_index).or_insert(Vec::new());
@@ -761,12 +763,8 @@ impl AssemblyBasedCallerUtils {
                                     // pass
                                 }
                                 Some(index) => {
-                                    if result.contains_key(&index) {
-                                        // variant contexts derived from the event map have only one alt allele each, so we can just
-                                        // grab the first one (we're not assuming that the sample is biallelic)
-                                        let allele_vec = result.get_mut(&index).unwrap();
-                                        allele_vec.push(h);
-                                    }
+                                    let allele_vec = result.entry(index).or_insert_with(|| Vec::new());
+                                    allele_vec.push(h);
                                 }
                             }
                         } else if spanning_event.get_reference().len()
@@ -794,12 +792,8 @@ impl AssemblyBasedCallerUtils {
                                     // pass
                                 }
                                 Some(index) => {
-                                    if result.contains_key(&index) {
-                                        // variant contexts derived from the event map have only one alt allele each, so we can just
-                                        // grab the first one (we're not assuming that the sample is biallelic)
-                                        let allele_vec = result.get_mut(&index).unwrap();
-                                        allele_vec.push(h);
-                                    }
+                                    let allele_vec = result.entry(index).or_insert_with(|| Vec::new());
+                                    allele_vec.push(h);
                                 }
                             }
                             // if result.contains_key(&remapped_spanning_event_alt_allele) {
@@ -820,7 +814,6 @@ impl AssemblyBasedCallerUtils {
                             .position(|a| a == &*SPAN_DEL_ALLELE);
                         match index {
                             None => {
-                                // I guess pass? We can't exactly insert it into merged_vc
                                 result.get_mut(&ref_index).unwrap().push(h);
                                 break;
                             }

@@ -136,6 +136,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             .into_iter()
             .map(|i| evidence_by_sample_index.get(&i).unwrap().len())
             .collect::<Vec<usize>>();
+        debug!("number_of_evidences: {:?}", number_of_evidences);
         let likelihoods_matrix_evidence_capacity_by_sample_index = values_by_sample_index
             .par_iter()
             .map(|sample_values| {
@@ -146,7 +147,9 @@ impl<A: Allele> AlleleLikelihoods<A> {
                     .unwrap_or(0)
             })
             .collect::<Vec<usize>>();
-
+        debug!(
+            "likelihoods_matrix_evidence_capacity_by_sample_index: {:?}",
+            likelihoods_matrix_evidence_capacity_by_sample_index);
         let reference_allele_index = Self::find_reference_allele_index(&alleles);
 
         Self {
@@ -472,6 +475,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         };
 
         let sample_values = &self.values_by_sample_index[sample_index];
+        // debug!("Sample values {:?}", sample_values);
         let mut best_allele_index = if can_be_reference || self.reference_allele_index.unwrap() != 0
         {
             0
@@ -590,8 +594,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
                                 number_of_qualified_allele_likelihoods += 1;
                             }
                         }
-
+                        debug!("Sample {} evidence {} best allele {:?} likelihood {} qualified alleles {}",
+                               s, r, best_allele.allele_index, best_allele.likelihood, number_of_qualified_allele_likelihoods);
                         let non_ref_likelihood = MathUtils::median_clone(&qualified_allele_likelihoods);
+                        debug!("Sample {} evidence {} non-ref likelihood {}", s, r, non_ref_likelihood);
                         // when the median is NaN that means that all applicable likekihoods are the same as the best
                         // so the evidence is not informative at all given the existing alleles. Unless there is only one (or zero) concrete
                         // alleles with give the same (the best) likelihood to the NON-REF. When there is only one (or zero) concrete
@@ -640,17 +646,16 @@ impl<A: Allele> AlleleLikelihoods<A> {
             old_allele_count,
             new_alleles_indices,
         );
-        // debug!("old to new allele map {:?}", &old_to_new_allele_index_map);
+        debug!("old to new allele map {:?}", &old_to_new_allele_index_map);
         // We calculate the marginal likelihoods.
         let new_likelihood_values = self.marginal_likelihoods(
             old_allele_count,
             new_allele_count,
             &old_to_new_allele_index_map,
         );
-        // debug!("new liklelihood values {:#?}", &new_likelihood_values);
+        debug!("new liklelihood values {:#?}", &new_likelihood_values);
 
         let _sample_count = self.number_of_samples();
-        // debug!("new liklelihood values {:?}", &new_likelihood_values);
 
         // let new_allele_list = old_to_new_allele_index_map
         //     .iter()
@@ -693,8 +698,8 @@ impl<A: Allele> AlleleLikelihoods<A> {
     ) -> Vec<Array2<f64>> {
         let sample_count = self.samples.len();
         let mut result = vec![Array2::zeros((0, 0)); sample_count];
-        // debug!("old allele count {}", old_allele_count);
-        // debug!("new allele count {}", new_allele_count);
+        debug!("old allele count {}", old_allele_count);
+        debug!("new allele count {}", new_allele_count);
 
         for s in 0..sample_count {
             let old_sample_values = &self.values_by_sample_index[s];
@@ -703,10 +708,11 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 self.evidence_by_sample_index.get(&s).unwrap().len(),
                 old_sample_values.ncols(),
             );
+            debug!("sample evidence count {}", sample_evidence_count);
             let mut new_sample_values = Array2::zeros((new_allele_count, sample_evidence_count));
             // We initiate all likelihoods to -Inf.
             new_sample_values.fill(f64::NEG_INFINITY);
-            // debug!("NEW: s -> {} rows -> {} cols -> {}", s, new_sample_values.nrows(), new_sample_values.ncols());
+            debug!("NEW: s -> {} rows -> {} cols -> {}", s, new_sample_values.nrows(), new_sample_values.ncols());
             // For each old allele and read we update the new table keeping the maximum likelihood.
             for r in 0..sample_evidence_count {
                 for a in 0..old_allele_count {
@@ -760,10 +766,14 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .filter(|(_, read)| !predicate(read, interval))
                 .map(|(idx, _)| idx)
                 .collect::<Vec<usize>>();
-            // debug!(
-            //     "Before remove {}",
-            //     self.evidence_by_sample_index.get(&s).unwrap().len()
-            // );
+            debug!(
+                "Remove indices {}",
+                remove_indices
+                    .iter()
+                    .map(|i| i.to_string())
+                    .collect::<Vec<String>>()
+                    .join(","));
+
             self.remove_evidence_by_index(s, remove_indices);
             // debug!(
             //     "After remove {}",
@@ -1069,7 +1079,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .map(|a| (tie_breaking_priority)(a))
                 .collect::<Vec<i32>>(),
         );
-
+        debug!("Priorities {:?}", priorities);
         let evidence_count = std::cmp::min(
             self.evidence_by_sample_index
                 .get(&sample_index)

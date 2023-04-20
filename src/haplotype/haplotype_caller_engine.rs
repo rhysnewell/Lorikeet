@@ -123,7 +123,7 @@ impl HaplotypeCallerEngine {
             Some(vals) => vals
                 .map(|k_size| *k_size)
                 .collect::<Vec<usize>>(),
-            _ => vec![17, 25],
+            _ => vec![21, 33],
         };
 
         let mut prune_factor = if args.get_flag("use-adaptive-pruning") {
@@ -132,7 +132,16 @@ impl HaplotypeCallerEngine {
             *args.get_one::<usize>("min-prune-factor").unwrap()
         };
 
-        Self::set_assembly_profile(args, &mut kmer_sizes, &mut prune_factor);
+        let mut recover_all_dangling_branches = args.get_flag("recover-all-dangling-branches");
+        let mut allow_non_unique_kmers_in_ref = args.get_flag("allow-non-unique-kmers-in-ref");
+
+        Self::set_assembly_profile(
+            args, 
+            &mut kmer_sizes, 
+            &mut prune_factor, 
+            &mut allow_non_unique_kmers_in_ref, 
+            &mut recover_all_dangling_branches
+        );
 
         let mut assembly_engine = ReadThreadingAssembler::new(
             *args.get_one::<i32>("max-allowed-path-for-read-threading-assembler")
@@ -167,7 +176,7 @@ impl HaplotypeCallerEngine {
         assembly_engine.recover_dangling_branches =
             !args.get_flag("do-not-recover-dangling-branches");
         assembly_engine.recover_all_dangling_branches =
-            args.get_flag("recover-all-dangling-branches");
+            recover_all_dangling_branches;
         assembly_engine.min_dangling_branch_length = *args
             .get_one::<i32>("min-dangling-branch-length")
             .unwrap();
@@ -227,7 +236,13 @@ impl HaplotypeCallerEngine {
         }
     }
 
-    fn set_assembly_profile(args: &clap::ArgMatches, kmer_sizes: &mut Vec<usize>, prune_factor: &mut usize) {
+    fn set_assembly_profile(
+        args: &clap::ArgMatches, 
+        kmer_sizes: &mut Vec<usize>, 
+        prune_factor: &mut usize,
+        allow_non_unique_kmers_in_ref: &mut bool,
+        recover_all_dangling_branches: &mut bool
+    ) {
         if !args.contains_id("profile") {
             return
         }
@@ -235,25 +250,39 @@ impl HaplotypeCallerEngine {
         let profile = args.get_one::<String>("profile").unwrap().to_lowercase();
         match profile.as_str() {
             "very-fast" => {
-                *prune_factor = 2;
+                *prune_factor = 2; // prunes low weight chains
                 if kmer_sizes.len() > 1 {
-                    *kmer_sizes = vec![21];
-                }
-            },
+                    *kmer_sizes = vec![33]; // only a single k-mer assembly
+                };
+                *allow_non_unique_kmers_in_ref = false; // ignores repeat regions
+                *recover_all_dangling_branches = false; // does not spend too much time recovering branches
+            }
             "fast" => {
-                *prune_factor = 1;
+                *prune_factor = 2; // prunes low weight chains
                 if kmer_sizes.len() > 1 {
-                    *kmer_sizes = vec![21];
-                }
+                    *kmer_sizes = vec![21, 33]; // only a single k-mer assembly
+                };
+                *allow_non_unique_kmers_in_ref = false; // ignores repeat regions
+                *recover_all_dangling_branches = false; // does not spend too much time recovering branches
             },
             "precise" => {
-                *prune_factor = 2;
-                *kmer_sizes = vec![17, 21, 25];
+                *prune_factor = 2; // prunes low weight chains
+                *kmer_sizes = vec![21, 33, 45]; // multiple k-mer assemblies
+                *allow_non_unique_kmers_in_ref = false; // ignores repeat regions
+                *recover_all_dangling_branches = false; // does not spend too much time recovering branches
             },
             "sensitive" => {
-                *prune_factor = 0;
-                *kmer_sizes = vec![17, 21, 25];
+                *prune_factor = 0; // does not prune low weight chains
+                *kmer_sizes = vec![21, 33, 45]; // multiple k-mer assemblies
+                // *allow_non_unique_kmers_in_ref = true; // does not ignore repeat regions
+                *recover_all_dangling_branches = false; // does not spend too much time recovering branches
             },
+            "super-sensitive" => {
+                *prune_factor = 0; // does not prune low weight chains
+                *kmer_sizes = vec![21, 33, 45]; // multiple k-mer assemblies
+                // *allow_non_unique_kmers_in_ref = true; // does not ignore repeat regions
+                *recover_all_dangling_branches = true; // spends a lot of time recovering branches
+            }
             _ => {
                 // just use defaults or what is already set
                 warn!("Unknown assembly profile: {}", profile);
@@ -1206,11 +1235,11 @@ impl HaplotypeCallerEngine {
         let (mut assembly_result, filtered_reads) =
             self.filter_non_passing_reads(assembly_result, flag_filters);
         // let filtered_reads = Vec::new();
-        // debug!("Filtered reads {}", filtered_reads.len());
-        // debug!(
-        //     "Assembly result allele order after read filter {:?}",
-        //     &assembly_result.haplotypes.len()
-        // );
+        debug!("Filtered reads {}", filtered_reads.len());
+        debug!(
+            "Assembly result allele order after read filter {:?}",
+            &assembly_result.haplotypes.len()
+        );
         let per_sample_filtered_read_list =
             AssemblyBasedCallerUtils::split_reads_by_sample(filtered_reads);
 
@@ -1242,12 +1271,12 @@ impl HaplotypeCallerEngine {
             .compute_read_likelihoods(&mut assembly_result, sample_names.to_vec(), reads);
 
         // if debug {
-        // debug!(
-        //     "Read by sample after compute: {:?}",
-        //     (0..sample_names.len())
-        //         .map(|s| read_likelihoods.sample_evidence_count(s))
-        //         .collect::<Vec<usize>>()
-        // );
+        debug!(
+            "Read by sample after compute: {:?}",
+            (0..sample_names.len())
+                .map(|s| read_likelihoods.sample_evidence_count(s))
+                .collect::<Vec<usize>>()
+        );
         // }
 
         // debug!(
@@ -1287,12 +1316,12 @@ impl HaplotypeCallerEngine {
         read_likelihoods.change_evidence(read_alignments);
 
         // if debug {
-        // debug!(
-        //     "After change {:?}",
-        //     (0..sample_names.len())
-        //         .map(|s| read_likelihoods.sample_evidence_count(s))
-        //         .collect::<Vec<usize>>()
-        // );
+        debug!(
+            "After change {:?}",
+            (0..sample_names.len())
+                .map(|s| read_likelihoods.sample_evidence_count(s))
+                .collect::<Vec<usize>>()
+        );
         // // }
 
         // debug!(

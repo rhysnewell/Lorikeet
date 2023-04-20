@@ -90,6 +90,7 @@ impl GenotypingEngine {
         }
 
         let mut reduced_vc: VariantContext;
+        let debug = vc.loc.start == 483;
         if VariantContext::MAX_ALTERNATE_ALLELES < (vc.get_alternate_alleles().len()) {
             let alleles_to_keep = AlleleSubsettingUtils::calculate_most_likely_alleles(
                 &vc,
@@ -116,6 +117,11 @@ impl GenotypingEngine {
             reduced_vc.genotypes = reduced_genotypes;
         } else {
             reduced_vc = vc.clone();
+        }
+
+        if debug {
+            debug!("FOUND POSITION {}", vc.loc.start);
+            debug!("GC {:?}", &reduced_vc.genotypes);
         }
 
         //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
@@ -170,6 +176,12 @@ impl GenotypingEngine {
                 "Did not pass emit threshold {} {}",
                 phred_scaled_confidence, stand_min_conf
             );
+            debug!("Site is mono {}", output_alternative_alleles.site_is_monomorphic);
+            debug!("No alleles or first allele is not NON_REF {:?}", GenotypingEngine::no_alleles_or_first_allele_is_not_non_ref(
+                &output_alternative_alleles.alleles,
+            ));
+            debug!("Given alleles empty {}", given_alleles_empty);
+            debug!("Alleles {:?}", &output_alternative_alleles.alleles);
             return None;
         }
 
@@ -407,17 +419,17 @@ impl GenotypingEngine {
                 let is_non_ref_which_is_lone_alt_allele =
                     alternative_allele_count == 1 && allele.eq(&*NON_REF_ALLELE);
 
-                // debug!(
-                //     "is non ref which is lone alt_allele {}",
-                //     is_non_ref_which_is_lone_alt_allele
-                // );
+                debug!(
+                    "is non ref which is lone alt_allele {}",
+                    is_non_ref_which_is_lone_alt_allele
+                );
                 let is_plausible = af_calculation_result.passes_threshold(allele, stand_min_conf);
-                // debug!(
-                //     "plausible {} {} {}",
-                //     is_plausible,
-                //     af_calculation_result.get_log10_posterior_of_allele_absent(allele),
-                //     QualityUtils::qual_to_error_prob_log10(stand_min_conf)
-                // );
+                debug!(
+                    "plausible {} {} {}",
+                    is_plausible,
+                    af_calculation_result.get_log10_posterior_of_allele_absent(allele),
+                    QualityUtils::qual_to_error_prob_log10(stand_min_conf)
+                );
 
                 //it's possible that the upstream deletion that spanned this site was not emitted, mooting the symbolic spanning deletion allele
                 let is_spurious_spanning_deletion = VCFConstants::is_spanning_deletion(allele)
