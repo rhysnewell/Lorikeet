@@ -1964,7 +1964,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("profile")
                         .long("profile")
-                        .value_parser(["fast", "sensitive", "precise", "super-sensitive"])
+                        .value_parser(["fast", "very-fast", "sensitive", "precise", "super-sensitive"])
                         .required(false)
                 )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))
@@ -2733,7 +2733,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("profile")
                         .long("profile")
-                        .value_parser(["fast", "sensitive", "precise", "super-sensitive"])
+                        .value_parser(["fast", "very-fast", "sensitive", "precise", "super-sensitive"])
                         .required(false)
                 )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))
@@ -3503,7 +3503,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("profile")
                         .long("profile")
-                        .value_parser(["fast", "sensitive", "precise", "super-sensitive"])
+                        .value_parser(["fast", "very-fast", "sensitive", "precise", "super-sensitive"])
                         .required(false)
                 )
                 .arg(Arg::new("force").long("force").action(clap::ArgAction::SetTrue))
