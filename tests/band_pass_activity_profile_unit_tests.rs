@@ -8,7 +8,7 @@ extern crate approx;
 
 use itertools::Itertools;
 use lorikeet_genome::activity_profile::activity_profile::{ActivityProfile, Profile};
-use lorikeet_genome::activity_profile::activity_profile_state::{ActivityProfileState, Type};
+use lorikeet_genome::activity_profile::activity_profile_state::{ActivityProfileState, ActivityProfileDataType};
 use lorikeet_genome::activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::haplotype::event_map::EventMap;
@@ -66,12 +66,12 @@ fn test_band_pass(
     let preceding_prob = if preceding_is_active { 1.0 } else { 0.0 };
     for i in 0..n_preceding_sites {
         let loc = SimpleInterval::new(0, i + start, i + start);
-        let state = ActivityProfileState::new(loc, preceding_prob, Type::None);
+        let state = ActivityProfileState::new(loc, preceding_prob, ActivityProfileDataType::None);
         profile.add(state);
     }
 
     let next_loc = SimpleInterval::new(0, n_preceding_sites + start, n_preceding_sites + start);
-    profile.add(ActivityProfileState::new(next_loc, 1.0, Type::None));
+    profile.add(ActivityProfileState::new(next_loc, 1.0, ActivityProfileDataType::None));
 
     if !preceding_is_active && n_preceding_sites >= band_pass_size && band_pass_size < start {
         // we have enough space that all probs fall on the genome
@@ -171,7 +171,7 @@ fn test_band_pass_composition(
     for i in 0..band_pass_size {
         let loc = SimpleInterval::new(tid, pos, pos);
         pos += 1;
-        let state = ActivityProfileState::new(loc, 0.0, Type::None);
+        let state = ActivityProfileState::new(loc, 0.0, ActivityProfileDataType::None);
         profile.add(state);
         raw_active_probs[raw_prob_offset] = 0.0;
         raw_prob_offset += 1;
@@ -181,7 +181,7 @@ fn test_band_pass_composition(
     for i in 0..integration_length {
         let next_loc = SimpleInterval::new(tid, pos, pos);
         pos += 1;
-        profile.add(ActivityProfileState::new(next_loc, 1.0, Type::None));
+        profile.add(ActivityProfileState::new(next_loc, 1.0, ActivityProfileDataType::None));
         raw_active_probs[raw_prob_offset] = 1.0;
         raw_prob_offset += 1;
 

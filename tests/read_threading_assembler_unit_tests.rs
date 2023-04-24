@@ -128,7 +128,7 @@ fn assemble(
     ref_haplotype.set_cigar(cigar.0);
 
     let mut active_region =
-        AssemblyRegion::new(loc.clone(), true, 0, contig_len, loc.get_contig(), 0);
+        AssemblyRegion::new(loc.clone(), true, 0, contig_len, loc.get_contig(), 0, 0.0);
     active_region.add_all(reads);
     let samples = vec!["sample_1".to_string()];
     let assembly_result_set = assembler.run_local_assembly(
@@ -140,6 +140,7 @@ fn assemble(
         *STANDARD_NGS,
         *NEW_SW_PARAMETERS,
         AVXMode::detect_mode(),
+        None
     );
 
     return assembly_result_set;
@@ -547,6 +548,7 @@ impl TestAssembler {
             sample_names.as_slice(),
             &*DANGLING_END_SW_PARAMETERS,
             AVXMode::detect_mode(),
+            None
         )[0]
         .clone()
         .get_seq_graph();

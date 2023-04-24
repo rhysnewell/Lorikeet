@@ -27,7 +27,7 @@ static b37_reference_20_21: &str = "tests/resources/large/human_g1k_v37.20.21.fa
 #[test]
 fn test_constructor() {
     let loc = SimpleInterval::new(1, 10, 20);
-    let ar = AssemblyRegion::new(loc.clone(), true, 2, *CONTIG_LEN, 0, 0);
+    let ar = AssemblyRegion::new(loc.clone(), true, 2, *CONTIG_LEN, 0, 0, 0.0);
     assert_eq!(ar.is_active(), true);
     assert_eq!(ar.get_span(), &loc);
     assert_eq!(ar.get_contig(), 0)
@@ -39,7 +39,7 @@ fn test_creating_assembly_regions(
     extension: usize,
     reader: &mut ReferenceReader,
 ) {
-    let mut region = AssemblyRegion::new(loc.clone(), is_active, extension, *CONTIG_LEN, 0, 0);
+    let mut region = AssemblyRegion::new(loc.clone(), is_active, extension, *CONTIG_LEN, 0, 0, 0.0);
     println!(
         "loc {:?} active {} extension {} Contig Length {}",
         &loc, is_active, extension, *CONTIG_LEN
@@ -142,7 +142,7 @@ fn make_polling_data() {
 }
 
 fn test_assembly_region_reads(loc: SimpleInterval, read: BirdToolRead) {
-    let mut region = AssemblyRegion::new(loc.clone(), true, 0, *CONTIG_LEN, 0, 0);
+    let mut region = AssemblyRegion::new(loc.clone(), true, 0, *CONTIG_LEN, 0, 0, 0.0);
     let dummy_reads = Vec::new();
     let dummy_reads_with_one = vec![read.clone()];
 
@@ -234,7 +234,7 @@ fn make_assembly_region_reads() {
 
 fn test_bad_read(read1: BirdToolRead, read2: BirdToolRead) {
     let loc = SimpleInterval::new(0, read1.get_start(), read1.get_end());
-    let mut region = AssemblyRegion::new(loc, true, 0, *CONTIG_LEN, 0, 0);
+    let mut region = AssemblyRegion::new(loc, true, 0, *CONTIG_LEN, 0, 0, 0.0);
     region.add(read1);
     region.add(read2);
 }
@@ -297,7 +297,7 @@ fn test_trim_assembly_region(
     expected_assembly_region: SimpleInterval,
     _expected_extension: usize,
 ) {
-    let region = AssemblyRegion::new(region_loc, true, extension, *CONTIG_LEN, 0, 0);
+    let region = AssemblyRegion::new(region_loc, true, extension, *CONTIG_LEN, 0, 0, 0.0);
     let trimmed = region.trim_with_padded_span(desired_span.clone(), desired_span.clone());
     assert_eq!(
         trimmed.get_span(),

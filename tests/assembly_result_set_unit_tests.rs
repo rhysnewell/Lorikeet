@@ -77,7 +77,7 @@ fn test_trim_to(
 fn trimming_data() {
     let rng = ThreadRng::default();
     let active_region =
-        AssemblyRegion::new(SimpleInterval::new(0, 1000, 1100), true, 25, 1000000, 0, 0);
+        AssemblyRegion::new(SimpleInterval::new(0, 1000, 1100), true, 25, 1000000, 0, 0, 0.0);
     let length = active_region.get_padded_span().size();
     let mut rnd = RandomDNA::new(rng);
     let reference = rnd.next_bases(length);

@@ -4,7 +4,7 @@
 )]
 
 use lorikeet_genome::activity_profile::activity_profile::{ActivityProfile, Profile};
-use lorikeet_genome::activity_profile::activity_profile_state::{ActivityProfileState, Type};
+use lorikeet_genome::activity_profile::activity_profile_state::{ActivityProfileState, ActivityProfileDataType};
 use lorikeet_genome::activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
@@ -105,6 +105,7 @@ impl BasicActivityProfileTestProvider {
                 self.contig_len,
                 self.region_start.get_contig(),
                 self.ref_idx,
+                0.0
             );
             l.push(r);
             is_active = !is_active;
@@ -127,7 +128,7 @@ fn test_activity_profile(cfg: BasicActivityProfileTestProvider) {
                     cfg.region_start.get_start() + i,
                     cfg.region_start.get_start() + i,
                 );
-                profile.add(ActivityProfileState::new(loc, p, Type::None));
+                profile.add(ActivityProfileState::new(loc, p, ActivityProfileDataType::None));
                 assert!(
                     !profile.is_empty(),
                     "Profile should not be empty after adding state"
@@ -166,7 +167,7 @@ fn test_activity_profile(cfg: BasicActivityProfileTestProvider) {
                 );
                 profile
                     .activity_profile
-                    .add(ActivityProfileState::new(loc, p, Type::None));
+                    .add(ActivityProfileState::new(loc, p, ActivityProfileDataType::None));
                 assert!(
                     !profile.activity_profile.is_empty(),
                     "Profile should not be empty after adding state"
@@ -301,7 +302,7 @@ fn test_region_creation(
         let is_active = probs[i];
         let loc = SimpleInterval::new(0, i + start, i + start);
         let state =
-            ActivityProfileState::new(loc, if is_active { 1.0 } else { 0.0 }, Type::None);
+            ActivityProfileState::new(loc, if is_active { 1.0 } else { 0.0 }, ActivityProfileDataType::None);
         profile.add(state);
 
         if !wait_until_end {
@@ -462,7 +463,7 @@ fn test_soft_clips(
     );
     for i in 0..n_preceding_sites {
         let loc = SimpleInterval::new(0, i + start, i + start);
-        let state = ActivityProfileState::new(loc, 0.0, Type::None);
+        let state = ActivityProfileState::new(loc, 0.0, ActivityProfileDataType::None);
         profile.add(state);
     }
 
@@ -471,7 +472,7 @@ fn test_soft_clips(
     profile.add(ActivityProfileState::new(
         soft_clip_loc.clone(),
         1.0,
-        Type::HighQualitySoftClips(soft_clip_size as f32),
+        ActivityProfileDataType::HighQualitySoftClips(soft_clip_size as f32),
     ));
 
     let actual_num_of_soft_clips = min(soft_clip_size, profile.get_max_prob_propagation_distance());
@@ -586,7 +587,7 @@ fn test_active_region_cuts(
     for i in 0..=(max_region_size + profile.get_max_prob_propagation_distance()) {
         let loc = SimpleInterval::new(0, i, i);
         let prob = if i < probs.len() { probs[i] } else { 0.0 };
-        let state = ActivityProfileState::new(loc, prob, Type::None);
+        let state = ActivityProfileState::new(loc, prob, ActivityProfileDataType::None);
         // println!("State: {:?}", &state);
         profile.add(state);
     }

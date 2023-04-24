@@ -59,7 +59,7 @@ fn test_compute_likelihoods() {
         read1.get_end(),
     ));
     let mut assembly_result_set = AssemblyResultSet::<ReadThreadingGraph>::new(
-        AssemblyRegion::new(SimpleInterval::new(0, 0, n + 1), true, 0, 100, 0, 0),
+        AssemblyRegion::new(SimpleInterval::new(0, 0, n + 1), true, 0, 100, 0, 0, 0.0),
         vec![b'A'; n + 1],
         SimpleInterval::new(0, 0, n + 1),
         hap1.clone(),

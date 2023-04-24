@@ -47,6 +47,7 @@ fn test_finalize_region() {
         header.size(),
         0,
         0,
+        0.0
     );
     assert!(active_region.is_active());
     assert!(!active_region.is_finalized());
