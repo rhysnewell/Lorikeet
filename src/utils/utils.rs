@@ -139,7 +139,7 @@ pub fn get_streamed_bam_readers<'a>(
             }
         }
     }
-    let discard_unmapped = m.contains_id("discard-unmapped");
+    let discard_unmapped = !m.get_flag("keep-unmapped");
     debug!("Reference Tempfile: {:?}", &reference_tempfile);
     let params = match readtype {
         &ReadType::Short => MappingParameters::generate_from_clap(
@@ -319,7 +319,7 @@ pub fn get_streamed_filtered_bam_readers(
             }
         }
     }
-    let discard_unmapped = m.contains_id("discard-unmapped");
+    let discard_unmapped = m.get_flag("keep-unmapped");
 
     let params = match readtype {
         &ReadType::Short => MappingParameters::generate_from_clap(

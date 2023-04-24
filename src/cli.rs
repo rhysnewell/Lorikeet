@@ -756,8 +756,8 @@ pub fn genotype_full_help() -> Manual {
             )
             .flag(
                 Flag::new()
-                    .long("--discard-unmapped")
-                    .help("Exclude unmapped reads from cached BAM files. [default: not set] \n"),
+                    .long("--keep-unmapped")
+                    .help("Include unmapped reads from cached BAM files. [default: not set] \n"),
             ),
     );
 
@@ -842,8 +842,8 @@ pub fn call_full_help() -> Manual {
             )
             .flag(
                 Flag::new()
-                    .long("--discard-unmapped")
-                    .help("Exclude unmapped reads from cached BAM files. [default: not set]"),
+                    .long("--keep-unmapped")
+                    .help("Include unmapped reads from cached BAM files. [default: not set]"),
             ),
     );
 
@@ -931,8 +931,8 @@ pub fn consensus_full_help() -> Manual {
             )
             .flag(
                 Flag::new()
-                    .long("--discard-unmapped")
-                    .help("Exclude unmapped reads from cached BAM files. [default: not set]"),
+                    .long("--Keep-unmapped")
+                    .help("Include unmapped reads from cached BAM files. [default: not set]"),
             ),
     );
 
@@ -1437,8 +1437,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hide(true),
                 )
                 .arg(
-                    Arg::new("discard-unmapped")
-                        .long("discard-unmapped")
+                    Arg::new("keep-unmapped")
+                        .long("keep-unmapped")
                         .action(clap::ArgAction::SetTrue)
                         .requires("bam-file-cache-directory"),
                 )
@@ -2222,8 +2222,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hide(true),
                 )
                 .arg(
-                    Arg::new("discard-unmapped")
-                        .long("discard-unmapped")
+                    Arg::new("keep-unmapped")
+                        .long("keep-unmapped")
                         .action(clap::ArgAction::SetTrue)
                         .requires("bam-file-cache-directory"),
                 )
@@ -3002,8 +3002,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hide(true),
                 )
                 .arg(
-                    Arg::new("discard-unmapped")
-                        .long("discard-unmapped")
+                    Arg::new("keep-unmapped")
+                        .long("keep-unmapped")
                         .action(clap::ArgAction::SetTrue)
                         .requires("bam-file-cache-directory"),
                 )

@@ -69,12 +69,7 @@ pub struct AssemblyRegion {
 }
 
 impl AssemblyRegion {
-    /**
-     * Create a new AssemblyRegion containing no reads
-     *  @param activeSpan the span of this active region
-     * @param isActive indicates whether this is an active region, or an inactive one
-     * @param padding the active region padding to use for this active region
-     */
+    /// Create a new AssemblyRegion
     pub fn new(
         active_span: SimpleInterval,
         is_active: bool,
@@ -102,6 +97,7 @@ impl AssemblyRegion {
         }
     }
 
+    /// Calculate the coverage for this regions givent the set of reads
     pub fn calculate_coverage<L: Locatable>(&self, reads: &[L]) -> f64 {
         let mut coverage = vec![0; self.padded_span.size()];
 
@@ -120,6 +116,7 @@ impl AssemblyRegion {
         mean
     }
 
+    /// Add new kmer sizes to the list of kmer sizes to use for assembly
     pub fn compute_additional_kmer_sizes(&self, current_kmer_sizes: &[usize]) -> Option<Vec<usize>> {
         if self.activity_density < MINIMUM_ACTIVITY_DENSITY_THRESHOLD {
             return None;
@@ -132,7 +129,7 @@ impl AssemblyRegion {
                 Self::add_kmer_size(*kmer_size, current_kmer_sizes, &mut additional_kmer_sizes);
             }
         } else if (self.activity_density - MINIMUM_ACTIVITY_DENSITY_THRESHOLD) > 0.2 {
-            for kmer_size in DEFAULT_ADDITIONAL_KMERS[0..2].iter() {
+            for kmer_size in DEFAULT_ADDITIONAL_KMERS[1..].iter() {
                 Self::add_kmer_size(*kmer_size, current_kmer_sizes, &mut additional_kmer_sizes);
             }
         } else {
@@ -141,11 +138,16 @@ impl AssemblyRegion {
 
         Some(additional_kmer_sizes)
     }
-
+    
+    /// Add a kmer size to the additional kmer sizes if it is not within +-5 of any of the current kmer sizes
     fn add_kmer_size(mut kmer_size: usize, current_kmer_sizes: &[usize], additional_kmer_sizes: &mut Vec<usize>) {
-        while current_kmer_sizes.contains(&kmer_size) {
+        // check if any current kmers are within +-5 of the kmer_size
+        while current_kmer_sizes.iter().any(|k| {
+            let diff = (*k as i32 - kmer_size as i32).abs();
+            diff < 5
+        }) {
             kmer_size += 3;
-        }
+        };
 
         additional_kmer_sizes.push(kmer_size);
     }
@@ -228,22 +230,6 @@ impl AssemblyRegion {
         self.reads.len()
     }
 
-    /**
-     * Override activity state of the region
-     *
-     * Note: Changing the isActive state after construction is a debug-level operation that only engine classes
-     * like AssemblyRegionWalker should be able to do
-     *
-     * @param value new activity state of this region
-     */
-    // fn set_is_active(&mut self, value: bool) {
-    //     self.is_active = value
-    // }
-
-    /**
-     * Get the span of this assembly region including the padding value
-     * @return a non-null SimpleInterval
-     */
     pub fn get_padded_span(&self) -> SimpleInterval {
         self.padded_span.clone()
     }
