@@ -310,12 +310,6 @@ impl AssemblyBasedCallerUtils {
             correct_overlapping_base_qualities,
             args.get_flag("soft-clip-low-quality-ends"),
         );
-        // debug!(
-        //     "Assembling {:?} with {} reads:    (with overlap region = {:?})",
-        //     region.get_span(),
-        //     region.get_reads().len(),
-        //     region.get_padded_span()
-        // );
 
         let full_reference_with_padding = region
             .get_assembly_region_reference(
@@ -357,6 +351,11 @@ impl AssemblyBasedCallerUtils {
         // }
 
         let region_padded_start = region.get_padded_span().get_start();
+        let additional_kmer_sizes = if args.get_flag("disable-automatic-kmer-adjustment") {
+            None
+        } else {
+            region.compute_additional_kmer_sizes(&assembly_engine.kmer_sizes)
+        };
         let mut assembly_result_set = assembly_engine.run_local_assembly(
             region,
             &mut ref_haplotype,
@@ -371,6 +370,7 @@ impl AssemblyBasedCallerUtils {
             } else {
                 AVXMode::detect_mode()
             },
+            additional_kmer_sizes
         );
 
         if !given_alleles.is_empty() {

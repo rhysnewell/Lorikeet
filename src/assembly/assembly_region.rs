@@ -8,6 +8,9 @@ use crate::utils::interval_utils::IntervalUtils;
 use crate::utils::simple_interval::Locatable;
 use crate::utils::simple_interval::SimpleInterval;
 
+const MINIMUM_ACTIVITY_DENSITY_THRESHOLD: f32 = 0.2;
+const DEFAULT_ADDITIONAL_KMERS: [usize; 3] = [19, 35, 47];
+
 /**
  * Region of the genome that gets assembled by the local assembly engine.
  *
@@ -59,6 +62,10 @@ pub struct AssemblyRegion {
      * Indicates whether the region has been finalized
      */
     has_been_finalized: bool,
+    /**
+     * The number of bases within the region that showed large evidence of activity
+     */
+    activity_density: f32,
 }
 
 impl AssemblyRegion {
@@ -75,6 +82,7 @@ impl AssemblyRegion {
         contig_length: usize,
         tid: usize,
         ref_idx: usize,
+        activity_density: f32
     ) -> AssemblyRegion {
         AssemblyRegion {
             padded_span: AssemblyRegion::make_padded_span(
@@ -90,7 +98,56 @@ impl AssemblyRegion {
             ref_idx,
             reads: Vec::new(),
             has_been_finalized: false,
+            activity_density
         }
+    }
+
+    pub fn calculate_coverage<L: Locatable>(&self, reads: &[L]) -> f64 {
+        let mut coverage = vec![0; self.padded_span.size()];
+
+        for read in reads.iter() {
+            let read_start = read.get_start() - self.padded_span.start;
+            let read_end = read.get_end() - self.padded_span.start;
+
+            for i in read_start..read_end {
+                coverage[i] += 1;
+            }
+        }
+
+        // calculate the mean
+        let total = coverage.iter().sum::<u32>();
+        let mean = total as f64 / coverage.len() as f64;
+        mean
+    }
+
+    pub fn compute_additional_kmer_sizes(&self, current_kmer_sizes: &[usize]) -> Option<Vec<usize>> {
+        if self.activity_density < MINIMUM_ACTIVITY_DENSITY_THRESHOLD {
+            return None;
+        }
+
+        let mut additional_kmer_sizes = Vec::new();
+
+        if (self.activity_density - MINIMUM_ACTIVITY_DENSITY_THRESHOLD) > 0.4 {
+            for kmer_size in DEFAULT_ADDITIONAL_KMERS.iter() {
+                Self::add_kmer_size(*kmer_size, current_kmer_sizes, &mut additional_kmer_sizes);
+            }
+        } else if (self.activity_density - MINIMUM_ACTIVITY_DENSITY_THRESHOLD) > 0.2 {
+            for kmer_size in DEFAULT_ADDITIONAL_KMERS[0..2].iter() {
+                Self::add_kmer_size(*kmer_size, current_kmer_sizes, &mut additional_kmer_sizes);
+            }
+        } else {
+            Self::add_kmer_size(DEFAULT_ADDITIONAL_KMERS[1], current_kmer_sizes, &mut additional_kmer_sizes);
+        }
+
+        Some(additional_kmer_sizes)
+    }
+
+    fn add_kmer_size(mut kmer_size: usize, current_kmer_sizes: &[usize], additional_kmer_sizes: &mut Vec<usize>) {
+        while current_kmer_sizes.contains(&kmer_size) {
+            kmer_size += 3;
+        }
+
+        additional_kmer_sizes.push(kmer_size);
     }
 
     pub fn clone_without_reads(&self) -> AssemblyRegion {
@@ -103,6 +160,7 @@ impl AssemblyRegion {
             ref_idx: self.ref_idx,
             reads: Vec::new(),
             has_been_finalized: self.has_been_finalized,
+            activity_density: self.activity_density
         }
     }
 
@@ -135,6 +193,7 @@ impl AssemblyRegion {
         contig_length: usize,
         tid: usize,
         ref_idx: usize,
+        activity_density: f32
     ) -> AssemblyRegion {
         AssemblyRegion {
             padded_span,
@@ -145,6 +204,7 @@ impl AssemblyRegion {
             ref_idx,
             reads: Vec::new(),
             has_been_finalized: false,
+            activity_density
         }
     }
 
@@ -289,6 +349,7 @@ impl AssemblyRegion {
             self.contig_length,
             self.tid,
             self.ref_idx,
+            self.activity_density
         );
 
         let mut trimmed_reads = self

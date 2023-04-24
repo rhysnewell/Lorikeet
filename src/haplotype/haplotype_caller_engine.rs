@@ -12,7 +12,7 @@ use crate::model::allele_likelihoods::AlleleLikelihoods;
 use crate::model::byte_array_allele::ByteArrayAllele;
 use crate::model::variant_context::VariantContext;
 use crate::activity_profile::activity_profile::Profile;
-use crate::activity_profile::activity_profile_state::{ActivityProfileState, Type};
+use crate::activity_profile::activity_profile_state::{ActivityProfileState, ActivityProfileDataType};
 use crate::activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use crate::annotator::variant_annotator_engine::VariantAnnotationEngine;
 use crate::assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
@@ -169,6 +169,7 @@ impl HaplotypeCallerEngine {
             args.get_flag("enable-legacy-graph-cycle-detection"),
             *args.get_one::<i32>("min-matching-bases-to-dangling-end-recovery")
                 .unwrap(),
+            args.get_flag("disable-prune-factor-correction")
         );
 
         assembly_engine.debug_graph_transformations =
@@ -260,7 +261,7 @@ impl HaplotypeCallerEngine {
             "fast" => {
                 *prune_factor = 2; // prunes low weight chains
                 if kmer_sizes.len() > 1 {
-                    *kmer_sizes = vec![21, 33]; // only a single k-mer assembly
+                    *kmer_sizes = vec![21, 33]; // multiple k-mer assemblies
                 };
                 *allow_non_unique_kmers_in_ref = false; // ignores repeat regions
                 *recover_all_dangling_branches = false; // does not spend too much time recovering branches
@@ -279,9 +280,9 @@ impl HaplotypeCallerEngine {
             },
             "super-sensitive" => {
                 *prune_factor = 0; // does not prune low weight chains
-                *kmer_sizes = vec![21, 33, 45]; // multiple k-mer assemblies
+                *kmer_sizes = vec![21, 33, 45, 57]; // multiple k-mer assemblies
                 // *allow_non_unique_kmers_in_ref = true; // does not ignore repeat regions
-                *recover_all_dangling_branches = true; // spends a lot of time recovering branches
+                *recover_all_dangling_branches = false; // spends a lot of time recovering branches
             }
             _ => {
                 // just use defaults or what is already set
@@ -980,7 +981,7 @@ impl HaplotypeCallerEngine {
                         // - `[3, -2, 4, -1]`
                         for (idx, sample_likelihoods) in genotype_likelihoods.iter().enumerate() {
                             let ref_v_any = &sample_likelihoods[pos];
-
+                            
                             // create compressed array of bases passing the depth filter.
                             // Used during ANI calculations to determine number of comparable
                             // bases between two samples.
@@ -1052,7 +1053,7 @@ impl HaplotypeCallerEngine {
                                 chunk_location.start + pos,
                             ),
                             is_active_prob as f32,
-                            Type::new(
+                            ActivityProfileDataType::new(
                                 hq_soft_clips.mean() as f32,
                                 HaplotypeCallerEngine::AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD,
                             ),
@@ -1115,31 +1116,15 @@ impl HaplotypeCallerEngine {
         flag_filters: &'b FlagFilter,
     ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
-        // debug!(
-        //     "Region of size {} with {} reads",
-        //     region.padded_span.size(),
-        //     region.reads.len()
-        // );
+
         if !region.is_active() && given_alleles.is_empty() {
-            // debug!("Region was not active");
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
         if given_alleles.is_empty() && region.len() == 0 {
-            // debug!("Region was of length 0");
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
-        // let debug = region.padded_span.start <= 1709882 && region.padded_span.end >= 1709882;
-
-        // if debug {
-        // debug!(
-        //     "loc {:?} padded Loc {:?} reads {}",
-        //     &region.active_span,
-        //     &region.padded_span,
-        //     region.reads.len()
-        // );
-        // }
         let region_without_reads = region.clone_without_reads();
 
         // run the local assembler, getting back a collection of information on how we should proceed
@@ -1149,7 +1134,6 @@ impl HaplotypeCallerEngine {
             args,
             reference_reader,
             &mut self.assembly_engine,
-            // !args.get_flag("do-not-correct-overlapping-base-qualities"),
             true,
             sample_names,
         );

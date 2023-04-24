@@ -27,14 +27,17 @@ use crate::reads::cigar_utils::CigarUtils;
 use crate::reads::read_clipper::ReadClipper;
 use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
+const PRUNE_FACTOR_COVERAGE_THRESHOLD: f64 = 10.0;
+
 #[derive(Debug, Clone)]
 pub struct ReadThreadingAssembler {
-    kmer_sizes: Vec<usize>,
+    pub(crate) kmer_sizes: Vec<usize>,
     dont_increase_kmer_sizes_for_cycles: bool,
     allow_non_unique_kmers_in_ref: bool,
     generate_seq_graph: bool,
     // recover_haplotypes_from_edges_not_covered_in_junction_trees: bool,
     num_pruning_samples: i32,
+    disable_prune_factor_correction: bool, // if the region has many reads, having a low prune factor can cause excessive runtimes
     num_best_haplotypes_per_graph: i32,
     prune_before_cycle_counting: bool,
     remove_paths_not_connected_to_ref: bool,
@@ -79,6 +82,7 @@ impl ReadThreadingAssembler {
         _use_linked_debruijn_graphs: bool,
         enable_legacy_graph_cycle_detection: bool,
         min_matching_bases_to_dangle_end_recovery: i32,
+        disable_prune_factor_correction: bool,
     ) -> ReadThreadingAssembler {
         assert!(
             max_allowed_paths_for_read_threading_assembler >= 1,
@@ -122,6 +126,7 @@ impl ReadThreadingAssembler {
             debug_graph_output_path: Some(format!("graph_debugging")),
             // graph_haplotype_histogram_path: None,
             graph_output_path: None,
+            disable_prune_factor_correction
         }
     }
 
@@ -141,6 +146,7 @@ impl ReadThreadingAssembler {
             false,
             false,
             3,
+            false,
         )
     }
 
@@ -164,6 +170,7 @@ impl ReadThreadingAssembler {
             false,
             false,
             3,
+            false
         )
     }
 
@@ -179,6 +186,10 @@ impl ReadThreadingAssembler {
         self.recover_dangling_branches = value;
     }
 
+    fn set_prune_factor(&mut self, value: usize) {
+        self.prune_factor = value;
+        self.chain_pruner.set_prune_factor(value);
+    }
     /**
      * Main entry point into the assembly engine. Build a set of deBruijn graphs out of the provided reference sequence and list of reads
      * @param assemblyRegion              AssemblyRegion object holding the reads which are to be used during assembly
@@ -200,6 +211,7 @@ impl ReadThreadingAssembler {
         dangling_end_sw_parameters: Parameters,
         reference_to_haplotype_sw_parameters: Parameters,
         avx_mode: AVXMode,
+        additional_kmer_sizes: Option<Vec<usize>>
     ) -> AssemblyResultSet<ReadThreadingGraph> {
         assert!(
             full_reference_with_padding.len() == ref_loc.size(),
@@ -228,6 +240,21 @@ impl ReadThreadingAssembler {
             .into_par_iter()
             .map(|read| ReadClipper::new(read).hard_clip_soft_clipped_bases())
             .collect::<Vec<BirdToolRead>>();
+
+        // calculate coverage estimate. no. reads / region size
+        let old_prune_factor = self.prune_factor;
+        if !self.disable_prune_factor_correction && !self.chain_pruner.is_adaptive() {
+            let coverage = assembly_region.calculate_coverage(&corrected_reads);
+            debug!("Coverage {} read count {} region size {}", coverage, corrected_reads.len(), assembly_region.get_span().size());
+            let new_prune_factor = if coverage > PRUNE_FACTOR_COVERAGE_THRESHOLD {
+                2
+            } else {
+                0
+            };
+            self.set_prune_factor(new_prune_factor);
+        }
+
+
         // debug!("Corrected reads {}", corrected_reads.len());
         // let non_ref_rt_graphs: Vec<ReadThreadingGraph> = Vec::new();
         // let non_ref_seq_graphs: Vec<SeqGraph<BaseEdgeStruct>> = Vec::new();
@@ -240,8 +267,8 @@ impl ReadThreadingAssembler {
             ref_loc.clone(),
             ref_haplotype.clone(),
         );
-        // either follow the old method for building graphs and then assembling or assemble and haplotype call before expanding kmers
 
+        // either follow the old method for building graphs and then assembling or assemble and haplotype call before expanding kmers
         if self.generate_seq_graph {
             self.assemble_kmer_graphs_and_haplotype_call(
                 &ref_haplotype,
@@ -253,6 +280,7 @@ impl ReadThreadingAssembler {
                 &dangling_end_sw_parameters,
                 &reference_to_haplotype_sw_parameters,
                 avx_mode,
+                additional_kmer_sizes
             );
         } else {
             self.assemble_graphs_and_expand_kmers_given_haplotypes(
@@ -265,8 +293,12 @@ impl ReadThreadingAssembler {
                 &dangling_end_sw_parameters,
                 &reference_to_haplotype_sw_parameters,
                 avx_mode,
+                additional_kmer_sizes
             )
         }
+
+        // reset prune_factor
+        self.set_prune_factor(old_prune_factor);
 
         // If we get to this point then no graph worked... thats bad and indicates something
         // horrible happened, in this case we just return a reference haplotype
@@ -294,6 +326,7 @@ impl ReadThreadingAssembler {
         dangling_end_sw_parameters: &Parameters,
         reference_to_haplotype_sw_parameters: &Parameters,
         avx_mode: AVXMode,
+        additional_kmer_sizes: Option<Vec<usize>>
     ) {
         // create the graphs by calling our subclass assemble method
         self.assemble(
@@ -302,6 +335,7 @@ impl ReadThreadingAssembler {
             sample_names,
             dangling_end_sw_parameters,
             avx_mode,
+            additional_kmer_sizes
         )
         .into_iter()
         .for_each(|mut result| {
@@ -346,11 +380,16 @@ impl ReadThreadingAssembler {
         sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         avx_mode: AVXMode,
+        additional_kmer_sizes: Option<Vec<usize>>,
     ) -> Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
-        // first, try using the requested kmer sizes
 
-        let mut results = self
-            .kmer_sizes
+        let mut kmer_sizes = self.kmer_sizes.clone();
+        if let Some(additional) = additional_kmer_sizes {
+            kmer_sizes.extend(additional);
+        }
+
+        // try using the requested kmer sizes
+        let mut results = kmer_sizes
             .par_iter()
             .filter_map(|kmer_size| {
                 self.create_graph(
@@ -375,6 +414,7 @@ impl ReadThreadingAssembler {
                 // }
             })
             .collect::<Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>>>();
+        
 
         if results.is_empty() && !self.dont_increase_kmer_sizes_for_cycles {
             let mut kmer_size =
@@ -427,11 +467,12 @@ impl ReadThreadingAssembler {
         dangling_end_sw_parameters: &Parameters,
         reference_to_haplotype_sw_parameters: &Parameters,
         avx_mode: AVXMode,
+        additional_kmer_sizes: Option<Vec<usize>>
     ) {
         let mut saved_assembly_results = Vec::new();
 
         let mut has_adequately_assembled_graph = false;
-        let kmers_to_try = self.get_expanded_kmer_list();
+        let kmers_to_try = self.get_expanded_kmer_list(additional_kmer_sizes);
         // first, try using the requested kmer sizes
         for i in 0..kmers_to_try.len() {
             let kmer_size = kmers_to_try[i];
@@ -589,7 +630,7 @@ impl ReadThreadingAssembler {
      * Method for getting a list of all of the specified kmer sizes to test for the graph including kmer expansions
      * @return
      */
-    fn get_expanded_kmer_list(&self) -> Vec<usize> {
+    fn get_expanded_kmer_list(&self, additional_kmer_sizes: Option<Vec<usize>>) -> Vec<usize> {
         let mut return_list = Vec::new();
         return_list.extend(self.kmer_sizes.iter());
         if !self.dont_increase_kmer_sizes_for_cycles {
@@ -601,6 +642,10 @@ impl ReadThreadingAssembler {
                 kmer_size += Self::KMER_SIZE_ITERATION_INCREASE;
                 num_iterations += 1;
             }
+        }
+
+        if let Some(additional_kmer_sizes) = additional_kmer_sizes {
+            return_list.extend(additional_kmer_sizes.iter());
         }
 
         return return_list;

@@ -1595,6 +1595,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_values(&["21", "33"]),
                 )
                 .arg(
+                    Arg::new("disable-automatic-kmer-adjustment")
+                        .long("disable-automatic-kmer-adjustment")
+                        .action(clap::ArgAction::SetTrue),
+                )
+                .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
                         .value_parser(clap::value_parser!(i32))
@@ -1661,6 +1666,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-prune-factor")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
+                )
+                .arg(
+                    Arg::new("disable-prune-factor-correction")
+                        .long("disable-prune-factor-correction")
+                        .action(clap::ArgAction::SetTrue),
                 )
                 .arg(Arg::new("use-adaptive-pruning").long("use-adaptive-pruning").action(clap::ArgAction::SetTrue))
                 .arg(
@@ -2370,6 +2380,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_values(&["21", "33"]),
                 )
                 .arg(
+                    Arg::new("disable-automatic-kmer-adjustment")
+                        .long("disable-automatic-kmer-adjustment")
+                        .action(clap::ArgAction::SetTrue),
+                )
+                .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
                         .value_parser(clap::value_parser!(i32))
@@ -2436,6 +2451,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-prune-factor")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
+                )
+                .arg(
+                    Arg::new("disable-prune-factor-correction")
+                        .long("disable-prune-factor-correction")
+                        .action(clap::ArgAction::SetTrue),
                 )
                 .arg(Arg::new("use-adaptive-pruning").long("use-adaptive-pruning").action(clap::ArgAction::SetTrue))
                 .arg(
@@ -3140,6 +3160,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_values(&["21", "33"]),
                 )
                 .arg(
+                    Arg::new("disable-automatic-kmer-adjustment")
+                        .long("disable-automatic-kmer-adjustment")
+                        .action(clap::ArgAction::SetTrue),
+                )
+                .arg(
                     Arg::new("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
                         .value_parser(clap::value_parser!(i32))
@@ -3206,6 +3231,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-prune-factor")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
+                )
+                .arg(
+                    Arg::new("disable-prune-factor-correction")
+                        .long("disable-prune-factor-correction")
+                        .action(clap::ArgAction::SetTrue),
                 )
                 .arg(Arg::new("use-adaptive-pruning").long("use-adaptive-pruning").action(clap::ArgAction::SetTrue))
                 .arg(

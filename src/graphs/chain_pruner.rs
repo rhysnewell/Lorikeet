@@ -20,6 +20,22 @@ pub enum ChainPruner {
 }
 
 impl ChainPruner {
+    pub fn is_adaptive(&self) -> bool {
+        match self {
+            ChainPruner::AdaptiveChainPruner(_) => true,
+            ChainPruner::LowWeightChainPruner(_) => false,
+        }
+    }
+
+    pub fn set_prune_factor(&mut self, new_prune_factor: usize) {
+        match self {
+            ChainPruner::LowWeightChainPruner(pruner) => pruner.prune_factor = new_prune_factor,
+            _ => {
+                // do nothing
+            }
+        }
+    }
+
     pub fn prune_low_weight_chains<
         V: BaseVertex + std::marker::Sync,
         E: BaseEdge + std::marker::Sync,

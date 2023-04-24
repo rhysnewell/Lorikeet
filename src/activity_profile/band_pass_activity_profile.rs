@@ -1,6 +1,6 @@
 use crate::assembly::assembly_region::AssemblyRegion;
 use crate::activity_profile::activity_profile::{ActivityProfile, Profile};
-use crate::activity_profile::activity_profile_state::{ActivityProfileState, Type};
+use crate::activity_profile::activity_profile_state::{ActivityProfileState, ActivityProfileDataType};
 use crate::utils::math_utils::MathUtils;
 use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
@@ -27,7 +27,7 @@ impl BandPassActivityProfile {
 
     /**
      * Create an activity profile that implements a band pass filter on the states
-     *  @param maxProbPropagationDistance region probability propagation distance beyond it's maximum size
+     * @param maxProbPropagationDistance region probability propagation distance beyond its maximum size
      * @param activeProbThreshold  threshold for the probability of a profile state being active
      * @param maxFilterSize the maximum size of the band pass filter we are allowed to create, regardless of sigma
      * @param sigma the variance of the Gaussian kernel for this band pass filter
@@ -252,7 +252,7 @@ impl Profile for BandPassActivityProfile {
                             let new_prob = super_state.is_active_prob()
                                 * self.gaussian_kernel[(i + self.filter_size as i64) as usize]
                                     as f32;
-                            states.push(ActivityProfileState::new(loc, new_prob, Type::None))
+                            states.push(ActivityProfileState::new(loc, new_prob, ActivityProfileDataType::None))
                         }
                         None => continue,
                     }

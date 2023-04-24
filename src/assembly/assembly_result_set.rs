@@ -87,6 +87,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
                 1,
                 0,
                 0,
+                0.0
             ),
             full_reference_with_padding: Vec::new(),
             padded_reference_loc: SimpleInterval::new(0, 0, 1),
