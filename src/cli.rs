@@ -149,7 +149,7 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .help(&format!(
                         "Exclude pairs with smaller numbers of \
         aligned bases. \
-        Implies --proper-pairs-only. {} \n",
+        Conflicts with --allow-improper-pairs. {} \n",
                         default_roff("0")
                     )),
             )
@@ -159,7 +159,7 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .help(&format!(
                         "Exclude pairs by overall percent \
                 identity e.g. 95 for 95%. \
-                Implies --proper-pairs-only. {} \n",
+                Conflicts with --allow-improper-pairs. {} \n",
                         default_roff("0")
                     )),
             )
@@ -170,13 +170,13 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                         "Exclude reads by percent aligned \
                 bases e.g. 95 means 95% of the read's \
                 bases must be aligned. \
-                Implies --proper-pairs-only. {} \n",
+                Conflicts with --allow-improper-pairs. {} \n",
                         default_roff("0")
                     )),
             )
             .flag(
                 Flag::new()
-                    .long("--proper-pairs-only")
+                    .long("--allow-improper-pairs")
                     .help("Require reads to be mapped as proper pairs. [default: not set] \n"),
             )
             .flag(
@@ -1463,19 +1463,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .value_parser(clap::value_parser!(u32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .value_parser(clap::value_parser!(f32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .value_parser(clap::value_parser!(f32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-covered-fraction")
@@ -1942,7 +1942,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::new("disable-optimizations").long("disable-optimizations").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("disable-avx").long("disable-avx").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("no-zeros").long("no-zeros").action(clap::ArgAction::SetTrue))
-                .arg(Arg::new("proper-pairs-only").long("proper-pairs-only").action(clap::ArgAction::SetTrue))
+                .arg(Arg::new("allow-improper-pairs").long("allow-improper-pairs").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("include-secondary").long("include-secondary").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("exclude-supplementary").long("exclude-supplementary").action(clap::ArgAction::SetTrue))
                 .arg(
@@ -2248,19 +2248,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .value_parser(clap::value_parser!(u32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .value_parser(clap::value_parser!(f32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .value_parser(clap::value_parser!(f32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-covered-fraction")
@@ -2721,7 +2721,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::new("disable-optimizations").long("disable-optimizations").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("disable-avx").long("disable-avx").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("no-zeros").long("no-zeros").action(clap::ArgAction::SetTrue))
-                .arg(Arg::new("proper-pairs-only").long("proper-pairs-only").action(clap::ArgAction::SetTrue))
+                .arg(Arg::new("allow-improper-pairs").long("allow-improper-pairs").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("include-secondary").long("include-secondary").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("exclude-supplementary").long("exclude-supplementary").action(clap::ArgAction::SetTrue))
                 .arg(
@@ -3028,19 +3028,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .value_parser(clap::value_parser!(u32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .value_parser(clap::value_parser!(f32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .value_parser(clap::value_parser!(f32))
-                        .requires("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::new("min-covered-fraction")
@@ -3501,7 +3501,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::new("disable-optimizations").long("disable-optimizations").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("disable-avx").long("disable-avx").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("no-zeros").long("no-zeros").action(clap::ArgAction::SetTrue))
-                .arg(Arg::new("proper-pairs-only").long("proper-pairs-only").action(clap::ArgAction::SetTrue))
+                .arg(Arg::new("allow-improper-pairs").long("allow-improper-pairs").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("include-secondary").long("include-secondary").action(clap::ArgAction::SetTrue))
                 .arg(Arg::new("exclude-supplementary").long("exclude-supplementary").action(clap::ArgAction::SetTrue))
                 .arg(

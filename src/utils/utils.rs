@@ -603,7 +603,7 @@ impl FilterParameters {
     pub fn generate_from_clap(m: &clap::ArgMatches) -> FilterParameters {
         let f = FilterParameters {
             flag_filters: FlagFilter {
-                include_improper_pairs: !m.get_flag("proper-pairs-only"),
+                include_improper_pairs: m.get_flag("allow-improper-pairs"),
                 include_secondary: m.get_flag("include-secondary"),
                 include_supplementary: !m.get_flag("exclude-supplementary"),
             },

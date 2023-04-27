@@ -30,7 +30,7 @@ impl FlagFilter {
         if !self.include_supplementary && record.is_supplementary() {
             return false;
         }
-        if !self.include_improper_pairs && !record.is_proper_pair() {
+        if !self.include_improper_pairs && !record.is_proper_pair() && record.is_paired() {
             return false;
         }
         return true;
