@@ -673,7 +673,7 @@ impl<'a> LorikeetEngine<'a> {
                                 },
                             );
                         } else {
-                            let _all_contexts = split_contexts.extend(filtered_contexts);
+                            split_contexts.extend(filtered_contexts);
                             assembly_engine.evaluator.write_vcf(
                                 &output_prefix,
                                 &split_contexts,

@@ -1765,31 +1765,36 @@ impl HaplotypeCallerEngine {
         reference_reader: &ReferenceReader,
         strain_info: bool,
     ) {
-        if variant_contexts.len() > 0 {
-            // initiate header
-            let mut header = Header::new();
-            // Add program info
-            self.populate_vcf_header(sample_names, reference_reader, &mut header, strain_info);
+        if variant_contexts.len() == 0 {
+            // touch empy output file and return
+            let _f = std::fs::File::create(format!("{}/{}.vcf", output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx]))
+                .expect("Unable to create empty VCF output");
+            return;
+        }
 
-            // ensure path exists
-            create_dir_all(output_prefix).expect("Unable to create output directory");
+        // initiate header
+        let mut header = Header::new();
+        // Add program info
+        self.populate_vcf_header(sample_names, reference_reader, &mut header, strain_info);
 
-            // Initiate writer
-            let mut bcf_writer = Writer::from_path(
-                format!(
-                    "{}/{}.vcf",
-                    output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx],
-                )
-                .as_str(),
-                &header,
-                true,
-                Format::Vcf, // uncompressed. Bcf compression seems busted?
+        // ensure path exists
+        create_dir_all(output_prefix).expect("Unable to create output directory");
+
+        // Initiate writer
+        let mut bcf_writer = Writer::from_path(
+            format!(
+                "{}/{}.vcf",
+                output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx],
             )
-            .unwrap_or_else(|_| panic!("Unable to create VCF output: {}.vcf", output_prefix));
+            .as_str(),
+            &header,
+            true,
+            Format::Vcf, // uncompressed. Bcf compression seems busted?
+        )
+        .unwrap_or_else(|_| panic!("Unable to create VCF output: {}.vcf", output_prefix));
 
-            for vc in variant_contexts {
-                vc.write_as_vcf_record(&mut bcf_writer, reference_reader, sample_names.len());
-            }
+        for vc in variant_contexts {
+            vc.write_as_vcf_record(&mut bcf_writer, reference_reader, sample_names.len());
         }
     }
 
