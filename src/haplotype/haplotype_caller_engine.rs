@@ -3,11 +3,14 @@ use mathru::algebra::abstr::Sign;
 use mathru::special::gamma::{digamma, ln_gamma};
 use rayon::prelude::*;
 use rust_htslib::bam::{record::Cigar, Record};
+use rust_htslib::bcf::record::GenotypeAllele;
 use rust_htslib::bcf::{Format, Header, Writer};
 use std::cmp::{max, min};
 use std::collections::HashSet;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, File};
+use std::io::{BufReader, BufWriter, BufRead, Write};
 
+use crate::annotator::variant_annotation::VariantAnnotations;
 use crate::model::allele_likelihoods::AlleleLikelihoods;
 use crate::model::byte_array_allele::ByteArrayAllele;
 use crate::model::variant_context::VariantContext;
@@ -1756,6 +1759,82 @@ impl HaplotypeCallerEngine {
         return Self::log_likelihood_ratio(ref_count, vec![qual], alt_count, None);
     }
 
+    fn write_empty_vcf(
+        &self,
+        output_prefix: &str,
+        sample_names: &[&str],
+        reference_reader: &ReferenceReader,
+        strain_info: bool,
+    ) {
+        // touch empy output file and return
+        // initiate header
+        let mut header = Header::new();
+        // Add program info
+        self.populate_vcf_header(sample_names, reference_reader, &mut header, strain_info);
+
+        // ensure path exists
+        create_dir_all(output_prefix).expect("Unable to create output directory");
+
+        // Initiate writer
+        let mut bcf_writer = Writer::from_path(
+            format!(
+                "{}/{}.vcf",
+                output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx],
+            )
+            .as_str(),
+            &header,
+            true,
+            Format::Vcf, // uncompressed. Bcf compression seems busted?
+        )
+        .unwrap_or_else(|_| panic!("Unable to create VCF output: {}.vcf", output_prefix));
+        
+        let mut record = bcf_writer.empty_record();
+
+        let mut phases = Vec::new();
+        let mut pls = Vec::new();
+        let mut ads = Vec::new();
+        let mut gqs = Vec::new();
+        let mut dps = Vec::new();
+        for _ in 0..sample_names.len() {
+            phases.extend(vec![GenotypeAllele::UnphasedMissing; 2]);
+            pls.push(".");
+            ads.push(".");
+            dps.push(0);
+            gqs.push(0);
+        }
+
+        record
+            .push_genotypes(phases.as_slice())
+            .expect("Unable to push genotypes");
+
+        record
+            .push_format_string(
+                VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
+                &pls.iter().map(|p| p.as_bytes()).collect::<Vec<&[u8]>>(),
+            )
+            .expect("Unable to push format tag");
+
+        record
+            .push_format_string(
+                VariantAnnotations::DepthPerAlleleBySample
+                    .to_key()
+                    .as_bytes(),
+                &ads.iter().map(|a| a.as_bytes()).collect::<Vec<&[u8]>>(),
+            )
+            .expect("Unable to push format tag");
+        record
+            .push_format_integer(
+                VariantAnnotations::GenotypeQuality.to_key().as_bytes(),
+                &gqs,
+            )
+            .expect("Unable to push format tag");
+        record
+            .push_format_integer(VariantAnnotations::Depth.to_key().as_bytes(), &dps)
+            .expect("Unable to push format tag");
+
+        bcf_writer.write(&record).expect("Unable to write empty record");
+    }
+
     /// Takes a vector of VariantContexts and writes them to a single VCF4 file
     pub fn write_vcf(
         &self,
@@ -1766,9 +1845,39 @@ impl HaplotypeCallerEngine {
         strain_info: bool,
     ) {
         if variant_contexts.len() == 0 {
-            // touch empy output file and return
-            let _f = std::fs::File::create(format!("{}/{}.vcf", output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx]))
-                .expect("Unable to create empty VCF output");
+
+            self.write_empty_vcf(
+                output_prefix,
+                sample_names,
+                reference_reader,
+                strain_info,
+            );
+            let out_file_name = format!(
+                "{}/{}.vcf",
+                output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx],
+            );
+            let out_file_name_tmp = format!(
+                "{}/{}.vcf.tmp",
+                output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx],
+            );
+
+            {
+                // remove last line of file
+                let file = File::open(out_file_name.as_str()).unwrap();
+                let out_file = File::create(out_file_name_tmp.as_str()).unwrap();
+
+                let reader = BufReader::new(&file);
+                let mut writer = BufWriter::new(&out_file);
+            
+                for (_, line) in reader.lines().enumerate() {
+                    let line = line.as_ref().unwrap();
+                    if !line.contains("GT:PL:AD:GQ:DP") {
+                        writeln!(writer, "{}", line).expect("Unable to write data to empty VCF");
+                    }
+                }
+            }
+            std::fs::rename(out_file_name_tmp.as_str(), out_file_name.as_str()).expect("Unable to rename VCF file");
+
             return;
         }
 
@@ -1792,6 +1901,7 @@ impl HaplotypeCallerEngine {
             Format::Vcf, // uncompressed. Bcf compression seems busted?
         )
         .unwrap_or_else(|_| panic!("Unable to create VCF output: {}.vcf", output_prefix));
+
 
         for vc in variant_contexts {
             vc.write_as_vcf_record(&mut bcf_writer, reference_reader, sample_names.len());
