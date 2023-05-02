@@ -21,8 +21,9 @@ edition = "2021"
 # Force openssl-sys to staticly link in the openssl library. Necessary when
 # cross compiling to x86_64-unknown-linux-musl.
 # vendored-openssl = ["openssl-sys/vendored"]
-default = ["fst"]
+default = ["fst", "bam"]
 fst = ["dep:pyo3"]
+bam = []
 
 [dependencies]
 approx = "^0.5"

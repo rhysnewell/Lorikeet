@@ -266,15 +266,22 @@ pub fn generate_concatenated_fasta_file(fasta_file_paths: &Vec<String>) -> Named
                 parse_fastx_file(path).expect(&format!("Unable to read fasta file {}", file));
 
             // Remove .gz .bz .xz from file names if present
-            let mut genome_name1 =
+            let genome_name1 =
                 String::from(path.to_str().expect("File name string conversion problem"));
-            if let Some(i) = genome_name1.rfind(".gz") {
-                genome_name1.truncate(i);
-            } else if let Some(i) = genome_name1.rfind(".bz") {
-                genome_name1.truncate(i);
-            } else if let Some(i) = genome_name1.rfind(".xz") {
-                genome_name1.truncate(i);
+            
+            // if genome_name1 ends with .gz, .bz, or .xz, the Rust HTSLIB indexed reader
+            // will not be able to parse it. So we need to gracefully exit and inform the user
+            // that they need to decompress the file first. Additionally, if they have provided BAM
+            // files the BAM files will need to be regenerated with decompressed input or reheadered
+            // to remove the .gz, .bz, or .xz extension.
+            if genome_name1.ends_with(".gz") || genome_name1.ends_with(".bz") || genome_name1.ends_with(".xz") {
+                error!("The genome file {} is compressed. Please decompress the file before running lorikeet.", genome_name1);
+                error!("If you are using BAM files, please regenerate the BAM files with decompressed input");
+                error!("Or reheader the BAM files to remove the .gz, .bz, or .xz extension from genome names");
+                process::exit(1);
             }
+
+
             let path1 = Path::new(&genome_name1);
 
             let genome_name = String::from(
