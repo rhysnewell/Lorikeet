@@ -5,6 +5,7 @@ use std::fmt;
 pub enum BirdToolError {
     InvalidClip(String),
     CigarBuilderError(String),
+    IOError(String),
     InvalidLocation(String),
     NonContiguousIntervals(String),
     SkipException(String),
@@ -31,6 +32,7 @@ impl Error for BirdToolError {
     fn description(&self) -> &str {
         match self {
             BirdToolError::InvalidClip(val)
+            | BirdToolError::IOError(val)
             | BirdToolError::CigarBuilderError(val)
             | BirdToolError::InvalidLocation(val)
             | BirdToolError::NonContiguousIntervals(val)

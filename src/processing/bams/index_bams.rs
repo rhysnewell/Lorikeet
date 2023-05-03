@@ -1,6 +1,7 @@
 use glob::glob;
 use indicatif::{ProgressBar, ProgressStyle};
 use rust_htslib::bam;
+use std::collections::HashMap;
 use std::path::Path;
 use std::result::Result::Err;
 use std::time::Duration;
@@ -15,8 +16,8 @@ use crate::utils::errors::BirdToolError;
 pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bams: Vec<G>,
     n_threads: usize,
-    _references: &GenomesAndContigs,
-    _parallel_genomes: bool,
+    references: &GenomesAndContigs,
+    split_bams: bool,
     mapping: bool,
 ) -> Result<(), BirdToolError> {
     let mut record: bam::Record = bam::Record::new();
@@ -46,7 +47,9 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             },
         ));
 
-        if mapping {
+        if split_bams {
+            split_bams_to_references(bam, references, &path, n_threads)?;
+        } else if mapping {
             while bam.read(&mut record).is_some() {
                 continue;
             }
@@ -67,6 +70,83 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         pb1.inc(1);
     }
     pb1.finish_with_message(format!("Reads and BAM files processed..."));
+    Ok(())
+}
+
+/// Splits bams by reference if the user has requested split bams.
+/// This is done to avoid file locking when reading bams in parallel.
+fn split_bams_to_references<R: NamedBamReader>(
+    mut bam_generator: R,
+    references: &GenomesAndContigs,
+    bam_path: &str,
+    n_threads: usize
+) -> Result<(), BirdToolError> {
+    let mut bam_writer_map: HashMap<String, bam::Writer> = HashMap::with_capacity(references.genomes.len());
+    let bam_header = bam_generator.header();
+    let new_header = bam::Header::from_template(bam_header);
+    debug!("Beginning bam splitting...");
+    // ensure output file exists for each reference
+    for ref_name in references.genomes.iter() {
+        let mut path_split = bam_path.rsplitn(2, '/');
+        let path_suffix = path_split.next().unwrap();
+        let path_prefix = path_split.next().unwrap();
+
+        let path = format!(
+            "{}/{}/{}",
+            path_prefix, ref_name, path_suffix
+        );
+        // ensure path exists
+        std::fs::create_dir_all(Path::new(&path).parent().unwrap())
+            .map_err(|_| BirdToolError::IOError(format!("Unable to create path {}", &path)))?;
+        
+        let writer = bam::Writer::from_path(&path, &new_header, bam::Format::Bam)
+            .map_err(|_| BirdToolError::IOError(format!("Unable to write bam at {}", &path)))?;
+
+        bam_writer_map.insert(ref_name.to_string(), writer);
+    }
+
+    debug!("Splitting bam to {} references", bam_writer_map.len());
+
+    let mut record: bam::Record = bam::Record::new();
+
+    while bam_generator.read(&mut record).is_some() {
+        let record_tid = record.tid() as usize;
+        let ref_name = std::str::from_utf8(bam_generator.header().tid2name(record_tid as u32)).expect("Cannot read reference name from bam file").split('~').next().unwrap();
+
+        let writer = bam_writer_map.get_mut(ref_name).unwrap();
+        writer.write(&record).unwrap();
+    }
+
+    bam_generator.finish();
+    
+    let mut paths_to_index = Vec::with_capacity(bam_writer_map.len());
+    // build indices for writers in two loops
+    // we use two loops as the destructor for the writer needs to run
+    // otherwise there is no EOF marker in the bam file
+    for (ref_name, _) in bam_writer_map.into_iter() {
+        let mut path_split = bam_path.rsplitn(2, '/');
+        let path_suffix = path_split.next().unwrap();
+        let path_prefix = path_split.next().unwrap();
+
+        let path = format!(
+            "{}/{}/{}",
+            path_prefix, ref_name, path_suffix
+        );
+        paths_to_index.push(path);
+        
+    }
+
+    // build indices for writers
+    for path in paths_to_index.into_iter() {
+        bam::index::build(
+            &path,
+            Some(&format!("{}.bai", path)),
+            bam::index::Type::Bai,
+            n_threads as u32,
+        )
+        .unwrap_or_else(|_| panic!("Unable to index bam at {}", &path));
+    }
+
     Ok(())
 }
 

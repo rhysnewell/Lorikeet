@@ -1120,7 +1120,7 @@ pub fn start_lorikeet_engine<
             threads,
             &genomes_and_contigs,
             // run_in_parallel,
-            false,
+            m.get_flag("split-bams"),
             !m.contains_id("bam-files"),
         ).expect("Failed to finish BAMs");
     }
