@@ -202,11 +202,10 @@ impl ReferenceReaderUtils {
     }
 
     pub fn generate_faidx(reference_path: &str) -> IndexedReader<File> {
-        external_command_checker::check_for_samtools();
         // debug!("Generating reference index");
         let cmd_string = format!(
             "set -e -o pipefail; \
-                     samtools faidx {}",
+            samtools faidx {}",
             reference_path
         );
         // debug!("Queuing cmd_string: {}", cmd_string);
@@ -216,7 +215,8 @@ impl ReferenceReaderUtils {
             // debug!("Found existing index file at {}", fai_path);
             return IndexedReader::from_file(&reference_path).expect("Unable to generate index");
         }
-
+                    
+        external_command_checker::check_for_samtools();
         std::process::Command::new("bash")
             .arg("-c")
             .arg(&cmd_string)

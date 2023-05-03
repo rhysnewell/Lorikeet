@@ -110,7 +110,10 @@ fn split_bams_to_references<R: NamedBamReader>(
     let mut record: bam::Record = bam::Record::new();
 
     while bam_generator.read(&mut record).is_some() {
-        let record_tid = record.tid() as usize;
+        let record_tid = record.tid();
+        if record_tid < 0 {
+            continue;
+        }
         let ref_name = std::str::from_utf8(bam_generator.header().tid2name(record_tid as u32)).expect("Cannot read reference name from bam file").split('~').next().unwrap();
 
         let writer = bam_writer_map.get_mut(ref_name).unwrap();
