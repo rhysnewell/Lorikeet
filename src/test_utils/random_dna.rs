@@ -1,5 +1,5 @@
 use rand::prelude::*;
-use std::cmp::min;
+
 lazy_static! {
     static ref code_to_base: Vec<u8> = vec![b'A', b'C', b'G', b'T'];
     static ref DNA_SET: &'static [u8] = b"ATCG";

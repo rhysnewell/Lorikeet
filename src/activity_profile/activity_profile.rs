@@ -1,10 +1,13 @@
-use activity_profile::activity_profile_state::{ActivityProfileState, Type};
-use assembly::assembly_region::AssemblyRegion;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use rayon::prelude::*;
 use std::cmp::min;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
+use crate::activity_profile::activity_profile_state::{ActivityProfileState, ActivityProfileDataType};
+use crate::assembly::assembly_region::AssemblyRegion;
+
+
+const PROBABILITY_TOLERANCE_FOR_DENSITY_CHECK: f32 = 0.05;
 
 /**
  * Class holding information about per-base activity scores for
@@ -305,7 +308,7 @@ impl Profile for ActivityProfile {
     fn process_state(&self, just_added_state: &ActivityProfileState) -> Vec<ActivityProfileState> {
         // debug!("Just added {:?}", just_added_state);
         match just_added_state.get_result_state() {
-            Type::HighQualitySoftClips(num_hq_clips) => {
+            ActivityProfileDataType::HighQualitySoftClips(num_hq_clips) => {
                 // special code to deal with the problem that high quality soft clipped bases aren't added to pileups
                 let mut states = Vec::new();
                 // add no more than the max prob propagation distance num HQ clips
@@ -321,7 +324,7 @@ impl Profile for ActivityProfile {
                         Some(loc) => states.push(ActivityProfileState::new(
                             loc,
                             just_added_state.is_active_prob(),
-                            Type::None,
+                            ActivityProfileDataType::None,
                         )),
                         _ => {
                             // Do nothing
@@ -331,7 +334,7 @@ impl Profile for ActivityProfile {
                 debug!("Soft clips added {}", states.len());
                 return states;
             }
-            Type::None => {
+            ActivityProfileDataType::None => {
                 vec![just_added_state.clone()]
             }
         }
@@ -370,7 +373,7 @@ impl Profile for ActivityProfile {
         assembly_region_extension: usize,
         min_region_size: usize,
         max_region_size: usize,
-        force_conversion: bool,
+        _force_conversion: bool,
     ) -> Vec<AssemblyRegion> {
         assert!(min_region_size > 0, "min_region_size must be >= 1");
         assert!(max_region_size > 0, "max_region_size must be >= 1");
@@ -435,35 +438,35 @@ impl Profile for ActivityProfile {
         }
         // If we are flushing the activity profile we need to trim off the excess
         // states so that we don't create regions outside of our current processing interval
-        if force_conversion {
-            let span = self.get_span();
-            match span {
-                Some(span) => {
-                    // self.state_list = &self.state_list[span.size()..];
-                    // self.state_list.retain(|state| !states_to_trim_away.contains(state));
-                    debug!("Span size {} states {}", span.size(), self.state_list.len());
-                    if span.size() < self.state_list.len() {
-                        debug!(
-                            "Drained {}",
-                            self.state_list
-                                .drain(span.size()..self.state_list.len())
-                                .count()
-                        );
-                        // self.state_list = self.state_list[0..span.size()].to_vec();
-                    }
-                }
-                None => {
-                    // Do nothing I guess?
-                }
-            }
-        }
+        // if force_conversion {
+        //     let span = self.get_span();
+        //     match span {
+        //         Some(span) => {
+        //             // self.state_list = &self.state_list[span.size()..];
+        //             // self.state_list.retain(|state| !states_to_trim_away.contains(state));
+        //             debug!("Span size {} states {}", span.size(), self.state_list.len());
+        //             if span.size() < self.state_list.len() {
+        //                 // debug!(
+        //                 //     "Drained {}",
+        //                 //     self.state_list
+        //                 //         .drain(span.size()..self.state_list.len())
+        //                 //         .count()
+        //                 // );
+        //                 // self.state_list = self.state_list[0..span.size()].to_vec();
+        //             }
+        //         }
+        //         None => {
+        //             // Do nothing I guess?
+        //         }
+        //     }
+        // }
 
         // debug!("Active prob 0 {} Threshold {}", &self.state_list[0].is_active_prob(), &self.active_prob_threshold);
         let is_active_region = &self.state_list[0].is_active_prob() > &self.active_prob_threshold;
-        debug!(
-            "First {:?} active? {}",
-            &self.state_list[0], is_active_region
-        );
+        // debug!(
+        //     "First {:?} active? {}",
+        //     &self.state_list[0], is_active_region
+        // );
         let offset_of_next_region_end = self.find_end_of_region(
             is_active_region,
             min_region_size,
@@ -475,11 +478,10 @@ impl Profile for ActivityProfile {
         match offset_of_next_region_end {
             Some(offset_of_next_region_end) => {
                 // we need to create the active region, and clip out the states we're extracting from this profile
-                let mut sub = self
+                let sub = self
                     .state_list
                     .drain(0..offset_of_next_region_end + 1)
                     .collect_vec();
-                // sub.clear();
 
                 // update the start and stop locations as necessary
                 if self.state_list.is_empty() {
@@ -498,7 +500,14 @@ impl Profile for ActivityProfile {
                         self.contig_len - 1,
                     ),
                 );
-                debug!("regionLoc {:?}", &region_loc);
+
+                // we can get a glimpse of the activity density here. i.e. the number of active states
+                // within this span
+                let activity_density = sub.iter().filter(|state| state.is_active_prob() > PROBABILITY_TOLERANCE_FOR_DENSITY_CHECK).count();
+                // divide this density count by the length
+                let activity_density = activity_density as f32 / region_loc.size() as f32;
+
+                debug!("regionLoc {:?}: activity density {}", &region_loc, activity_density);
                 return Some(AssemblyRegion::new(
                     region_loc,
                     is_active_region,
@@ -506,6 +515,7 @@ impl Profile for ActivityProfile {
                     self.contig_len,
                     self.tid,
                     self.ref_idx,
+                    activity_density,
                 ));
             }
             None => None,

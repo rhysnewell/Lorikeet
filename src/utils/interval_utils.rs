@@ -1,5 +1,6 @@
 use clap::ArgMatches;
-use utils::simple_interval::SimpleInterval;
+
+use crate::utils::simple_interval::SimpleInterval;
 
 pub struct IntervalUtils {}
 
@@ -31,7 +32,7 @@ impl IntervalUtils {
         let bounded_start = start;
         let bounded_stop = std::cmp::min(contig_length, stop);
 
-        if (bounded_start > contig_length) {
+        if bounded_start > contig_length {
             return None;
         } else {
             return Some(SimpleInterval::new(tid, bounded_start, bounded_stop));
@@ -39,8 +40,8 @@ impl IntervalUtils {
     }
 
     pub fn parse_limiting_interval(args: &ArgMatches) -> Option<SimpleInterval> {
-        if args.is_present("limiting-interval") {
-            let interval_str = args.value_of("limiting-interval").unwrap();
+        if args.contains_id("limiting-interval") {
+            let interval_str = args.get_one::<String>("limiting-interval").unwrap();
             let split = interval_str.split('-').collect::<Vec<&str>>();
             if split.len() == 1 {
                 None

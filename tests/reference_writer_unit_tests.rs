@@ -1,20 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate mathru;
-extern crate rand;
-extern crate statrs;
 
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
 use lorikeet_genome::model::variant_context::{VariantContext, VariantType};

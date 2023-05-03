@@ -1,18 +1,18 @@
 use gkl::smithwaterman::OverhangStrategy;
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
 use ordered_float::OrderedFloat;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
-use rayon::prelude::*;
-use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::CigarString;
-use smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
 use std::cmp::Ordering;
 use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
-use utils::base_utils::BaseUtils;
+use std::hash::Hash;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
+use crate::utils::base_utils::BaseUtils;
 
 /**
  * A path thought a BaseGraph
@@ -132,9 +132,9 @@ impl Path {
         }
     }
 
-    fn paths_are_the_same(&self, path: &Self) -> bool {
-        self.edges_in_order == path.edges_in_order
-    }
+    // fn paths_are_the_same(&self, path: &Self) -> bool {
+    //     self.edges_in_order == path.edges_in_order
+    // }
 
     /**
      * Does this path contain the given vertex?
@@ -156,7 +156,7 @@ impl Path {
     }
 
     pub fn to_string<V: BaseVertex, E: BaseEdge>(&self, graph: &BaseGraph<V, E>) -> String {
-        let mut joined_path = self
+        let joined_path = self
             .get_vertices(graph)
             .iter()
             .map(|v| {

@@ -34,7 +34,7 @@ pub trait BaseEdge: Debug + Clone + Send + Sync + Eq + PartialEq + Hash {
      * @param multiplicity our desired multiplicity
      * @return a newly allocated BaseEdge
      */
-    fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self
+    fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, _single_sample_capacity: usize) -> Self
     where
         Self: std::marker::Sized,
     {

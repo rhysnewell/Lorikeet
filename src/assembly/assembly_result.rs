@@ -1,10 +1,10 @@
-use graphs::base_edge::BaseEdgeStruct;
-use graphs::seq_graph::SeqGraph;
-use haplotype::haplotype::Haplotype;
 use hashlink::LinkedHashSet;
-use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
-use std::collections::HashSet;
-use utils::simple_interval::Locatable;
+
+use crate::graphs::base_edge::BaseEdgeStruct;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::haplotype::haplotype::Haplotype;
+use crate::read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
+use crate::utils::simple_interval::Locatable;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Status {

@@ -1,14 +1,13 @@
 use bio::alphabets::dna;
 use bio_types::strand::Strand;
 use itertools::{izip, Itertools};
-use model::variant_context::VariantContext;
-use model::variant_context_utils::VariantContextUtils;
-use model::variants::{Base, Variant};
-use rand::seq::index::sample;
-use reference::reference_reader::ReferenceReader;
 use rust_htslib::bcf::Read;
 use std::collections::HashMap;
-use utils::utils::{mean, std_deviation};
+
+use crate::model::variant_context::VariantContext;
+use crate::model::variant_context_utils::VariantContextUtils;
+use crate::reference::reference_reader::ReferenceReader;
+use crate::utils::utils::{mean, std_deviation};
 
 #[allow(dead_code)]
 pub struct GeneInfo {
@@ -113,12 +112,12 @@ impl Translations for CodonTable {
             amino_hash.insert(codon.clone(), *aa as char);
             start_hash.insert(codon, *s as char);
         }
-        debug!("Amino hash {:?}", amino_hash);
+        // debug!("Amino hash {:?}", amino_hash);
         self.aminos = amino_hash;
         self.starts = start_hash;
 
         let nucleotides: Vec<u8> = vec![65, 84, 67, 71];
-        debug!("nucleotides: {} ", String::from_utf8_lossy(&nucleotides));
+        // debug!("nucleotides: {} ", String::from_utf8_lossy(&nucleotides));
         for (codon, _aa) in self.aminos.iter() {
             let mut n = 0.0;
             for (pos, cod) in codon.iter().enumerate() {
@@ -182,9 +181,9 @@ impl Translations for CodonTable {
                 // Additionally, end position is non-inclusive so do minus 1
                 let start = *gene.start() as usize - 1;
                 let end = *gene.end() as usize - 1;
-                debug!("Start {} End {}", start, end);
+                // debug!("Start {} End {}", start, end);
                 // fetch variants in this window
-                variants.fetch(rid, start as u64, Some(end as u64));
+                variants.fetch(rid, start as u64, Some(end as u64)).expect("Unable to fetch variants");
 
                 // VariantContext::process_vcf_in_region()
 
@@ -193,9 +192,9 @@ impl Translations for CodonTable {
                     Err(_) => 0,
                 };
                 let gene_sequence = &reference_reader.current_sequence[start..=end];
-                debug!("Gene Seq {:?}", String::from_utf8_lossy(gene_sequence));
+                // debug!("Gene Seq {:?}", String::from_utf8_lossy(gene_sequence));
                 let codon_sequence = get_codons(&gene_sequence, frame, strand);
-                debug!("Codon Sequence {:?}", codon_sequence);
+                // debug!("Codon Sequence {:?}", codon_sequence);
 
                 // Calculate N and S
                 let mut big_n: Vec<f64> = vec![0.0; n_samples];
@@ -216,17 +215,17 @@ impl Translations for CodonTable {
                                 }
                             }
                             None => {
-                                debug!(
-                                    "Codon {:?} not found",
-                                    std::str::from_utf8(codon.as_slice())
-                                );
+                                // debug!(
+                                    // "Codon {:?} not found",
+                                    // std::str::from_utf8(codon.as_slice())
+                                // );
                                 continue;
                             }
                         }
                     }
                 }
 
-                debug!("getting ns_sites N {:?} S {:?}", &big_n, &big_s);
+                // debug!("getting ns_sites N {:?} S {:?}", &big_n, &big_s);
 
                 // Create Nd and Sd values
                 let mut big_nd: Vec<f64> = vec![0.0; n_samples];
@@ -291,10 +290,10 @@ impl Translations for CodonTable {
                                     // index of current position in the current codon
                                     // all codons have size == 3
                                     let codon_cursor = gene_cursor % 3;
-                                    debug!(
-                                        "reference cursor {} gained_bases {} Gene cursor {} codon idx {} codon cursor {}",
-                                        reference_cursor, gained_bases, gene_cursor, codon_idx, codon_cursor
-                                    );
+                                    // debug!(
+                                    //     "reference cursor {} gained_bases {} Gene cursor {} codon idx {} codon cursor {}",
+                                    //     reference_cursor, gained_bases, gene_cursor, codon_idx, codon_cursor
+                                    // );
 
                                     if codon_idx >= codon_sequence.len() {
                                         continue;
@@ -312,11 +311,11 @@ impl Translations for CodonTable {
                                     for sample_idx in 0..n_samples {
                                         if process_previous_codon {
                                             for new_codon in new_codons[sample_idx].iter() {
-                                                debug!("Positionals start {:?}", &positionals);
-                                                debug!(
-                                                    "Sample {} new_codon {:?} ref_codon {:?}",
-                                                    sample_idx, new_codon, &previous_codon
-                                                );
+                                                // debug!("Positionals start {:?}", &positionals);
+                                                // debug!(
+                                                //     "Sample {} new_codon {:?} ref_codon {:?}",
+                                                //     sample_idx, new_codon, &previous_codon
+                                                // );
                                                 if (previous_codon.len() == 3)
                                                     && (new_codon.len() == 3)
                                                     && (previous_codon != new_codon)
@@ -342,11 +341,11 @@ impl Translations for CodonTable {
                                                     // calculate synonymous and non-synonymous for each permutation
                                                     let mut ns = 0;
                                                     let mut ss = 0;
-                                                    debug!(
-                                                        "positional difference {:?} permutations {:?}",
-                                                        diffs,
-                                                        permutations.len()
-                                                    );
+                                                    // debug!(
+                                                    //     "positional difference {:?} permutations {:?}",
+                                                    //     diffs,
+                                                    //     permutations.len()
+                                                    // );
                                                     positionals[sample_idx] += permutations.len();
                                                     for permutation in permutations.iter() {
                                                         let mut shifting = codon.clone();
@@ -370,21 +369,21 @@ impl Translations for CodonTable {
                                                     big_nd[sample_idx] += nd;
                                                     big_sd[sample_idx] += sd;
                                                 }
-                                                debug!("Positionals end {:?}", &positionals);
-                                                debug!(
-                                                    "Codon idx {} gene cursor {} codons {} gene length {} new_codons {:?}",
-                                                    codon_idx,
-                                                    gene_cursor,
-                                                    codon_sequence.len(),
-                                                    gene_sequence.len(),
-                                                    new_codons[sample_idx]
-                                                );
+                                                // debug!("Positionals end {:?}", &positionals);
+                                                // debug!(
+                                                //     "Codon idx {} gene cursor {} codons {} gene length {} new_codons {:?}",
+                                                //     codon_idx,
+                                                //     gene_cursor,
+                                                //     codon_sequence.len(),
+                                                //     gene_sequence.len(),
+                                                //     new_codons[sample_idx]
+                                                // );
                                             }
                                             // begin working on new codon
                                             new_codons[sample_idx] = Vec::new();
                                         }
 
-                                        let mut which_are_present = context
+                                        let which_are_present = context
                                             .alleles_present_in_sample(
                                                 sample_idx,
                                                 depth_per_sample_filter,
@@ -421,35 +420,35 @@ impl Translations for CodonTable {
                                                     // Create a copy of codon up to this point
                                                     // Not sure if reusing previous variants is bad, but
                                                     // not doing so can cause randomness to dN/dS values
-                                                    debug!(
-                                                        "before pushing {:?}",
-                                                        new_codons[sample_idx]
-                                                    );
+                                                    // debug!(
+                                                    //     "before pushing {:?}",
+                                                    //     new_codons[sample_idx]
+                                                    // );
                                                     new_codons[sample_idx].push(codon.clone());
-                                                    debug!(
-                                                        "Gene cursor {} sample idx {} snp count {} codon cursor {}",
-                                                        gene_cursor, sample_idx, snp_count, codon_cursor
-                                                    );
-                                                    debug!(
-                                                        "new_codons length {}",
-                                                        new_codons[sample_idx].len()
-                                                    );
+                                                    // debug!(
+                                                    //     "Gene cursor {} sample idx {} snp count {} codon cursor {}",
+                                                    //     gene_cursor, sample_idx, snp_count, codon_cursor
+                                                    // );
+                                                    // debug!(
+                                                    //     "new_codons length {}",
+                                                    //     new_codons[sample_idx].len()
+                                                    // );
                                                     new_codons[sample_idx][snp_count]
                                                         [codon_cursor] = allele.bases[0];
 
-                                                    debug!(
-                                                        "multi snp codon {:?}",
-                                                        new_codons[sample_idx]
-                                                    );
+                                                    // debug!(
+                                                    //     "multi snp codon {:?}",
+                                                    //     new_codons[sample_idx]
+                                                    // );
                                                 } else {
                                                     for var_idx in 0..new_codons[sample_idx].len() {
-                                                        debug!(
-                                                            "s {} v {} c {}. Size {}",
-                                                            sample_idx,
-                                                            var_idx,
-                                                            codon_cursor,
-                                                            new_codons[sample_idx].len()
-                                                        );
+                                                        // debug!(
+                                                        //     "s {} v {} c {}. Size {}",
+                                                        //     sample_idx,
+                                                        //     var_idx,
+                                                        //     codon_cursor,
+                                                        //     new_codons[sample_idx].len()
+                                                        // );
                                                         new_codons[sample_idx][var_idx]
                                                             [codon_cursor] = allele.bases[0];
                                                     }
@@ -471,18 +470,18 @@ impl Translations for CodonTable {
 
                 let mut dnds_values = vec![1.0; n_samples];
                 for sample_idx in 0..n_samples {
-                    debug!(
-                        "Nd {} N {}, Sd {} S {} total permutations {} variants {}",
-                        big_nd[sample_idx],
-                        big_n[sample_idx],
-                        big_sd[sample_idx],
-                        big_s[sample_idx],
-                        positionals[sample_idx],
-                        total_variants[sample_idx]
-                    );
+                    // debug!(
+                    //     "Nd {} N {}, Sd {} S {} total permutations {} variants {}",
+                    //     big_nd[sample_idx],
+                    //     big_n[sample_idx],
+                    //     big_sd[sample_idx],
+                    //     big_s[sample_idx],
+                    //     positionals[sample_idx],
+                    //     total_variants[sample_idx]
+                    // );
                     let mut pn = big_nd[sample_idx] / big_n[sample_idx];
                     let mut ps = big_sd[sample_idx] / big_s[sample_idx];
-                    debug!("pn {} ps {}", pn, ps);
+                    // debug!("pn {} ps {}", pn, ps);
                     // Weirdly in the Jukes-Cantor model if pn or ps are 0.75 then the nat log does not resolve
                     // No one talks about this in the literature for some reason
                     if pn == 0.75 {
@@ -493,7 +492,7 @@ impl Translations for CodonTable {
                     }
                     let d_n = -(3.0 / 4.0) * (1.0 - (4.0 * pn) / 3.0).ln();
                     let d_s = -(3.0 / 4.0) * (1.0 - (4.0 * ps) / 3.0).ln();
-                    debug!("dN {} dS {}", d_n, d_s);
+                    // debug!("dN {} dS {}", d_n, d_s);
                     let mut dnds = d_n / d_s;
 
                     // negative dnds values make no sense, but occur nonetheless
@@ -540,38 +539,5 @@ pub fn get_codons<'a>(sequence: &'a [u8], frame: usize, strandedness: Strand) ->
                 .map(|chunk| chunk.to_vec())
                 .collect::<Vec<Vec<u8>>>()
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bio::io::gff;
-    use bio::stats::LogProb;
-    use model::variants;
-    use std::collections::HashSet;
-
-    fn create_base(ref_sequence: &Vec<u8>, var_char: u8, pos: i64, sample_count: usize) -> Base {
-        Base {
-            tid: 0,
-            pos,
-            refr: ref_sequence[pos as usize..(pos as usize + 1)].to_vec(),
-            variant: Variant::SNV(var_char),
-            depth: vec![5; sample_count],
-            truedepth: vec![5; sample_count],
-            totaldepth: vec![5; sample_count],
-            genotypes: HashSet::new(),
-            quals: vec![0.; sample_count],
-            referencedepth: vec![0; sample_count],
-            freq: vec![0.; sample_count],
-            rel_abunds: vec![0.; sample_count],
-            reads: HashSet::new(),
-        }
-    }
-
-    #[test]
-    fn test_floor_division() {
-        assert_eq!(0 / 3 as usize, 0);
-        assert_eq!(803 / 3 as usize, 267);
     }
 }

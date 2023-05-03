@@ -1,13 +1,13 @@
 use bio::stats::LogProb;
-use model::byte_array_allele::Allele;
-use model::byte_array_allele::ByteArrayAllele;
 use ordered_float::NotNan;
-use rayon::prelude::*;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-use utils::vcf_constants::VCFConstants;
+
+use crate::model::byte_array_allele::Allele;
+use crate::model::byte_array_allele::ByteArrayAllele;
+use crate::utils::vcf_constants::VCFConstants;
 
 pub type AlleleFreq = NotNan<f64>;
 
@@ -521,5 +521,5 @@ pub struct Base {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
 }

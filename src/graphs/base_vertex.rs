@@ -1,9 +1,10 @@
 use itertools::Itertools;
 use rayon::prelude::*;
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+
+use crate::read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 
 /**
  * A graph vertex that holds some sequence information

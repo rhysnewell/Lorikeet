@@ -1,14 +1,14 @@
-use processing::lorikeet_engine::ReadType;
-use reads::cigar_utils::CigarUtils;
-use reads::read_utils::ReadUtils;
-use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::bam::record::{Cigar, CigarString, Record};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use utils::simple_interval::Locatable;
+
+use crate::processing::lorikeet_engine::ReadType;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::reads::read_utils::ReadUtils;
+use crate::utils::simple_interval::Locatable;
 
 /**
  * Unified read interface for use throughout the Bird Tools.

@@ -1,18 +1,19 @@
-use assembly::kmer::Kmer;
 use gkl::smithwaterman::Parameters;
-use graphs::base_edge::BaseEdgeStruct;
-use graphs::base_graph::BaseGraph;
-use graphs::multi_sample_edge::MultiSampleEdge;
-use graphs::seq_graph::SeqGraph;
 use hashlink::LinkedHashMap;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::Direction;
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
-use read_threading::read_threading_graph::ReadThreadingGraph;
-use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::fmt::Debug;
-use utils::simple_interval::Locatable;
+
+use crate::assembly::kmer::Kmer;
+use crate::graphs::base_edge::BaseEdgeStruct;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::multi_sample_edge::MultiSampleEdge;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use crate::read_threading::read_threading_graph::ReadThreadingGraph;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::utils::simple_interval::Locatable;
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
@@ -46,8 +47,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      */
     fn is_threading_start(
         &self,
-        kmer: &Kmer,
-        start_threading_only_at_existing_vertex: bool,
+        kmer: &Kmer
     ) -> bool;
 
     // get the next kmerVertex for ChainExtension and validate if necessary.

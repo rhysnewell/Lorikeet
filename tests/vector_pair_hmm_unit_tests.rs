@@ -2,7 +2,7 @@ extern crate gkl;
 extern crate lorikeet_genome;
 extern crate rust_htslib;
 
-use gkl::pairhmm::{forward, forward_avx};
+use gkl::pairhmm::{forward};
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;

@@ -1,8 +1,9 @@
 use std::cmp::{max, min, Ordering};
 use std::fmt::Debug;
 use std::hash::Hash;
-use utils::errors::BirdToolError;
-use utils::interval_utils::IntervalUtils;
+
+use crate::utils::errors::BirdToolError;
+use crate::utils::interval_utils::IntervalUtils;
 
 /**
 * Minimal immutable class representing a 0-based closed ended genomic interval
@@ -227,7 +228,7 @@ pub struct CoordMath {}
 
 impl CoordMath {
     pub fn get_length(start: usize, end: usize) -> usize {
-        return ((end + 1).checked_sub(start).unwrap_or(0));
+        return (end + 1).checked_sub(start).unwrap_or(0);
     }
 
     pub fn get_start(end: usize, length: usize) -> usize {

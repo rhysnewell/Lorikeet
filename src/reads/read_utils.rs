@@ -1,14 +1,15 @@
-use coverm::FlagFilter;
-use num::abs;
-use processing::lorikeet_engine::ReadType;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_utils::CigarUtils;
+use anyhow::Result;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::bam::record::{Aux, AuxArray, Cigar, CigarString, CigarStringView};
 use rust_htslib::bam::Record;
 use std::cmp::Ordering;
 use std::ops::Deref;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::reads::cigar_utils::CigarUtils;
+use crate::processing::lorikeet_engine::ReadType;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
+use crate::bam_parsing::FlagFilter;
 
 pub struct ReadUtils {}
 
@@ -108,8 +109,8 @@ impl ReadUtils {
             return (None, None);
         }
 
-        let mut first_read_pos_of_element = 0; // inclusive
-        let mut first_ref_pos_of_element = alignment_start; // inclusive
+        let mut first_read_pos_of_element; // inclusive
+        let mut first_ref_pos_of_element; // inclusive
         let mut last_read_pos_of_element = 0; // exclusive
         let mut last_ref_pos_of_element = alignment_start; // exclusive
 
@@ -246,14 +247,14 @@ impl ReadUtils {
         return empty_read;
     }
 
-    pub fn set_insertion_base_qualities(read: &mut BirdToolRead, base_ins_quals: &Vec<u8>) {
-        read.read
-            .push_aux(b"BI", Aux::ArrayU8(AuxArray::from(base_ins_quals)));
+    pub fn set_insertion_base_qualities(read: &mut BirdToolRead, base_ins_quals: &Vec<u8>) -> Result<()> {
+        Ok(read.read
+            .push_aux(b"BI", Aux::ArrayU8(AuxArray::from(base_ins_quals)))?)
     }
 
-    pub fn set_deletion_base_qualities(read: &mut BirdToolRead, base_del_quals: &Vec<u8>) {
-        read.read
-            .push_aux(b"BD", Aux::ArrayU8(AuxArray::from(base_del_quals)));
+    pub fn set_deletion_base_qualities(read: &mut BirdToolRead, base_del_quals: &Vec<u8>) -> Result<()> {
+        Ok(read.read
+            .push_aux(b"BD", Aux::ArrayU8(AuxArray::from(base_del_quals)))?)
     }
 
     pub fn compare_coordinates(first: &BirdToolRead, second: &BirdToolRead) -> Ordering {

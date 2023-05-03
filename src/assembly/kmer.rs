@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 /**
@@ -66,33 +67,37 @@ impl Kmer {
         Self::new_with_start_and_length(bases, self.start + new_start, new_length)
     }
 
-    /**
-     *  Compute the hashcode for a KMer.
-     *  Equivalent to <code>new String(bases, start, length).hashCode()</code>
-     */
+    ///
+    /// Compute the hashcode for a KMer.
+    ///
     fn hash_code(bases: &[u8], start: usize, length: usize) -> usize {
         if length == 0 {
             return 0;
         }
 
-        let mut h = 0;
-        for i in start..(start + length) {
-            h = 31 * h + bases[i] as usize;
-        }
+        let stop = min(start + length, bases.len());
+        
+        let mut hasher = DefaultHasher::new();
+        bases[start..stop].hash(&mut hasher);
+        let hash = hasher.finish() as usize;
+        
+        // for i in start..stop {
+        //     h = 31 * h + bases[i] as usize;
+        // }
 
-        h
+        hash
     }
 
-    /**
-     * Get the bases of this kmer.  May create a copy of the bases, depending on how this kmer was constructed.
-     *
-     * The bases aren't stored in the kmer object to avoid excess copying/cloning. So the full sequence
-     * must be passed by reference and the kmer is retrieved as a slice
-     *
-     * @return a non-null byte[] containing length() bases of this kmer, regardless of how this kmer was created
-     */
+    ///
+    /// Get the bases of this kmer.
+    ///
+    /// The bases aren't stored in the kmer object to avoid excess copying/cloning. So the full sequence
+    /// must be passed by reference and the kmer is retrieved as a slice
+    ///
+    /// returns a byte slice of the bases of this kmer
+    ///
     pub fn bases<'a>(&self, sequence: &'a [u8]) -> &'a [u8] {
-        &sequence[self.start..min((self.start + self.length), sequence.len())]
+        &sequence[self.start..min(self.start + self.length, sequence.len())]
     }
 
     pub fn len(&self) -> usize {

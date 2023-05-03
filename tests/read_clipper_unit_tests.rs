@@ -1,21 +1,16 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 
+use anyhow::Result;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::reads::read_clipper::ReadClipper;
 use lorikeet_genome::test_utils::read_clipper_test_utils::ReadClipperTestUtils;
 use lorikeet_genome::utils::simple_interval::Locatable;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
+use rust_htslib::bam::record::{Cigar, CigarString};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -29,21 +24,21 @@ struct ReadClipperUnitTest {
 }
 
 impl ReadClipperUnitTest {
-    pub fn new() -> ReadClipperUnitTest {
-        let mut cigar_list = ReadClipperTestUtils::generate_cigar_list(6, false);
+    pub fn new() -> Result<ReadClipperUnitTest> {
+        let mut cigar_list = ReadClipperTestUtils::generate_cigar_list(6, false)?;
         let additional_cigar = CigarString::try_from("2M3I5M").unwrap();
         cigar_list.push(additional_cigar);
 
-        Self {
+        Ok(Self {
             cigar_list,
             maximum_cigar_elements: 6,
-        }
+        })
     }
 }
 
 #[test]
 fn test_hard_clip_both_ends_by_reference() {
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new().expect("Failed to create ReadClipperUnitTest");
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -51,7 +46,7 @@ fn test_hard_clip_both_ends_by_reference() {
         let aln_end = read.get_end() as i64;
         let read_length = aln_start - aln_end;
         for i in (read_length / 2) + 1..=0 {
-            let clipped_read = ReadClipper::new(&read)
+            let clipped_read = ReadClipper::new(read.clone())
                 .hard_clip_both_ends_by_reference_coordinates(
                     (aln_start + i) as usize,
                     (aln_end - i) as usize,
@@ -84,7 +79,7 @@ fn test_hard_clip_both_ends_by_reference() {
 
 #[test]
 fn test_hard_clip_by_reference_coordinates() {
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -92,7 +87,7 @@ fn test_hard_clip_by_reference_coordinates() {
         let stop = read.get_soft_end();
         for i in start..=stop {
             let clip_left =
-                ReadClipper::new(&read).hard_clip_by_reference_coordinates(None, Some(i));
+                ReadClipper::new(read.clone()).hard_clip_by_reference_coordinates(None, Some(i));
 
             if !clip_left.is_empty() {
                 assert!(
@@ -108,7 +103,7 @@ fn test_hard_clip_by_reference_coordinates() {
             }
 
             let clip_right =
-                ReadClipper::new(&read).hard_clip_by_reference_coordinates(Some(i), None);
+                ReadClipper::new(read.clone()).hard_clip_by_reference_coordinates(Some(i), None);
             if !clip_right.is_empty() && clip_right.get_start() <= clip_right.get_end() {
                 // alnStart > alnEnd if the entire read is a soft clip now. We can't test those.
                 assert!(
@@ -128,7 +123,7 @@ fn test_hard_clip_by_reference_coordinates() {
 
 #[test]
 fn test_hard_clip_by_reference_coordinates_left_tail() {
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -137,7 +132,7 @@ fn test_hard_clip_by_reference_coordinates_left_tail() {
         if read.get_soft_start().unwrap() == aln_start {
             for i in aln_start..=aln_end {
                 let clip_left =
-                    ReadClipper::new(&read).hard_clip_by_reference_coordinates(None, Some(i));
+                    ReadClipper::new(read.clone()).hard_clip_by_reference_coordinates(None, Some(i));
                 if !clip_left.is_empty() {
                     assert!(
                         clip_left.get_start() >= i,
@@ -157,7 +152,7 @@ fn test_hard_clip_by_reference_coordinates_left_tail() {
 
 #[test]
 fn test_hard_clip_by_reference_coordinates_right_tail() {
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -166,7 +161,7 @@ fn test_hard_clip_by_reference_coordinates_right_tail() {
         if read.get_soft_end() == aln_start {
             for i in aln_start..=aln_end {
                 let clip_right =
-                    ReadClipper::new(&read).hard_clip_by_reference_coordinates(Some(i), None);
+                    ReadClipper::new(read.clone()).hard_clip_by_reference_coordinates(Some(i), None);
                 if !clip_right.is_empty() && clip_right.get_start() <= clip_right.get_end() {
                     assert!(
                         clip_right.get_end() <= i,
@@ -190,7 +185,7 @@ fn test_hard_clip_low_qual_ends() {
     let HIGH_QUAL: u8 = 30;
 
     // create a read for every cigar permutation
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let mut read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -210,7 +205,7 @@ fn test_hard_clip_low_qual_ends() {
 
             read.read.set(&qname, Some(&cigar), &seq, &quals);
 
-            let clip_left = ReadClipper::new(&read).hard_clip_low_qual_ends(LOW_QUAL);
+            let clip_left = ReadClipper::new(read.clone()).hard_clip_low_qual_ends(LOW_QUAL);
             assert_no_low_qual_bases(&clip_left, LOW_QUAL);
 
             // create a read with n_low_qual_bases in the right tail
@@ -221,7 +216,7 @@ fn test_hard_clip_low_qual_ends() {
 
             read.read.set(&qname, Some(&cigar), &seq, &quals);
 
-            let clip_right = ReadClipper::new(&read).hard_clip_low_qual_ends(LOW_QUAL);
+            let clip_right = ReadClipper::new(read.clone()).hard_clip_low_qual_ends(LOW_QUAL);
             assert_no_low_qual_bases(&clip_right, LOW_QUAL);
 
             // create a read with n_low_qual_bases in both tails
@@ -235,7 +230,7 @@ fn test_hard_clip_low_qual_ends() {
 
                 read.read.set(&qname, Some(&cigar), &seq, &quals);
 
-                let clip_right = ReadClipper::new(&read).hard_clip_low_qual_ends(LOW_QUAL);
+                let clip_right = ReadClipper::new(read.clone()).hard_clip_low_qual_ends(LOW_QUAL);
                 assert_no_low_qual_bases(&clip_right, LOW_QUAL);
             }
         }
@@ -245,11 +240,11 @@ fn test_hard_clip_low_qual_ends() {
 #[test]
 fn test_hard_clip_soft_clipped_bases() {
     // create a read for every cigar permutation
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
-        let clipped_read = ReadClipper::new(&read).hard_clip_soft_clipped_bases();
+        let clipped_read = ReadClipper::new(read.clone()).hard_clip_soft_clipped_bases();
 
         if !clipped_read.is_empty() {
             let original = CigarCounter::new(&read);
@@ -264,7 +259,7 @@ fn test_hard_clip_soft_clipped_bases() {
 #[test]
 fn test_revert_soft_clipped_bases() {
     // create a read for every cigar permutation
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let leading_soft_clips = leading_cigar_element_length(&cigar, Some(Cigar::SoftClip(0)));
@@ -273,7 +268,7 @@ fn test_revert_soft_clipped_bases() {
             Some(Cigar::SoftClip(0)),
         );
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
-        let unclipped = ReadClipper::new(&read).revert_soft_clipped_bases();
+        let unclipped = ReadClipper::new(read.clone()).revert_soft_clipped_bases();
 
         assert_unclipped_limits(&read, &unclipped);
 
@@ -300,7 +295,7 @@ fn test_revert_soft_clipped_bases() {
 #[test]
 fn test_revert_entirely_soft_clipped_reads() {
     let read = ReadClipperTestUtils::make_read_from_str("2H1S3H", 0);
-    let clipped_read = ReadClipper::new(&read).revert_soft_clipped_bases();
+    let clipped_read = ReadClipper::new(read.clone()).revert_soft_clipped_bases();
 
     assert_eq!(clipped_read.get_start(), read.get_soft_start().unwrap());
 }
@@ -308,7 +303,7 @@ fn test_revert_entirely_soft_clipped_reads() {
 #[test]
 fn test_soft_clip_both_ends_by_reference_coordinates() {
     // create a read for every cigar permutation
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -316,7 +311,7 @@ fn test_soft_clip_both_ends_by_reference_coordinates() {
         let aln_end = read.get_end() as i64;
         let read_length = aln_start - aln_end;
         for i in (read_length / 2) + 1..=0 {
-            let clipped_read = ReadClipper::new(&read)
+            let clipped_read = ReadClipper::new(read.clone())
                 .soft_clip_both_ends_by_reference_coordinates(
                     (aln_start + i) as usize,
                     (aln_end - i) as usize,
@@ -359,7 +354,7 @@ fn test_revert_soft_clipped_bases_before_start_of_contig(soft_start: i64, alignm
     assert_eq!(read.get_start() as i64, alignment_start);
     assert_eq!(read.read.cigar().to_string(), cigar);
 
-    let reverted = ReadClipper::new(&read).revert_soft_clipped_bases();
+    let reverted = ReadClipper::new(read.clone()).revert_soft_clipped_bases();
     let expected_alignment_start = 0;
     let expected_cigar = format!("{}H{}M", 1 - soft_start, read.get_end());
     assert_eq!(reverted.get_soft_start_i64(), expected_alignment_start);

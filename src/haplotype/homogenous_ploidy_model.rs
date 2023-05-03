@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use rayon::prelude::*;
 
 /**
  * Information about the number of chromosome per sample at a given location.
@@ -54,7 +53,7 @@ impl HomogeneousPloidyModel {
 }
 
 impl PloidyModel for HomogeneousPloidyModel {
-    fn sample_ploidy(&self, sample_index: usize) -> usize {
+    fn sample_ploidy(&self, _sample_index: usize) -> usize {
         self.ploidy
     }
 

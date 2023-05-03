@@ -1,9 +1,8 @@
-use activity_profile::activity_profile::{ActivityProfile, Profile};
-use activity_profile::activity_profile_state::{ActivityProfileState, Type};
-use assembly::assembly_region::AssemblyRegion;
-use rayon::prelude::*;
-use utils::math_utils::MathUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
+use crate::assembly::assembly_region::AssemblyRegion;
+use crate::activity_profile::activity_profile::{ActivityProfile, Profile};
+use crate::activity_profile::activity_profile_state::{ActivityProfileState, ActivityProfileDataType};
+use crate::utils::math_utils::MathUtils;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * A band pass filtering version of the activity profile
@@ -28,7 +27,7 @@ impl BandPassActivityProfile {
 
     /**
      * Create an activity profile that implements a band pass filter on the states
-     *  @param maxProbPropagationDistance region probability propagation distance beyond it's maximum size
+     * @param maxProbPropagationDistance region probability propagation distance beyond its maximum size
      * @param activeProbThreshold  threshold for the probability of a profile state being active
      * @param maxFilterSize the maximum size of the band pass filter we are allowed to create, regardless of sigma
      * @param sigma the variance of the Gaussian kernel for this band pass filter
@@ -51,7 +50,7 @@ impl BandPassActivityProfile {
             tid,
             contig_len,
         );
-        let mut full_kernel = Self::make_kernel(max_filter_size, sigma);
+        let full_kernel = Self::make_kernel(max_filter_size, sigma);
 
         let filter_size = if adaptive_filter_size {
             Self::determine_filter_size(&full_kernel, Self::MIN_PROB_TO_KEEP_IN_FILTER)
@@ -67,7 +66,7 @@ impl BandPassActivityProfile {
         }
     }
 
-    pub fn from_band_passes(mut passes: Vec<Self>) -> Self {
+    pub fn from_band_passes(passes: Vec<Self>) -> Self {
         let mut passes_iter = passes.into_iter();
         let mut result = passes_iter.next().unwrap();
         for pass in passes_iter {
@@ -83,7 +82,7 @@ impl BandPassActivityProfile {
     fn make_kernel(filter_size: usize, sigma: f64) -> Vec<f64> {
         let band_size = 2 * filter_size + 1;
         // let mut kernel = vec![0.0; band_size];
-        let mut kernel = (0..band_size)
+        let kernel = (0..band_size)
             .into_iter()
             .map(|iii| MathUtils::normal_distribution(filter_size as f64, sigma, iii as f64))
             .collect::<Vec<f64>>();
@@ -253,7 +252,7 @@ impl Profile for BandPassActivityProfile {
                             let new_prob = super_state.is_active_prob()
                                 * self.gaussian_kernel[(i + self.filter_size as i64) as usize]
                                     as f32;
-                            states.push(ActivityProfileState::new(loc, new_prob, Type::None))
+                            states.push(ActivityProfileState::new(loc, new_prob, ActivityProfileDataType::None))
                         }
                         None => continue,
                     }
@@ -302,7 +301,7 @@ impl Profile for BandPassActivityProfile {
     }
 
     fn pop_ready_assembly_regions(
-        mut self,
+        self,
         assembly_region_extension: usize,
         min_region_size: usize,
         max_region_size: usize,

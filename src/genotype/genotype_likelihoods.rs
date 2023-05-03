@@ -1,11 +1,11 @@
 use ndarray::Array2;
 use ordered_float::OrderedFloat;
-use rayon::prelude::*;
 use statrs::function::factorial::binomial;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use utils::math_utils::MathUtils;
+
+use crate::utils::math_utils::MathUtils;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GenotypeLikelihoods {
@@ -271,13 +271,13 @@ impl CacheKey {
         }
     }
 
-    pub fn equals(&self, other_cache: &CacheKey) -> bool {
-        self == other_cache
-    }
+    // pub fn equals(&self, other_cache: &CacheKey) -> bool {
+    //     self == other_cache
+    // }
 
-    pub fn hash_code(&self) -> i64 {
-        self.num_alleles * 31 + self.ploidy
-    }
+    // pub fn hash_code(&self) -> i64 {
+    //     self.num_alleles * 31 + self.ploidy
+    // }
 }
 
 impl Hash for CacheKey {

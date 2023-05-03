@@ -1,35 +1,14 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-extern crate bio;
-extern crate itertools;
-extern crate petgraph;
-extern crate rand;
-extern crate term;
 
 use lorikeet_genome::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use lorikeet_genome::graphs::base_graph::{BaseGraph, TestGraph};
 use lorikeet_genome::graphs::seq_graph::SeqGraph;
 use lorikeet_genome::graphs::seq_vertex::SeqVertex;
 use lorikeet_genome::graphs::vertex_based_transformer::VertexBasedTransformer;
-use lorikeet_genome::graphs::vertex_based_transformer::VertexBasedTransformer::MergeTails;
-use petgraph::graph::NodeIndex;
-use petgraph::Direction;
-use rayon::prelude::*;
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
 
 struct MergeNodesWithNoVariationTestProvider<'a> {
     sequence: &'a [u8],
@@ -126,22 +105,23 @@ fn make_linear_zip_data() {
     let ac1 = SeqVertex::new(b"AC".to_vec());
 
     // just a single vertex
-    let a1_c1 = graph.base_graph.add_vertices(vec![a1.clone(), c1.clone()]);
+    let a1_c1 = graph.base_graph.add_vertices(vec![&a1, &c1]);
     expected
         .base_graph
-        .add_vertices(vec![a1.clone(), c1.clone()]);
+        .add_vertices(vec![&a1, &c1]);
     test_linear_zip(&graph, &expected);
 
     graph
         .base_graph
         .add_edges(a1_c1[0], vec![a1_c1[1]], BaseEdgeStruct::new(false, 1, 0));
     expected = SeqGraph::new(11);
-    expected.base_graph.add_node(ac1.clone());
+    expected.base_graph.add_node(&ac1);
     test_linear_zip(&graph, &expected);
 
     // three long chain merged corrected
     let g1 = SeqVertex::new(b"G".to_vec());
-    let g1_id = graph.base_graph.add_node(g1.clone());
+    let g1_id = graph.base_graph.add_node(&g1);
+    let e1 = SeqVertex::new(b"ACG".to_vec());
     graph
         .base_graph
         .graph
@@ -149,16 +129,17 @@ fn make_linear_zip_data() {
     expected = SeqGraph::new(11);
     expected
         .base_graph
-        .add_node(SeqVertex::new(b"ACG".to_vec()));
+        .add_node(&e1);
     test_linear_zip(&graph, &expected);
 
     // adding something that isn't connected isn't a problem
     let t1 = SeqVertex::new(b"T".to_vec());
-    graph.base_graph.add_node(t1.clone());
+    graph.base_graph.add_node(&t1);
     expected = SeqGraph::new(11);
+    let t0 = SeqVertex::new(b"ACG".to_vec());
     expected
         .base_graph
-        .add_vertices(vec![SeqVertex::new(b"ACG".to_vec()), t1.clone()]);
+        .add_vertices(vec![&t0, &t1]);
     test_linear_zip(&graph, &expected);
 
     // splitting chain with branch produces the correct zipped subgraphs
@@ -166,12 +147,12 @@ fn make_linear_zip_data() {
     let c2 = SeqVertex::new(b"C".to_vec());
     graph = SeqGraph::new(11);
     let node_indices = graph.base_graph.add_vertices(vec![
-        a1.clone(),
-        c1.clone(),
-        g1.clone(),
-        t1.clone(),
-        a2.clone(),
-        c2.clone(),
+        &a1,
+        &c1,
+        &g1,
+        &t1,
+        &a2,
+        &c2,
     ]);
     println!(
         "Adding indices {:?}",
@@ -193,7 +174,7 @@ fn make_linear_zip_data() {
     let expected_indices =
         expected
             .base_graph
-            .add_vertices(vec![acg.clone(), ta.clone(), c2.clone()]);
+            .add_vertices(vec![&acg, &ta, &c2]);
     expected.base_graph.graph.add_edge(
         expected_indices[0],
         expected_indices[1],
@@ -211,7 +192,7 @@ fn make_linear_zip_data() {
         graph = SeqGraph::new(11);
         let node_indices = graph
             .base_graph
-            .add_vertices(vec![a1.clone(), c1.clone(), g1.clone()]);
+            .add_vertices(vec![&a1, &c1, &g1]);
         graph.base_graph.add_edges(
             node_indices[0],
             node_indices[1..].to_vec(),
@@ -228,7 +209,7 @@ fn make_linear_zip_data() {
         let cg = SeqVertex::new(b"CG".to_vec());
         let expected_indices = expected
             .base_graph
-            .add_vertices(vec![a1.clone(), cg.clone()]);
+            .add_vertices(vec![&a1, &cg]);
         expected.base_graph.graph.add_edge(
             expected_indices[0],
             expected_indices[1],
@@ -258,7 +239,7 @@ fn make_linear_zip_data() {
         expected = SeqGraph::new(11);
         let expected_indices = expected
             .base_graph
-            .add_vertices(vec![ac.clone(), g1.clone()]);
+            .add_vertices(vec![&ac, &g1]);
         expected.base_graph.add_edges(
             expected_indices[0],
             vec![expected_indices[1], expected_indices[1]],
@@ -282,7 +263,7 @@ fn make_linear_zip_data() {
                 expected_bases.extend_from_slice(seq.as_bytes());
                 println!("Result {:?}", &expected_bases);
                 let a = SeqVertex::new(seq.as_bytes().to_vec());
-                let a_index = graph.base_graph.add_node(a);
+                let a_index = graph.base_graph.add_node(&a);
                 match last_index {
                     None => {
                         // pass
@@ -297,9 +278,10 @@ fn make_linear_zip_data() {
                 };
                 last_index = Some(a_index);
             }
+            let e1 = SeqVertex::new(expected_bases.clone());
             expected
                 .base_graph
-                .add_node(SeqVertex::new(expected_bases.clone()));
+                .add_node(&e1);
             test_linear_zip(&graph, &expected);
         }
     }
@@ -314,23 +296,23 @@ fn make_linear_zip_data() {
                 let node_indices =
                     graph
                         .base_graph
-                        .add_vertices(vec![a1.clone(), c1.clone(), g1.clone()]);
+                        .add_vertices(vec![&a1, &c1, &g1]);
                 graph.base_graph.add_edges(
                     node_indices[0],
                     node_indices[1..].to_vec(),
                     BaseEdgeStruct::new(false, 1, 0),
                 );
-                let expected_index = expected.base_graph.add_node(acg.clone());
+                let expected_index = expected.base_graph.add_node(&acg);
 
                 for v in make_vertices(n_incoming) {
                     let e = BaseEdgeStruct::new(false, edge_weight, 0);
                     edge_weight += 1;
-                    let v_index = graph.base_graph.add_node(v.clone());
+                    let v_index = graph.base_graph.add_node(&v);
                     graph
                         .base_graph
                         .graph
                         .add_edge(v_index, node_indices[0], e.clone());
-                    let expected_v_index = expected.base_graph.add_node(v);
+                    let expected_v_index = expected.base_graph.add_node(&v);
                     expected
                         .base_graph
                         .graph
@@ -340,12 +322,12 @@ fn make_linear_zip_data() {
                 for v in make_vertices(n_outgoing) {
                     let e = BaseEdgeStruct::new(false, edge_weight, 0);
                     edge_weight += 1;
-                    let v_index = graph.base_graph.add_node(v.clone());
+                    let v_index = graph.base_graph.add_node(&v);
                     graph
                         .base_graph
                         .graph
                         .add_edge(node_indices[2], v_index, e.clone());
-                    let expected_v_index = expected.base_graph.add_node(v);
+                    let expected_v_index = expected.base_graph.add_node(&v);
                     expected
                         .base_graph
                         .graph
@@ -399,13 +381,13 @@ fn make_merging_data() {
     let tail2 = SeqVertex::new(b"GC".to_vec());
 
     // just a single vertex
-    let pre1_index = graph.base_graph.add_node(pre1.clone());
+    let pre1_index = graph.base_graph.add_node(&pre1);
     test_merging(&graph, &graph);
 
     let mut top_index;
     // pre1 -> top = pre1 + top
     {
-        top_index = graph.base_graph.add_node(top.clone());
+        top_index = graph.base_graph.add_node(&top);
         graph.base_graph.add_or_update_edge(
             pre1_index,
             top_index,
@@ -413,14 +395,14 @@ fn make_merging_data() {
         );
         let pre1_top = SeqVertex::new(vec![pre1.sequence.clone(), top.sequence.clone()].concat());
         let mut expected = SeqGraph::new(11);
-        expected.base_graph.add_node(pre1_top);
+        expected.base_graph.add_node(&pre1_top);
         test_merging(&graph, &expected);
     }
 
     let mut middle1_index;
     // pre1 -> top -> middle1 = pre1 + top + middle1
     {
-        middle1_index = graph.base_graph.add_node(middle1.clone());
+        middle1_index = graph.base_graph.add_node(&middle1);
         graph.base_graph.add_or_update_edge(
             top_index,
             middle1_index,
@@ -435,14 +417,14 @@ fn make_merging_data() {
             ]
             .concat(),
         );
-        expected.base_graph.add_node(pre1_top_middle1);
+        expected.base_graph.add_node(&pre1_top_middle1);
         test_merging(&graph, &expected);
     }
 
     let mut middle2_index;
     // pre1 -> top -> middle1 & top -> middle2 = pre1 + top -> middle1 & -> middle2
     {
-        middle2_index = graph.base_graph.add_node(middle2.clone());
+        middle2_index = graph.base_graph.add_node(&middle2);
         graph.base_graph.add_or_update_edge(
             top_index,
             middle2_index,
@@ -453,7 +435,7 @@ fn make_merging_data() {
         let expected_indices =
             expected
                 .base_graph
-                .add_vertices(vec![pre1_top, middle1.clone(), middle2.clone()]);
+                .add_vertices(vec![&pre1_top, &middle1, &middle2]);
         expected.base_graph.add_or_update_edge(
             expected_indices[0],
             expected_indices[1],
@@ -472,7 +454,7 @@ fn make_merging_data() {
     let mut middle4_index;
     // An actual diamond event to merge!
     {
-        bottom_index = graph.base_graph.add_node(bottom.clone());
+        bottom_index = graph.base_graph.add_node(&bottom);
         graph.base_graph.add_or_update_edge(
             middle1_index,
             bottom_index,
@@ -491,7 +473,7 @@ fn make_merging_data() {
         let expected_indices =
             expected
                 .base_graph
-                .add_vertices(vec![pre1_top, new_middle1, new_middle2, new_bottom]);
+                .add_vertices(vec![&pre1_top, &new_middle1, &new_middle2, &new_bottom]);
         expected.base_graph.add_edges(
             expected_indices[0],
             vec![expected_indices[1], expected_indices[3]],
@@ -504,14 +486,14 @@ fn make_merging_data() {
         );
         test_merging(&graph, &expected);
 
-        middle3_index = graph.base_graph.add_node(middle3.clone());
+        middle3_index = graph.base_graph.add_node(&middle3);
         graph.base_graph.add_edges(
             top_index,
             vec![middle3_index, bottom_index],
             BaseEdgeStruct::new(false, 1, 0),
         );
         let new_middle3 = SeqVertex::new(b"A".to_vec());
-        let new_middle3_index = expected.base_graph.add_node(new_middle3);
+        let new_middle3_index = expected.base_graph.add_node(&new_middle3);
         expected.base_graph.add_edges(
             expected_indices[0],
             vec![new_middle3_index, expected_indices[3]],
@@ -519,7 +501,7 @@ fn make_merging_data() {
         );
         test_merging(&graph, &expected);
 
-        middle4_index = graph.base_graph.add_node(middle4.clone());
+        middle4_index = graph.base_graph.add_node(&middle4);
         graph.base_graph.add_edges(
             top_index,
             vec![middle4_index, bottom_index],
@@ -539,14 +521,14 @@ fn make_merging_data() {
         // all the nodes -> lots of merging and motion of nodes
         let mut all = SeqGraph::new(11);
         let all_indices = all.base_graph.add_vertices(vec![
-            pre1.clone(),
-            pre2.clone(),
-            top.clone(),
-            middle1.clone(),
-            middle2.clone(),
-            bottom.clone(),
-            tail1.clone(),
-            tail2.clone(),
+            &pre1,
+            &pre2,
+            &top,
+            &middle1,
+            &middle2,
+            &bottom,
+            &tail1,
+            &tail2,
         ]);
         all.base_graph.add_edges(
             all_indices[0],
@@ -577,14 +559,14 @@ fn make_merging_data() {
         let new_middle2 = SeqVertex::new(b"T".to_vec());
         let new_bottom = SeqVertex::new(vec![b"C".to_vec(), bottom.sequence.clone()].concat());
         let expected_indices = expected.base_graph.add_vertices(vec![
-            new_pre1.clone(),
-            new_pre2.clone(),
-            new_top.clone(),
-            new_middle1.clone(),
-            new_middle2.clone(),
-            new_bottom.clone(),
-            tail1.clone(),
-            tail2.clone(),
+            &new_pre1,
+            &new_pre2,
+            &new_top,
+            &new_middle1,
+            &new_middle2,
+            &new_bottom,
+            &tail1,
+            &tail2,
         ]);
         expected.base_graph.add_edges(
             expected_indices[0],
@@ -617,10 +599,10 @@ fn make_merging_data() {
         let mid2 = SeqVertex::new(b"C".to_vec());
         let bot = SeqVertex::new(b"G".to_vec());
         let graph2_indices = graph2.base_graph.add_vertices(vec![
-            my_top.clone(),
-            mid1.clone(),
-            mid2.clone(),
-            bot.clone(),
+            &my_top,
+            &mid1,
+            &mid2,
+            &bot,
         ]);
         graph2.base_graph.add_edges(
             graph2_indices[0],
@@ -637,9 +619,9 @@ fn make_merging_data() {
         let new_mid1 = SeqVertex::new(b"A".to_vec());
         let new_bottom = SeqVertex::new(b"CG".to_vec());
         let expected_indices = expected.base_graph.add_vertices(vec![
-            my_top.clone(),
-            new_mid1.clone(),
-            new_bottom.clone(),
+            &my_top,
+            &new_mid1,
+            &new_bottom,
         ]);
         expected.base_graph.add_edges(
             expected_indices[0],
@@ -671,7 +653,7 @@ fn test_bubble_same_bases_with_ref() {
     let graph_indices =
         graph
             .base_graph
-            .add_vertices(vec![top.clone(), mid1.clone(), mid2.clone(), bot.clone()]);
+            .add_vertices(vec![&top, &mid1, &mid2, &bot]);
     graph.base_graph.add_edges(
         graph_indices[0],
         vec![graph_indices[2], graph_indices[3]],
@@ -689,9 +671,10 @@ fn test_bubble_same_bases_with_ref() {
     );
 
     let mut expected = SeqGraph::new(11);
+    let ev = SeqVertex::new(b"AACTC".to_vec());
     expected
         .base_graph
-        .add_vertices(vec![SeqVertex::new(b"AACTC".to_vec())]);
+        .add_vertices(vec![&ev]);
     // let expected_indices = expected.base_graph.add_vertices(vec![top.clone(), SeqVertex::new(b"ACTC".to_vec())]);
     // expected.base_graph.graph.add_edge(graph_indices[0], graph_indices[1], BaseEdgeStruct::new(true, 1, 0));
     // expected.base_graph.graph.add_edge(graph_indices[1], graph_indices[3], BaseEdgeStruct::new(true, 1, 0));

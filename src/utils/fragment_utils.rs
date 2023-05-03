@@ -1,9 +1,10 @@
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_utils::CigarUtils;
-use reads::read_utils::ReadUtils;
 use std::cmp::min;
-use utils::quality_utils::QualityUtils;
-use utils::simple_interval::Locatable;
+
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::reads::read_utils::ReadUtils;
+use crate::utils::quality_utils::QualityUtils;
+use crate::utils::simple_interval::Locatable;
 
 pub const DEFAULT_PCR_SNV_ERROR_RATE: f64 = 1e-4;
 lazy_static! {
@@ -25,9 +26,9 @@ lazy_static! {
  */
 pub fn adjust_quals_of_overlapping_paired_fragments(
     pair: (BirdToolRead, BirdToolRead),
-    set_conflicting_to_zero: bool,
+    _set_conflicting_to_zero: bool,
     half_of_pcr_snv_qual: Option<u8>,
-    half_of_pcr_indel_qual: Option<u8>,
+    _half_of_pcr_indel_qual: Option<u8>,
 ) -> (BirdToolRead, BirdToolRead) {
     let in_order = pair.0.get_soft_start().unwrap() < pair.1.get_soft_start().unwrap();
     let (mut first_read, mut second_read) = if in_order {

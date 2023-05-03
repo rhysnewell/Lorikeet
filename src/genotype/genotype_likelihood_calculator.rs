@@ -1,14 +1,14 @@
-use genotype::genotype_allele_counts::GenotypeAlleleCounts;
-use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
-use model::allele_list::AlleleListPermutation;
-use model::byte_array_allele::Allele;
 use ndarray::Array2;
-use rayon::prelude::*;
 use std::cmp::max;
 use std::collections::BinaryHeap;
-use utils::math_utils::MathUtils;
+
+use crate::utils::math_utils::MathUtils;
+use crate::genotype::genotype_allele_counts::GenotypeAlleleCounts;
+use crate::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use crate::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use crate::model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
+use crate::model::allele_list::AlleleListPermutation;
+use crate::model::byte_array_allele::Allele;
 
 #[derive(Clone, Debug)]
 pub struct GenotypeLikelihoodCalculator {
@@ -177,13 +177,13 @@ impl GenotypeLikelihoodCalculator {
                 "Invalid likelihood index {} >= {} (Genotype count for n-alleles = {} and {}",
                 index, self.genotype_count, self.allele_count, self.ploidy
             );
-        } else if index < self.genotype_allele_counts.len() {
+        } else if index < GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY {
+            
             return &mut self.genotype_allele_counts[index];
         } else if self.last_overhead_counts.is_null() || self.last_overhead_counts.index() > index {
             let mut result = self.genotype_allele_counts
                 [GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1]
                 .clone();
-
             // let mut result = &mut self.genotype_allele_counts[index];
             //
             result.increase(
@@ -199,6 +199,7 @@ impl GenotypeLikelihoodCalculator {
             // return result;
             return &mut self.last_overhead_counts;
         } else {
+            
             self.last_overhead_counts
                 .increase(index as i32 - self.last_overhead_counts.index() as i32);
             return &mut self.last_overhead_counts;
@@ -310,15 +311,18 @@ impl GenotypeLikelihoodCalculator {
         permutation: &AlleleLikelihoodMatrixMapper<A>,
         number_of_evidences: usize,
     ) -> GenotypeLikelihoods {
-        debug!("Single likelihoods array {:?}", likelihoods);
-        debug!("Number of evidences {}", number_of_evidences);
-        debug!("permutation {:?}", permutation);
+        // debug!("Single likelihoods array {:?}", likelihoods);
+        // debug!("Number of evidences {}", number_of_evidences);
+        // debug!("permutation {:?}", permutation);
         let read_likelihoods_by_genotype_index = self
             .get_read_raw_read_likelihoods_by_genotype_index(
                 likelihoods,
                 permutation,
                 number_of_evidences,
             );
+        // debug!(
+        //     "Read likelihoods by genotype index {:?}",
+        //     read_likelihoods_by_genotype_index);
         return GenotypeLikelihoods::from_log10_likelihoods(read_likelihoods_by_genotype_index);
     }
 
@@ -478,8 +482,8 @@ impl GenotypeLikelihoodCalculator {
         genotype_allele_counts_index: usize,
         read_count: usize,
     ) {
-        let mut likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
-        let mut genotype_allele_counts =
+        let likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
+        let genotype_allele_counts =
             &mut self.genotype_allele_counts[genotype_allele_counts_index];
         let allele = genotype_allele_counts.allele_index_at(0);
         // the count of the only component must be = ploidy.
@@ -502,7 +506,7 @@ impl GenotypeLikelihoodCalculator {
         genotype_allele_counts_index: usize,
         read_count: usize,
     ) {
-        let mut genotype_allele_counts =
+        let genotype_allele_counts =
             &mut self.genotype_allele_counts[genotype_allele_counts_index];
         let allele_0 = genotype_allele_counts.allele_index_at(0);
         let freq_0 = genotype_allele_counts.allele_count_at(0);
@@ -511,7 +515,7 @@ impl GenotypeLikelihoodCalculator {
 
         let mut allele_0_LnL_offset = read_count * ((self.ploidy + 1) * allele_0 + freq_0);
         let mut allele_1_LnL_offset = read_count * ((self.ploidy + 1) * allele_1 + freq_1);
-        let mut likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
+        let likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
 
         for r in 0..read_count {
             let ln_lk_0 = self.read_allele_likelihood_by_allele_count[allele_0_LnL_offset];
@@ -534,7 +538,7 @@ impl GenotypeLikelihoodCalculator {
     ) {
         // First we collect the allele likelihood component for all reads and place it
         // in readGenotypeLikelihoodComponents for the final calculation per read.
-        let mut genotype_allele_counts =
+        let genotype_allele_counts =
             &mut self.genotype_allele_counts[genotype_allele_counts_index];
 
         genotype_allele_counts.copy_allele_counts(&mut self.genotype_alleles_and_counts, 0);
@@ -552,7 +556,7 @@ impl GenotypeLikelihoodCalculator {
                 allele_data_size * allele_index + allele_count * read_count;
 
             let mut read_data_offset = c;
-            for r in 0..read_count {
+            for _r in 0..read_count {
                 self.read_genotype_likelihood_components[read_data_offset] =
                     self.read_allele_likelihood_by_allele_count[allele_data_offset];
                 allele_data_offset += 1;
@@ -560,7 +564,7 @@ impl GenotypeLikelihoodCalculator {
             }
         }
 
-        let mut likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
+        let likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
         // Calculate the likelihood per read.
         let mut read_data_offset = 0;
         for r in 0..read_count {
@@ -622,22 +626,22 @@ impl GenotypeLikelihoodCalculator {
         // frequency1Offset += alleleDataSize to skip to the next allele index data location (+ readCount) at each iteration.
         let mut frequency_1_offset = read_count;
         for a in 0..self.allele_count {
-            debug!(
-                "no slice cloning from slice offset {} evidences {} dest size {} source size {}",
-                frequency_1_offset,
-                number_of_evidences,
-                self.read_allele_likelihood_by_allele_count.len(),
-                &likelihoods.row(permutation.permutation.from_index(a)).len()
-            );
-            debug!(
-                "cloning from slice offset {} evidences {} dest size {} source size {}",
-                frequency_1_offset,
-                number_of_evidences,
-                self.read_allele_likelihood_by_allele_count
-                    [frequency_1_offset..frequency_1_offset + number_of_evidences]
-                    .len(),
-                &likelihoods.row(permutation.permutation.from_index(a)).len()
-            );
+            // debug!(
+            //     "no slice cloning from slice offset {} evidences {} dest size {} source size {}",
+            //     frequency_1_offset,
+            //     number_of_evidences,
+            //     self.read_allele_likelihood_by_allele_count.len(),
+            //     &likelihoods.row(permutation.permutation.from_index(a)).len()
+            // );
+            // debug!(
+            //     "cloning from slice offset {} evidences {} dest size {} source size {}",
+            //     frequency_1_offset,
+            //     number_of_evidences,
+            //     self.read_allele_likelihood_by_allele_count
+            //         [frequency_1_offset..frequency_1_offset + number_of_evidences]
+            //         .len(),
+            //     &likelihoods.row(permutation.permutation.from_index(a)).len()
+            // );
             self.read_allele_likelihood_by_allele_count
                 [frequency_1_offset..frequency_1_offset + number_of_evidences]
                 .clone_from_slice(
@@ -652,7 +656,7 @@ impl GenotypeLikelihoodCalculator {
             for frequency in 2..=self.ploidy {
                 let log10_frequency = (frequency as f64).log10();
                 let mut source_offset = frequency_1_offset;
-                for r in 0..read_count {
+                for _r in 0..read_count {
                     self.read_allele_likelihood_by_allele_count[destination_offset] = self
                         .read_allele_likelihood_by_allele_count[source_offset]
                         + log10_frequency;
@@ -758,7 +762,7 @@ impl GenotypeLikelihoodCalculator {
                 );
             };
 
-            for k in 0..repeats {
+            for _k in 0..repeats {
                 self.allele_heap.push(new_index);
             }
         }

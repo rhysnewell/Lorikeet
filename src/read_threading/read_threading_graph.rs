@@ -1,30 +1,31 @@
-use assembly::kmer::Kmer;
 use compare::{Compare, Extract};
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
-use graphs::base_edge::BaseEdge;
-use graphs::base_edge::BaseEdgeStruct;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::multi_sample_edge::MultiSampleEdge;
-use graphs::seq_graph::SeqGraph;
-use hashlink::{LinkedHashMap, LinkedHashSet};
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use hashlink::LinkedHashMap;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use rayon::prelude::*;
-use read_threading::abstract_read_threading_graph::{
-    AbstractReadThreadingGraph, DanglingChainMergeHelper, SequenceForKmers, TraversalDirection,
-};
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
-use reads::alignment_utils::AlignmentUtils;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::Cigar;
-use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::HashSet;
-use utils::simple_interval::Locatable;
+
+use crate::assembly::kmer::Kmer;
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_edge::BaseEdgeStruct;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::multi_sample_edge::MultiSampleEdge;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use crate::read_threading::abstract_read_threading_graph::{
+    AbstractReadThreadingGraph, DanglingChainMergeHelper, SequenceForKmers, TraversalDirection,
+};
+use crate::read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use crate::reads::alignment_utils::AlignmentUtils;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::smith_waterman::smith_waterman_aligner::SmithWatermanAligner;
+use crate::utils::simple_interval::Locatable;
 
 /**
  * Note: not final but only intended to be subclassed for testing.
@@ -64,13 +65,13 @@ pub struct ReadThreadingGraph {
 impl ReadThreadingGraph {
     pub const ANONYMOUS_SAMPLE: &'static str = "XXX_UNNAMED_XXX";
     const WRITE_GRAPH: bool = false;
-    const DEBUG_NON_UNIQUE_CALC: bool = false;
+    // const DEBUG_NON_UNIQUE_CALC: bool = false;
     pub const MAX_CIGAR_COMPLEXITY: usize = 3;
     const INCREASE_COUNTS_BACKWARDS: bool = true;
 
     pub fn new(
         kmer_size: usize,
-        debug_graph_transformations: bool,
+        _debug_graph_transformations: bool,
         min_base_quality_to_use_in_assembly: u8,
         min_pruning_samples: usize,
         min_matching_bases_to_dangling_end_recovery: i32,
@@ -122,6 +123,9 @@ impl ReadThreadingGraph {
             }
             Some(stop_position) => {
                 for i in 0..=stop_position {
+                    // if seq_for_kmers.sequence.len() <= i + kmer_size {
+                    //     break;
+                    // }
                     let kmer =
                         Kmer::new_with_start_and_length(seq_for_kmers.sequence, i, kmer_size);
                     if all_kmers.contains(&kmer) {
@@ -167,7 +171,10 @@ impl ReadThreadingGraph {
             .iter()
             .filter_map(|sequence_for_kmers| {
                 let non_uniques_from_seq =
-                    Self::determine_non_unique_kmers(sequence_for_kmers, kmer_size);
+                    Self::determine_non_unique_kmers(
+                        sequence_for_kmers, 
+                        kmer_size
+                    );
                 if !non_uniques_from_seq.is_empty() {
                     // keep track of the non-uniques for this kmerSize, and keep it in the list of sequences that have non-uniques
                     Some(non_uniques_from_seq)
@@ -232,7 +239,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     fn is_threading_start(
         &self,
         kmer: &Kmer,
-        start_threading_only_at_existing_vertex: bool,
     ) -> bool {
         if self.start_threading_only_at_existing_vertex {
             self.kmer_to_vertex_map.contains_key(kmer)
@@ -261,12 +267,12 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         &self,
         kmer: &Kmer,
         is_ref: bool,
-        prev_vertex: NodeIndex,
+        _prev_vertex: NodeIndex,
     ) -> Option<&NodeIndex> {
         let unique_merge_vertex = self.get_kmer_vertex(kmer, false);
         assert!(
             !(is_ref && unique_merge_vertex.is_some()),
-            "Did not find a unique vertex to merge into the reference path"
+            "Did not find a unique vertex to merge into the reference path: {} {}", is_ref, unique_merge_vertex.is_some()
         );
 
         return unique_merge_vertex;
@@ -276,19 +282,19 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      * Since we want to duplicate non-unique kmers in the graph code we must determine what those kmers are
      */
     fn preprocess_reads<'a>(&mut self, pending: &LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>) {
-        debug!(
-            "All pending before preprocess {}",
-            Self::get_all_pending_sequences(pending).len()
-        );
+        // debug!(
+        //     "All pending before preprocess {}",
+        //     Self::get_all_pending_sequences(pending).len()
+        // );
         self.non_unique_kmers = self.determine_non_uniques(
             self.base_graph.get_kmer_size(),
             Self::get_all_pending_sequences(pending),
         );
-        debug!(
-            "All pending after preprocess {}",
-            Self::get_all_pending_sequences(pending).len()
-        );
-        debug!("Non-uniques {}", self.non_unique_kmers.len());
+        // debug!(
+        //     "All pending after preprocess {}",
+        //     Self::get_all_pending_sequences(pending).len()
+        // );
+        // debug!("Non-uniques {}", self.non_unique_kmers.len());
     }
 
     // whether reads are needed after graph construction
@@ -335,12 +341,15 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     fn add_read<'a>(
         &mut self,
         read: &'a BirdToolRead,
-        sample_names: &[String],
+        _sample_names: &[String],
         count: &mut usize,
         pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>,
     ) {
         let sequence = read.seq();
         let qualities = read.read.qual();
+        if sequence.is_empty() || qualities.is_empty() {
+            return;
+        }
 
         let mut last_good = -1;
         for end in 0..=sequence.len() {
@@ -397,7 +406,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         self.start_threading_only_at_existing_vertex = value
     }
 
-    fn print_graph(&self, file_name: String, prune_factor: usize) {
+    fn print_graph(&self, file_name: String, _prune_factor: usize) {
         self.base_graph.print_graph(&file_name, true, 0);
     }
 
@@ -418,8 +427,8 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
 
         // let pending = self.get_pending();
         // go through the pending sequences, and add them to the graph
-        for (name, sequences_for_samples) in pending.iter() {
-            debug!("Sample {} reads {}", *name, sequences_for_samples.len());
+        for (_name, sequences_for_samples) in pending.iter() {
+            // debug!("Sample {} reads {}", *name, sequences_for_samples.len());
             for sequence_for_kmers in sequences_for_samples.iter() {
                 self.thread_sequence(sequence_for_kmers);
                 if Self::WRITE_GRAPH {
@@ -435,22 +444,22 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                 }
                 self.counter += 1;
             }
-            debug!(
-                "Threaded {} Nodes {} Edges {}",
-                self.counter,
-                self.base_graph.graph.node_count(),
-                self.base_graph.graph.edge_count()
-            );
+            // debug!(
+            //     "Threaded {} Nodes {} Edges {}",
+            //     self.counter,
+            //     self.base_graph.graph.node_count(),
+            //     self.base_graph.graph.edge_count()
+            // );
             // flush the single sample edge values from the graph
             for e in self.base_graph.graph.edge_weights_mut() {
                 e.flush_single_sample_multiplicity()
             }
-            debug!(
-                "Flushed {} Nodes {} Edges {}",
-                self.counter,
-                self.base_graph.graph.node_count(),
-                self.base_graph.graph.edge_count()
-            );
+            // debug!(
+            //     "Flushed {} Nodes {} Edges {}",
+            //     self.counter,
+            //     self.base_graph.graph.node_count(),
+            //     self.base_graph.graph.edge_count()
+            // );
         }
 
         // self.replace_pending(&mut pending);
@@ -462,7 +471,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
 
         self.already_built = true;
         for (_, v) in self.kmer_to_vertex_map.iter_mut() {
-            let mut node = self.base_graph.graph.node_weight_mut(*v).unwrap();
+            let node = self.base_graph.graph.node_weight_mut(*v).unwrap();
             node.set_additional_info(format!("{}+", node.get_additional_info()));
         }
     }
@@ -480,6 +489,10 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                 // do nothing :)
             }
             Some(start_pos) => {
+                if seq_for_kmers.sequence.len() <= start_pos + self.base_graph.get_kmer_size() {
+                    // debug!("Sequence length {}", seq_for_kmers.sequence.len());
+                    return;
+                }
                 let starting_vertex =
                     self.get_or_create_kmer_vertex(&seq_for_kmers.sequence, start_pos);
                 // increase the counts of all edges incoming into the starting vertex supported by going back in sequence
@@ -557,7 +570,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         if seq_for_kmers.is_ref {
             return Some(0);
         } else {
-            let stop = seq_for_kmers.stop - self.base_graph.get_kmer_size();
+            let stop = seq_for_kmers.stop.saturating_sub(self.base_graph.get_kmer_size());
 
             for i in seq_for_kmers.start..stop {
                 let kmer1 = Kmer::new_with_start_and_length(
@@ -565,7 +578,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                     i,
                     self.base_graph.get_kmer_size(),
                 );
-                if self.is_threading_start(&kmer1, self.start_threading_only_at_existing_vertex) {
+                if self.is_threading_start(&kmer1) {
                     return Some(i);
                 }
             }
@@ -598,22 +611,10 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      * @return a vertex for kmer, or null (either because it doesn't exist or is non-unique for graphs that have such a distinction)
      */
     fn get_kmer_vertex(&self, kmer: &Kmer, allow_ref_source: bool) -> Option<&NodeIndex> {
-        if !allow_ref_source {
-            match &self.ref_source {
-                None => {
-                    return self.kmer_to_vertex_map.get(kmer);
-                }
-                Some(ref_source) => {
-                    if kmer == ref_source {
-                        return None;
-                    } else {
-                        return self.kmer_to_vertex_map.get(kmer);
-                    }
-                }
-            }
-        } else {
-            return self.kmer_to_vertex_map.get(kmer);
+        if !allow_ref_source && self.ref_source.as_ref() == Some(kmer) {
+            return None;
         }
+        return self.kmer_to_vertex_map.get(kmer);
     }
 
     /**
@@ -622,10 +623,9 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      * @param kmer the kmer we want to create a vertex for
      * @return the non-null created vertex
      */
-    fn create_vertex(&mut self, sequence: &[u8], mut kmer: Kmer) -> NodeIndex {
+    fn create_vertex(&mut self, sequence: &[u8], kmer: Kmer) -> NodeIndex {
         let new_vertex = MultiDeBruijnVertex::new(kmer.bases(sequence).to_vec(), false);
         let node_index = self.base_graph.add_node(&new_vertex);
-
         self.track_kmer(kmer, node_index);
 
         return node_index;
@@ -709,7 +709,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .base_graph
             .graph
             .edges_directed(prev_vertex, Direction::Outgoing);
-
         let next_pos = kmer_start + self.base_graph.get_kmer_size() - 1;
         let mut found_match = None;
         let mut return_target = None;
@@ -730,18 +729,20 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             {
                 found_match = Some(outgoing_edge.id());
                 return_target = Some(target);
+                // can't directly access the edge weight here, so we break and do it below
+                // as we need a mutable reference to it.
                 break;
             }
         }
 
         if found_match.is_some() {
-            // we've got a match in the chain, so simply increase the count of the edge by 1 and continue
+            // we've got a match in the chain, so simply increase the count of the edge by 1 and return
+            // the target node index
             self.base_graph
                 .graph
                 .edge_weight_mut(found_match.unwrap())
                 .unwrap()
                 .inc_multiplicity(count);
-
             return return_target.unwrap();
         }
 
@@ -757,7 +758,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             *merge_vertex.unwrap()
         };
 
-        let edge_index = self.base_graph.graph.add_edge(
+        let _edge_index = self.base_graph.graph.add_edge(
             prev_vertex,
             next_vertex,
             MultiSampleEdge::new(is_ref, count, self.num_pruning_samples),
@@ -795,20 +796,21 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .filter(|v| self.base_graph.out_degree_of(*v) == 0 && !self.base_graph.is_ref_sink(*v))
             .collect::<Vec<NodeIndex>>();
 
-        let mut attempted = 0;
-        let mut n_recovered = 0;
+        // let mut attempted = 0;
+        // let mut n_recovered = 0;
         for v in dangling_tails {
-            attempted += 1;
-            n_recovered += self.recover_dangling_tail(
+            // attempted += 1;
+            // n_recovered += 
+            self.recover_dangling_tail(
                 v,
                 prune_factor,
                 min_dangling_branch_length,
                 recover_all,
                 dangling_end_sw_parameters,
-            )
+            );
         }
 
-        debug!("Recovered {} of {} dangling tails", n_recovered, attempted);
+        // debug!("Recovered {} of {} dangling tails", n_recovered, attempted);
     }
 
     /**
@@ -840,20 +842,21 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .collect::<Vec<NodeIndex>>();
 
         // now we can try to recover the dangling heads
-        let mut attempted = 0;
-        let mut n_recovered = 0;
+        // let mut attempted = 0;
+        // let mut n_recovered = 0;
         for v in dangling_heads {
-            attempted += 1;
-            n_recovered += self.recover_dangling_head(
+            // attempted += 1;
+            // n_recovered += 
+            self.recover_dangling_head(
                 v,
                 prune_factor,
                 min_dangling_branch_length,
                 recover_all,
                 dangling_head_sw_parameters,
-            )
+            );
         }
 
-        debug!("Recovered {} of {} dangling heads", n_recovered, attempted);
+        // debug!("Recovered {} of {} dangling heads", n_recovered, attempted);
     }
 
     /**
@@ -1279,7 +1282,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             let new_v_index = self.base_graph.add_node(&new_v);
             let new_e =
                 MultiSampleEdge::new(false, removed_edge.multiplicity, self.num_pruning_samples);
-            let new_e_index = self.base_graph.graph.add_edge(new_v_index, prev_v, new_e);
+            let _new_e_index = self.base_graph.graph.add_edge(new_v_index, prev_v, new_e);
             dangling_head_merge_result.dangling_path.push(new_v_index);
             prev_v = new_v_index;
         }
@@ -1326,7 +1329,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             {
                 break;
             } else {
-                for j in 0..(ce.len()) {
+                for _j in 0..(ce.len()) {
                     if path1[ref_idx as usize] != path2[read_idx as usize] {
                         break 'cigarLoop;
                     };
@@ -1786,8 +1789,8 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     // alteations that must be made to the graph based on implementation
     fn post_process_for_haplotype_finding<L: Locatable>(
         &mut self,
-        debug_graph_output_path: Option<&String>,
-        ref_haplotype: &L,
+        _debug_graph_output_path: Option<&String>,
+        _ref_haplotype: &L,
     ) {
         // Do nothing There is no processing required for this graph so simply return
     }

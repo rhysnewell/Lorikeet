@@ -1,7 +1,7 @@
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use haplotype::homogenous_ploidy_model::PloidyModel;
-use model::allele_list::AlleleList;
-use model::byte_array_allele::Allele;
+use crate::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use crate::haplotype::homogenous_ploidy_model::PloidyModel;
+use crate::model::allele_list::AlleleList;
+use crate::model::byte_array_allele::Allele;
 
 /**
  * Genotyping Likelihoods collection.

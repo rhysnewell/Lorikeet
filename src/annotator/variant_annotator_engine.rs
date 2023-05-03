@@ -1,13 +1,11 @@
-use annotator::variant_annotation::{Annotation, AnnotationType, VariantAnnotations};
-use genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
-use haplotype::haplotype::Haplotype;
 use hashlink::LinkedHashMap;
-use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variant_context::VariantContext;
 use rust_htslib::bcf::Header;
-use std::collections::HashMap;
-use utils::simple_interval::SimpleInterval;
+
+use crate::annotator::variant_annotation::{Annotation, AnnotationType, VariantAnnotations};
+use crate::genotype::genotype_builder::{AttributeObject, GenotypesContext};
+use crate::model::allele_likelihoods::AlleleLikelihoods;
+use crate::model::byte_array_allele::Allele;
+use crate::model::variant_context::VariantContext;
 
 /**
  * The class responsible for computing annotations for variants.
@@ -40,11 +38,11 @@ impl VariantAnnotationEngine {
         let mut builder = VariantContext::build_from_vc(vc);
         // genotype context annotation here
         builder.genotypes = Self::add_genotype_annotations(&mut builder, read_likelihoods);
-        debug!(
-            "genotypes {:?} empty {}",
-            &builder.genotypes,
-            builder.genotypes.is_empty()
-        );
+        // debug!(
+        //     "genotypes {:?} empty {}",
+        //     &builder.genotypes,
+        //     builder.genotypes.is_empty()
+        // );
         let info_annot_map =
             Self::add_info_annotations(&mut builder, read_likelihoods, add_annotation);
 
@@ -77,7 +75,7 @@ impl VariantAnnotationEngine {
         add_annotation: Box<dyn Fn(&Annotation) -> bool>,
     ) -> LinkedHashMap<String, AttributeObject> {
         let mut info_annot_map = LinkedHashMap::new();
-        for mut annotation in Self::vc_annotations() {
+        for annotation in Self::vc_annotations() {
             if add_annotation(&annotation) {
                 let annotation_result = annotation.annotate(vc, None, likelihoods);
                 info_annot_map.insert(

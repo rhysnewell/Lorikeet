@@ -1,14 +1,13 @@
-use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
-use graphs::base_vertex::BaseVertex;
-use graphs::graph_utils::GraphUtils;
-use graphs::seq_graph::SeqGraph;
-use graphs::seq_vertex::SeqVertex;
 use hashlink::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use rayon::prelude::*;
-use std::collections::HashSet;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::graph_utils::GraphUtils;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::graphs::seq_vertex::SeqVertex;
 
 /**
  * Split a collection of middle nodes in a graph into their shared prefix and suffix values
@@ -239,7 +238,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
             .base_graph
             .remove_all_edges(&self.edges_to_remove);
 
-        let new_nodes = self.outer.base_graph.add_vertices(
+        let _new_nodes = self.outer.base_graph.add_vertices(
             self.split_graph
                 .base_graph
                 .get_node_weights(&self.new_middles)
@@ -477,7 +476,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
                 // there's no edge, so we return a newly allocated one and don't schedule e for removal
                 // the weight must be 0 to preserve sum through the diamond
 
-                let mut edge_template = E::new(self.outer.base_graph.is_reference_node(v), 0, 0);
+                let edge_template = E::new(self.outer.base_graph.is_reference_node(v), 0, 0);
                 // debug!("Edge template {:?}", &e);
                 return edge_template;
             }

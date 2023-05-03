@@ -1,5 +1,5 @@
-use model::byte_array_allele::ByteArrayAllele;
-use model::variants::SPAN_DEL_ALLELE;
+use crate::model::byte_array_allele::ByteArrayAllele;
+use crate::model::variants::SPAN_DEL_ALLELE;
 
 lazy_static! {
 

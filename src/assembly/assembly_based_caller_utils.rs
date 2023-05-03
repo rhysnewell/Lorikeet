@@ -1,46 +1,45 @@
-use assembly::assembly_region::AssemblyRegion;
-use assembly::assembly_result_set::AssemblyResultSet;
-use genotype::genotype_builder::AttributeObject;
-use haplotype::haplotype::Haplotype;
-use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
-use haplotype::location_and_alleles::LocationsAndAlleles;
-use haplotype::reference_confidence_model::ReferenceConfidenceModel;
 use hashlink::linked_hash_map::LinkedHashMap;
 use itertools::Itertools;
-use model::allele_likelihoods::{AlleleLikelihoods, ReadIndexer};
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::location_and_alleles::LocationAndAlleles;
-use model::variant_context::VariantContext;
-use model::variant_context_utils::{
-    FilteredRecordMergeType, GenotypeMergeType, VariantContextUtils,
-};
-use model::variants::*;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    AVXMode, PCRErrorModel, PairHMMLikelihoodCalculationEngine,
-};
 use rayon::prelude::*;
 // use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
-use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
-use read_threading::read_threading_assembler::ReadThreadingAssembler;
-use read_threading::read_threading_graph::ReadThreadingGraph;
-use reads::alignment_utils::AlignmentUtils;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_utils::CigarUtils;
-use reads::read_clipper::ReadClipper;
-use reads::read_utils::ReadUtils;
-use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::ext::BamRecordExtensions;
-// use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
-use smith_waterman::smith_waterman_aligner::{NEW_SW_PARAMETERS, STANDARD_NGS};
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::collections::{HashMap, HashSet};
-use utils::fragment_collection::FragmentCollection;
-use utils::fragment_utils::adjust_quals_of_overlapping_paired_fragments;
-use utils::math_utils::MathUtils;
-use utils::quality_utils::QualityUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
-use utils::vcf_constants::*;
+
+use crate::assembly::assembly_region::AssemblyRegion;
+use crate::assembly::assembly_result_set::AssemblyResultSet;
+use crate::genotype::genotype_builder::AttributeObject;
+use crate::haplotype::haplotype::Haplotype;
+use crate::haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
+use crate::haplotype::location_and_alleles::LocationsAndAlleles;
+use crate::haplotype::reference_confidence_model::ReferenceConfidenceModel;
+use crate::model::allele_likelihoods::{AlleleLikelihoods, ReadIndexer};
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::model::location_and_alleles::LocationAndAlleles;
+use crate::model::variant_context::VariantContext;
+use crate::model::variant_context_utils::{
+    FilteredRecordMergeType, GenotypeMergeType, VariantContextUtils,
+};
+use crate::model::variants::*;
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    AVXMode, PCRErrorModel, PairHMMLikelihoodCalculationEngine,
+};
+use crate::read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
+use crate::read_threading::read_threading_assembler::ReadThreadingAssembler;
+use crate::read_threading::read_threading_graph::ReadThreadingGraph;
+use crate::reads::alignment_utils::AlignmentUtils;
+use crate::smith_waterman::smith_waterman_aligner::{NEW_SW_PARAMETERS, STANDARD_NGS};
+use crate::utils::fragment_collection::FragmentCollection;
+use crate::utils::fragment_utils::adjust_quals_of_overlapping_paired_fragments;
+use crate::utils::quality_utils::QualityUtils;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
+use crate::utils::vcf_constants::*;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::reads::read_clipper::ReadClipper;
+use crate::reads::read_utils::ReadUtils;
+use crate::reference::reference_reader::ReferenceReader;
 
 lazy_static! {
     static ref PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
@@ -77,9 +76,9 @@ impl PhaseGroup {
         self.description.clone()
     }
 
-    pub fn get_alt_allele_index(&self) -> usize {
-        self.alt_allele_index
-    }
+    // pub fn get_alt_allele_index(&self) -> usize {
+    //     self.alt_allele_index
+    // }
 }
 
 /// Collection of functions used during various assembly stages
@@ -114,18 +113,18 @@ impl AssemblyBasedCallerUtils {
         };
 
         let original_reads = region.move_reads();
-        debug!("Original reads {}", original_reads.len());
+        // debug!("Original reads {}", original_reads.len());
 
         let mut reads_to_use = original_reads
             .into_par_iter()
             .filter_map(|original_read| {
                 // TODO unclipping soft clips may introduce bases that aren't in the extended region if the unclipped bases
                 // TODO include a deletion w.r.t. the reference.  We must remove kmers that occur before the reference haplotype start
-                let mut hard_clipped = false;
+                // let mut hard_clipped = false;
                 let mut read = if dont_use_soft_clipped_bases
                     || !ReadUtils::has_well_defined_fragment_size(&original_read)
                 {
-                    hard_clipped = true;
+                    // hard_clipped = true;
                     ReadClipper::new(original_read).hard_clip_soft_clipped_bases()
                 } else {
                     ReadClipper::new(original_read).revert_soft_clipped_bases()
@@ -137,12 +136,12 @@ impl AssemblyBasedCallerUtils {
                     ReadClipper::new(read).hard_clip_low_qual_ends(min_tail_quality_to_use)
                 };
 
-                let mut adaptored = false;
+                // let mut adaptored = false;
                 if read.get_start() <= read.get_end() {
                     read = if read.read.is_unmapped() {
                         read
                     } else {
-                        adaptored = true;
+                        // adaptored = true;
                         ReadClipper::new(read).hard_clip_adaptor_sequence()
                     };
 
@@ -214,6 +213,7 @@ impl AssemblyBasedCallerUtils {
     ) -> HashMap<ReadIndexer, BirdToolRead> {
         let best_alleles = original_read_likelihoods
             .best_alleles_breaking_ties_main(Self::haplotype_alignment_tiebreaking_priority());
+        debug!("Best alleles {:?}", best_alleles.iter().map(|x| x.allele_index).collect::<Vec<_>>());
         return best_alleles
             .iter()
             .map(|best_allele| {
@@ -236,7 +236,7 @@ impl AssemblyBasedCallerUtils {
                     padded_reference_loc.get_start(),
                     is_informative,
                     avx_mode,
-                );
+                ).expect("Failed to realign read");
                 (
                     ReadIndexer::new(best_allele.sample_index, best_allele.evidence_index),
                     realigned_read,
@@ -267,12 +267,12 @@ impl AssemblyBasedCallerUtils {
         half_of_pcr_indel_qual: Option<u8>,
     ) -> Vec<BirdToolRead> {
         let n_reads = reads.len();
-        let mut split_reads_by_sample = Self::split_reads_by_sample(reads);
+        let split_reads_by_sample = Self::split_reads_by_sample(reads);
 
         let mut reads = Vec::with_capacity(n_reads);
         for per_sample_read_list in split_reads_by_sample.into_values() {
-            let mut fragment_collection = FragmentCollection::create(per_sample_read_list);
-            let (singletons, mut overlapping_pairs) = fragment_collection.consume();
+            let fragment_collection = FragmentCollection::create(per_sample_read_list);
+            let (singletons, overlapping_pairs) = fragment_collection.consume();
             reads.extend(singletons);
             for overlapping_pair in overlapping_pairs {
                 let fixed_pair = adjust_quals_of_overlapping_paired_fragments(
@@ -303,21 +303,12 @@ impl AssemblyBasedCallerUtils {
     ) -> AssemblyResultSet<ReadThreadingGraph> {
         Self::finalize_regions(
             &mut region,
-            args.is_present("error-correct-reads"),
-            args.is_present("dont-use-soft-clipped-bases"),
-            args.value_of("min-base-quality")
-                .unwrap()
-                .parse::<u8>()
-                .unwrap()
-                - 1,
+            args.get_flag("error-correct-reads"),
+            args.get_flag("dont-use-soft-clipped-bases"),
+            args.get_one::<u8>("min-base-quality")
+                .unwrap().saturating_sub(1),
             correct_overlapping_base_qualities,
-            args.is_present("soft-clip-low-quality-ends"),
-        );
-        debug!(
-            "Assembling {:?} with {} reads:    (with overlap region = {:?})",
-            region.get_span(),
-            region.get_reads().len(),
-            region.get_padded_span()
+            args.get_flag("soft-clip-low-quality-ends"),
         );
 
         let full_reference_with_padding = region
@@ -332,7 +323,7 @@ impl AssemblyBasedCallerUtils {
             Self::REFERENCE_PADDING_FOR_ASSEMBLY,
             &reference_reader,
         );
-        debug!("Padded reference location {:?}", &padded_reference_loc);
+        // debug!("Padded reference location {:?}", &padded_reference_loc);
         let mut ref_haplotype = Self::create_reference_haplotype(
             &region,
             &padded_reference_loc,
@@ -342,14 +333,14 @@ impl AssemblyBasedCallerUtils {
 
         // let mut read_error_corrector = None;
 
-        // if args.is_present("error-correct-reads") {
+        // if args.get_flag("error-correct-reads") {
         //     read_error_corrector = Some(NearbyKmerErrorCorrector::default(
-        //         args.value_of("kmer-length-for-read-error-correction")
+        //         args.get_one("kmer-length-for-read-error-correction")
         //             .unwrap()
         //             .parse::<usize>()
         //             .unwrap(),
         //         HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION,
-        //         args.value_of("min-observation-for-kmer-to-be-solid")
+        //         args.get_one("min-observation-for-kmer-to-be-solid")
         //             .unwrap()
         //             .parse::<usize>()
         //             .unwrap(),
@@ -360,6 +351,11 @@ impl AssemblyBasedCallerUtils {
         // }
 
         let region_padded_start = region.get_padded_span().get_start();
+        let additional_kmer_sizes = if args.get_flag("disable-automatic-kmer-adjustment") {
+            None
+        } else {
+            region.compute_additional_kmer_sizes(&assembly_engine.kmer_sizes)
+        };
         let mut assembly_result_set = assembly_engine.run_local_assembly(
             region,
             &mut ref_haplotype,
@@ -369,22 +365,23 @@ impl AssemblyBasedCallerUtils {
             sample_names,
             *STANDARD_NGS,
             *NEW_SW_PARAMETERS,
-            if args.is_present("disable-avx") {
+            if args.get_flag("disable-avx") {
                 AVXMode::None
             } else {
                 AVXMode::detect_mode()
             },
+            additional_kmer_sizes
         );
 
         if !given_alleles.is_empty() {
             Self::add_given_alleles(
                 region_padded_start,
                 given_alleles,
-                args.value_of("max-mnp-distance").unwrap().parse().unwrap(),
+                *args.get_one::<usize>("max-mnp-distance").unwrap(),
                 *NEW_SW_PARAMETERS,
                 &ref_haplotype,
                 &mut assembly_result_set,
-                if args.is_present("disable-avx") {
+                if args.get_flag("disable-avx") {
                     AVXMode::None
                 } else {
                     AVXMode::detect_mode()
@@ -418,17 +415,17 @@ impl AssemblyBasedCallerUtils {
             Err(error) => panic!("{:?}", error),
         };
 
-        let mut assembled_variants = grouped_by
+        let assembled_variants = grouped_by
             .into_iter()
             .map(|(i, vcs)| (i, Self::make_merged_variant_context(vcs).unwrap()))
             .collect::<HashMap<usize, VariantContext>>();
 
         for given_vc in given_alleles {
             let mut assembled_haplotypes = assembly_result_set.get_haplotype_list();
-            let mut assembled_vc = assembled_variants.get(&given_vc.loc.get_start());
+            let assembled_vc = assembled_variants.get(&given_vc.loc.get_start());
             let given_vc_ref_length = given_vc.get_reference().len();
-            let mut unassembled_given_alleles = Vec::new();
-            let mut longer_ref;
+            let unassembled_given_alleles;
+            let longer_ref;
             match &assembled_vc {
                 None => {
                     longer_ref = given_vc.get_reference();
@@ -529,7 +526,7 @@ impl AssemblyBasedCallerUtils {
                         }
                     };
 
-                    let mut inserted_haplotype = base_haplotype.insert_allele(
+                    let inserted_haplotype = base_haplotype.insert_allele(
                         longer_ref,
                         &given_allele,
                         active_region_start + given_vc.loc.get_start() - assembly_region_start,
@@ -554,7 +551,7 @@ impl AssemblyBasedCallerUtils {
             }
         }
 
-        assembly_result_set.regenerate_variation_events(max_mnp_distance);
+        assembly_result_set.regenerate_variation_events(max_mnp_distance).expect("Failed to regenerate variation events");
     }
 
     // Contract: the List<Allele> alleles of the resulting VariantContext is the ref allele followed by alt alleles in the
@@ -738,13 +735,14 @@ impl AssemblyBasedCallerUtils {
             .get_alleles()
             .iter()
             .enumerate()
-            .filter(|(idx, a)| !a.is_symbolic && !a.is_ref)
-            .for_each(|(idx, a)| {
+            .filter(|(_idx, a)| !a.is_symbolic && !a.is_ref)
+            .for_each(|(idx, _a)| {
                 result.insert(idx, Vec::new());
             });
 
         for h in haplotypes {
             let spanning_events = h.event_map.as_ref().unwrap().get_overlapping_events(loc);
+            
 
             if spanning_events.is_empty() {
                 let allele_vec = result.entry(ref_index).or_insert(Vec::new());
@@ -765,12 +763,8 @@ impl AssemblyBasedCallerUtils {
                                     // pass
                                 }
                                 Some(index) => {
-                                    if result.contains_key(&index) {
-                                        // variant contexts derived from the event map have only one alt allele each, so we can just
-                                        // grab the first one (we're not assuming that the sample is biallelic)
-                                        let mut allele_vec = result.get_mut(&index).unwrap();
-                                        allele_vec.push(h);
-                                    }
+                                    let allele_vec = result.entry(index).or_insert_with(|| Vec::new());
+                                    allele_vec.push(h);
                                 }
                             }
                         } else if spanning_event.get_reference().len()
@@ -798,12 +792,8 @@ impl AssemblyBasedCallerUtils {
                                     // pass
                                 }
                                 Some(index) => {
-                                    if result.contains_key(&index) {
-                                        // variant contexts derived from the event map have only one alt allele each, so we can just
-                                        // grab the first one (we're not assuming that the sample is biallelic)
-                                        let mut allele_vec = result.get_mut(&index).unwrap();
-                                        allele_vec.push(h);
-                                    }
+                                    let allele_vec = result.entry(index).or_insert_with(|| Vec::new());
+                                    allele_vec.push(h);
                                 }
                             }
                             // if result.contains_key(&remapped_spanning_event_alt_allele) {
@@ -824,7 +814,6 @@ impl AssemblyBasedCallerUtils {
                             .position(|a| a == &*SPAN_DEL_ALLELE);
                         match index {
                             None => {
-                                // I guess pass? We can't exactly insert it into merged_vc
                                 result.get_mut(&ref_index).unwrap().push(h);
                                 break;
                             }
@@ -937,49 +926,38 @@ impl AssemblyBasedCallerUtils {
     pub fn create_likelihood_calculation_engine(
         args: &clap::ArgMatches,
         handle_soft_clips: bool,
-    ) -> PairHMMLikelihoodCalculationEngine<'static> {
+    ) -> PairHMMLikelihoodCalculationEngine{
         //AlleleLikelihoods::normalizeLikelihoods uses std::f64::NEGATIVE_INFINITY as a flag to disable capping
-        let log10_global_read_mismapping_rate = if args
-            .value_of("phred-scaled-global-read-mismapping-rate")
-            .unwrap()
-            .parse::<f64>()
-            .unwrap()
+        let log10_global_read_mismapping_rate = if (*args
+            .get_one::<u8>("phred-scaled-global-read-mismapping-rate")
+            .unwrap() as f64)
             < 0.0
         {
             std::f64::NEG_INFINITY
         } else {
             QualityUtils::qual_to_error_prob_log10(
-                args.value_of("phred-scaled-global-read-mismapping-rate")
-                    .unwrap()
-                    .parse::<u8>()
+                *args
+                    .get_one::<u8>("phred-scaled-global-read-mismapping-rate")
                     .unwrap(),
             )
         };
 
         PairHMMLikelihoodCalculationEngine::new(
-            args.value_of("pair-hmm-gap-continuation-penalty")
-                .unwrap()
-                .parse()
+            *args.get_one::<u8>("pair-hmm-gap-continuation-penalty")
                 .unwrap(),
             log10_global_read_mismapping_rate,
             PCRErrorModel::new(args),
-            args.value_of("base-quality-score-threshold")
-                .unwrap()
-                .parse()
+            *args.get_one::<u8>("base-quality-score-threshold")
                 .unwrap(),
-            args.is_present("enable-dynamic-read-disqualification-for-genotyping"),
-            args.value_of("dynamic-read-disqualification-threshold")
-                .unwrap()
-                .parse()
+            !args.get_flag("disable-dynamic-read-disqualification-for-genotyping"),
+            *args.get_one::<f64>("dynamic-read-disqualification-threshold")
                 .unwrap(),
-            args.value_of("expected-mismatch-rate-for-read-disqualification")
-                .unwrap()
-                .parse()
+            *args.get_one::<f64>("expected-mismatch-rate-for-read-disqualification")
                 .unwrap(),
-            !args.is_present("disable-symmetric-hmm-normalizing"),
-            args.is_present("disable-cap-base-qualities-to-map-quality"),
+            !args.get_flag("disable-symmetric-hmm-normalizing"),
+            args.get_flag("disable-cap-base-qualities-to-map-quality"),
             handle_soft_clips,
-            if args.is_present("disable-avx") {
+            if args.get_flag("disable-avx") {
                 AVXMode::None
             } else {
                 AVXMode::detect_mode()
@@ -1031,7 +1009,7 @@ impl AssemblyBasedCallerUtils {
             // get all of the (indexes of the) calls that belong in this group (keeping them in the original order)
             let mut indexes = Vec::new();
             for index in 0..original_calls.len() {
-                let call = &original_calls[index];
+                let _call = &original_calls[index];
                 if phase_set_mapping.contains_key(&index)
                     && phase_set_mapping.get(&index).unwrap().0 == count
                 {
@@ -1148,7 +1126,7 @@ impl AssemblyBasedCallerUtils {
 
         // use the haplotype mapping to connect variants that are always/never present on the same haplotypes
         for i in 0..(num_calls).checked_sub(1).unwrap_or(0) {
-            let call = &original_calls[i];
+            let _call = &original_calls[i];
             let haplotypes_with_call = haplotype_map.get(&i);
             match haplotypes_with_call {
                 None => continue,
@@ -1169,7 +1147,7 @@ impl AssemblyBasedCallerUtils {
                         let mut call_haplotypes_available_for_phasing = HashSet::new();
 
                         for j in (i + 1)..num_calls {
-                            let comp = &original_calls[j];
+                            let _comp = &original_calls[j];
                             let haplotypes_with_comp = haplotype_map.get(&j);
                             match haplotypes_with_comp {
                                 None => continue,

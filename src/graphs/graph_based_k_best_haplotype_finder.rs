@@ -1,13 +1,13 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::k_best_haplotype::KBestHaplotype;
-use graphs::k_best_haplotype_finder::KBestHaplotypeFinder;
+
 use petgraph::prelude::NodeIndex;
 use petgraph::Direction;
-use rayon::prelude::*;
-use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::k_best_haplotype::KBestHaplotype;
+use crate::graphs::k_best_haplotype_finder::KBestHaplotypeFinder;
 
 /**
  * Efficient algorithm to obtain the list of best haplotypes given the {@link BaseGraph instance}.
@@ -67,10 +67,10 @@ impl GraphBasedKBestHaplotypeFinder {
         graph: &BaseGraph<V, E>,
     ) -> Vec<KBestHaplotype> {
         let mut result = Vec::new();
-        debug!(
-            "Sources {:?} Sinks {:?}",
-            &self.k_best_haplotype_finder.sources, &self.k_best_haplotype_finder.sinks
-        );
+        // debug!(
+        //     "Sources {:?} Sinks {:?}",
+        //     &self.k_best_haplotype_finder.sources, &self.k_best_haplotype_finder.sinks
+        // );
 
         let mut queue: BinaryHeap<KBestHaplotype> = self
             .k_best_haplotype_finder
@@ -79,20 +79,20 @@ impl GraphBasedKBestHaplotypeFinder {
             .map(|source| KBestHaplotype::new(*source, graph))
             .collect::<BinaryHeap<KBestHaplotype>>();
 
-        debug!("Graph {:?}", &graph);
+        // debug!("Graph {:?}", &graph);
         let mut vertex_counts = graph
             .graph
             .node_indices()
             .map(|v| (v, 0))
             .collect::<HashMap<NodeIndex, usize>>();
 
-        debug!(
-            "Sinks {:?} queue {:?} vertex counts {:?}",
-            &self.k_best_haplotype_finder.sinks, &queue, &vertex_counts
-        );
+        // debug!(
+        //     "Sinks {:?} queue {:?} vertex counts {:?}",
+        //     &self.k_best_haplotype_finder.sinks, &queue, &vertex_counts
+        // );
 
         while !queue.is_empty() && result.len() < max_number_of_haplotypes {
-            let mut path_to_extend = queue.pop().unwrap();
+            let path_to_extend = queue.pop().unwrap();
             // debug!("Path to extend {:?}", &path_to_extend);
             let vertex_to_extend = path_to_extend.path.last_vertex;
             if self
@@ -126,7 +126,7 @@ impl GraphBasedKBestHaplotypeFinder {
             }
         }
 
-        debug!("Results {:?}", &result);
+        // debug!("Results {:?}", &result);
 
         return result;
     }

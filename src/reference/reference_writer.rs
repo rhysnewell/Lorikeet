@@ -1,11 +1,12 @@
-use model::byte_array_allele::ByteArrayAllele;
-use model::variant_context::{VariantContext, VariantType};
-use reference::reference_reader::ReferenceReader;
 use std::collections::{BTreeMap, BinaryHeap};
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::path::Path;
-use utils::simple_interval::Locatable;
+
+use crate::model::byte_array_allele::ByteArrayAllele;
+use crate::model::variant_context::{VariantContext, VariantType};
+use crate::reference::reference_reader::ReferenceReader;
+use crate::utils::simple_interval::Locatable;
 
 /// Struct housing methods for writing out genomes when given specific variant information
 /// Basically a wrapper for reference reader
@@ -34,7 +35,7 @@ impl<'a> ReferenceWriter<'a> {
         strain_ids_present: Vec<usize>,
     ) {
         let mut grouped_variant_contexts = Self::split_variant_contexts_by_tid(variant_contexts);
-        let mut tids = self
+        let tids = self
             .reference_reader
             .retrieve_tids_for_ref_index(ref_idx)
             .unwrap()
@@ -67,7 +68,7 @@ impl<'a> ReferenceWriter<'a> {
                 let old_length = new_bases.len();
                 // This value holds how far right or left the vc location has shifted as we add indels
                 let mut offset = 0;
-                let mut variant_contexts_of_contig = grouped_variant_contexts.get_mut(&tid);
+                let variant_contexts_of_contig = grouped_variant_contexts.get_mut(&tid);
                 let mut variations = 0;
                 match variant_contexts_of_contig {
                     Some(variant_contexts_of_contig) => {
@@ -123,7 +124,7 @@ impl<'a> ReferenceWriter<'a> {
         samples: &[&str],
     ) {
         let mut grouped_variant_contexts = Self::split_variant_contexts_by_tid(variant_contexts);
-        let mut tids = self
+        let tids = self
             .reference_reader
             .retrieve_tids_for_ref_index(ref_idx)
             .unwrap()
@@ -164,7 +165,7 @@ impl<'a> ReferenceWriter<'a> {
                 debug!("Contig length {}", old_length);
                 // This value holds how far right or left the vc location has shifted as we add indels
                 let mut offset = 0;
-                let mut variant_contexts_of_contig = grouped_variant_contexts.get_mut(&tid);
+                let variant_contexts_of_contig = grouped_variant_contexts.get_mut(&tid);
                 let mut variations = 0;
                 match variant_contexts_of_contig {
                     Some(variant_contexts_of_contig) => {

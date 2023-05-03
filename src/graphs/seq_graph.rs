@@ -1,16 +1,12 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::seq_vertex::SeqVertex;
-use graphs::vertex_based_transformer::VertexBasedTransformer::{
-    MergeCommonSuffices, MergeDiamonds, MergeTails, SplitCommonSuffices,
-};
-use graphs::vertex_based_transformer::VertexBasedTransformerOptions;
-use petgraph::algo::is_cyclic_directed;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use std::collections::HashSet;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::seq_vertex::SeqVertex;
+use crate::graphs::vertex_based_transformer::VertexBasedTransformerOptions;
 
 /**
  * A graph that contains base sequence at each node
@@ -96,33 +92,33 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      */
     fn simplify_graph_once(&mut self, iteration: usize, name: &str) -> bool {
         // iterate until we haven't don't anything useful
-        debug!(
-            "Before anything Edges {}, Nodes {}, Cyclic? {}",
-            self.base_graph.graph.edge_count(),
-            self.base_graph.graph.node_count(),
-            is_cyclic_directed(&self.base_graph.graph)
-        );
+        // debug!(
+        //     "Before anything Edges {}, Nodes {}, Cyclic? {}",
+        //     self.base_graph.graph.edge_count(),
+        //     self.base_graph.graph.node_count(),
+        //     is_cyclic_directed(&self.base_graph.graph)
+        // );
 
         let mut did_some_work = false;
         did_some_work |=
             VertexBasedTransformerOptions::MergeDiamonds.transform_until_complete(self);
-        debug!(
-            "After diamonds Edges {}, Nodes {}, Cyclic? {}",
-            self.base_graph.graph.edge_count(),
-            self.base_graph.graph.node_count(),
-            is_cyclic_directed(&self.base_graph.graph)
-        );
+        // debug!(
+        //     "After diamonds Edges {}, Nodes {}, Cyclic? {}",
+        //     self.base_graph.graph.edge_count(),
+        //     self.base_graph.graph.node_count(),
+        //     is_cyclic_directed(&self.base_graph.graph)
+        // );
         self.print_graph_simplification(&format!(
             "{}_simplify_graph.{}.1.diamonds.dot",
             name, iteration
         ));
         did_some_work |= VertexBasedTransformerOptions::MergeTails.transform_until_complete(self);
-        debug!(
-            "After tails Edges {}, Nodes {}, Cyclic? {}",
-            self.base_graph.graph.edge_count(),
-            self.base_graph.graph.node_count(),
-            is_cyclic_directed(&self.base_graph.graph)
-        );
+        // debug!(
+        //     "After tails Edges {}, Nodes {}, Cyclic? {}",
+        //     self.base_graph.graph.edge_count(),
+        //     self.base_graph.graph.node_count(),
+        //     is_cyclic_directed(&self.base_graph.graph)
+        // );
         self.print_graph_simplification(&format!(
             "{}_simplify_graph.{}.2.tails.dot",
             name, iteration
@@ -130,12 +126,12 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
 
         did_some_work |=
             VertexBasedTransformerOptions::SplitCommonSuffices.transform_until_complete(self);
-        debug!(
-            "After split common Edges {}, Nodes {}, Cyclic? {}",
-            self.base_graph.graph.edge_count(),
-            self.base_graph.graph.node_count(),
-            is_cyclic_directed(&self.base_graph.graph)
-        );
+        // debug!(
+        //     "After split common Edges {}, Nodes {}, Cyclic? {}",
+        //     self.base_graph.graph.edge_count(),
+        //     self.base_graph.graph.node_count(),
+        //     is_cyclic_directed(&self.base_graph.graph)
+        // );
 
         self.print_graph_simplification(&format!(
             "{}_simplify_graph.{}.3.split_suffix.dot",
@@ -144,12 +140,12 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
 
         did_some_work |=
             VertexBasedTransformerOptions::MergeCommonSuffices.transform_until_complete(self);
-        debug!(
-            "After merge common Edges {}, Nodes {}, Cyclic? {}",
-            self.base_graph.graph.edge_count(),
-            self.base_graph.graph.node_count(),
-            is_cyclic_directed(&self.base_graph.graph)
-        );
+        // debug!(
+        //     "After merge common Edges {}, Nodes {}, Cyclic? {}",
+        //     self.base_graph.graph.edge_count(),
+        //     self.base_graph.graph.node_count(),
+        //     is_cyclic_directed(&self.base_graph.graph)
+        // );
 
         self.print_graph_simplification(&format!(
             "{}_simplify_graph.{}.4.merge_suffix.dot",
@@ -157,12 +153,12 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
         ));
 
         did_some_work |= self.zip_linear_chains();
-        debug!(
-            "After zip Edges {}, Nodes {}, Cyclic? {}",
-            self.base_graph.graph.edge_count(),
-            self.base_graph.graph.node_count(),
-            is_cyclic_directed(&self.base_graph.graph)
-        );
+        // debug!(
+        //     "After zip Edges {}, Nodes {}, Cyclic? {}",
+        //     self.base_graph.graph.edge_count(),
+        //     self.base_graph.graph.node_count(),
+        //     is_cyclic_directed(&self.base_graph.graph)
+        // );
 
         return did_some_work;
     }
@@ -307,7 +303,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      */
     fn merge_linear_chain(&mut self, linear_chain: &Vec<NodeIndex>) -> bool {
         match self.merge_linear_chain_vertex(linear_chain) {
-            Some(index) => true,
+            Some(_index) => true,
             None => false,
         }
     }
@@ -350,7 +346,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
 
         self.base_graph
             .graph
-            .retain_nodes(|gr, v| !linear_chain.contains(&v));
+            .retain_nodes(|_gr, v| !linear_chain.contains(&v));
 
         return Some(added_node_index);
     }

@@ -1,8 +1,8 @@
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use rayon::prelude::*;
 use std::collections::HashMap;
-use utils::math_utils::MathUtils;
-use utils::quality_utils::QualityUtils;
+
+use crate::utils::math_utils::MathUtils;
+use crate::utils::quality_utils::QualityUtils;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
 
 /**
  * Describes the results of the AFCalc
@@ -118,7 +118,7 @@ impl AFCalculationResult {
         phred_scale_qual_threshold: f64,
     ) -> bool {
         (self.get_log10_posterior_of_allele_absent(allele) + AFCalculationResult::EPSILON)
-            < QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold as u8)
+            < QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold)
     }
 
     /**

@@ -1,11 +1,10 @@
-use bio_types::sequence::SequenceRead;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::cigar_utils::CigarUtils;
-use reads::clipping_op::ClippingOp;
-use reads::read_utils::ReadUtils;
 use rust_htslib::bam::record::Cigar;
-use utils::simple_interval::Locatable;
 
+use crate::utils::simple_interval::Locatable;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::cigar_utils::CigarUtils;
+use crate::reads::clipping_op::ClippingOp;
+use crate::reads::read_utils::ReadUtils;
 /**
  * A comprehensive clipping tool.
  *
@@ -128,8 +127,8 @@ impl ReadClipper {
             )
         }
 
-        let mut start;
-        let mut stop;
+        let start;
+        let stop;
 
         // Determine the read coordinate to start and stop hard clipping
         match ref_start {
@@ -174,7 +173,7 @@ impl ReadClipper {
 
                     stop = (self.read.read.seq_len()).checked_sub(1);
                 }
-                Some(ref_stop) => {
+                Some(_ref_stop) => {
                     panic!("Either ref_start or ref_stop needs to be None")
                 }
             },
@@ -211,7 +210,7 @@ impl ReadClipper {
     }
 
     pub fn hard_clip_by_reference_coordinates(
-        mut self,
+        self,
         ref_start: Option<usize>,
         ref_stop: Option<usize>,
     ) -> BirdToolRead {
@@ -233,7 +232,7 @@ impl ReadClipper {
      * @return a new read, without the clipped bases (Could return an empty, unmapped read)
      */
     pub fn hard_clip_both_ends_by_reference_coordinates(
-        mut self,
+        self,
         left: usize,
         right: usize,
     ) -> BirdToolRead {
@@ -253,7 +252,7 @@ impl ReadClipper {
             ReadUtils::empty_read_mut(&mut left_tail_read);
             return left_tail_read;
         } else {
-            let mut clipper = ReadClipper::new(left_tail_read);
+            let clipper = ReadClipper::new(left_tail_read);
             return clipper.hard_clip_by_reference_coordinates_left_tail(left);
         }
     }
@@ -268,7 +267,7 @@ impl ReadClipper {
      * @return a new read, without the clipped bases (May return empty, unclipped reads)
      */
     pub fn soft_clip_both_ends_by_reference_coordinates(
-        mut self,
+        self,
         left: usize,
         right: usize,
     ) -> BirdToolRead {
@@ -288,7 +287,7 @@ impl ReadClipper {
             ReadUtils::empty_read_mut(&mut left_tail_read);
             return left_tail_read;
         } else {
-            let mut clipper = ReadClipper::new(left_tail_read);
+            let clipper = ReadClipper::new(left_tail_read);
             return clipper.soft_clip_by_reference_coordinates_left_tail(left);
         }
     }
@@ -300,7 +299,7 @@ impl ReadClipper {
      * @param refStop the last base to be hard clipped in the left tail of the read.
      * @return a new read, without the left tail (Could be an empty, unmapped read if the clip removed all bases).
      */
-    fn hard_clip_by_reference_coordinates_left_tail(mut self, ref_stop: usize) -> BirdToolRead {
+    fn hard_clip_by_reference_coordinates_left_tail(self, ref_stop: usize) -> BirdToolRead {
         return self.clip_by_reference_coordinates(
             None,
             Some(ref_stop),
@@ -315,7 +314,7 @@ impl ReadClipper {
      * @param refStop the last base to be hard clipped in the left tail of the read.
      * @return a new read, without the left tail (Could be an empty, unmapped read if the clip removed all bases).
      */
-    fn soft_clip_by_reference_coordinates_left_tail(mut self, ref_stop: usize) -> BirdToolRead {
+    fn soft_clip_by_reference_coordinates_left_tail(self, ref_stop: usize) -> BirdToolRead {
         return self.clip_by_reference_coordinates(
             None,
             Some(ref_stop),
@@ -330,7 +329,7 @@ impl ReadClipper {
      * @param refStart refStop the first base to be hard clipped in the right tail of the read.
      * @return a new read, without the right tail (Could be an empty, unmapped read if the clip removed all bases).
      */
-    fn hard_clip_by_reference_coordinates_right_tail(mut self, ref_start: usize) -> BirdToolRead {
+    fn hard_clip_by_reference_coordinates_right_tail(self, ref_start: usize) -> BirdToolRead {
         return self.clip_by_reference_coordinates(
             Some(ref_start),
             None,
@@ -456,7 +455,7 @@ impl ReadClipper {
      *
      * @return a new read without adaptor sequence (Could return an empty, unmapped read)
      */
-    pub fn hard_clip_adaptor_sequence(mut self) -> BirdToolRead {
+    pub fn hard_clip_adaptor_sequence(self) -> BirdToolRead {
         let adaptor_boundary = self.read.get_adaptor_boundary();
 
         if adaptor_boundary == ReadUtils::CANNOT_COMPUTE_ADAPTOR_BOUNDARY
@@ -472,11 +471,11 @@ impl ReadClipper {
         }
     }
 
-    pub fn hard_clip_low_qual_ends(mut self, low_qual: u8) -> BirdToolRead {
+    pub fn hard_clip_low_qual_ends(self, low_qual: u8) -> BirdToolRead {
         self.clip_low_qual_ends(ClippingRepresentation::HardclipBases, low_qual)
     }
 
-    pub fn soft_clip_low_qual_ends(mut self, low_qual: u8) -> BirdToolRead {
+    pub fn soft_clip_low_qual_ends(self, low_qual: u8) -> BirdToolRead {
         self.clip_low_qual_ends(ClippingRepresentation::SoftclipBases, low_qual)
     }
 

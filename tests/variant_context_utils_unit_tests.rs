@@ -1,8 +1,5 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
@@ -13,15 +10,15 @@ extern crate hashlink;
 
 use hashlink::LinkedHashSet;
 use lorikeet_genome::genotype::genotype_builder::{Genotype, GenotypesContext};
-use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
-use lorikeet_genome::model::variant_context;
-use lorikeet_genome::model::variant_context::{VariantContext, VariantType};
-use lorikeet_genome::model::variant_context_utils;
+use lorikeet_genome::model::byte_array_allele::{ByteArrayAllele};
+
+use lorikeet_genome::model::variant_context::{VariantContext};
+
 use lorikeet_genome::model::variant_context_utils::{
     FilteredRecordMergeType, GenotypeMergeType, VariantContextUtils,
 };
-use lorikeet_genome::utils::simple_interval::Locatable;
-use std::collections::vec_deque::VecDeque;
+
+
 use std::collections::HashSet;
 
 #[test]
@@ -323,15 +320,15 @@ impl MergeAllelesTest {
 #[test]
 fn merge_alleles_data() {
     let Aref = ByteArrayAllele::new(b"A", true);
-    let Cref = ByteArrayAllele::new(b"C", true);
-    let Gref = ByteArrayAllele::new(b"G", true);
-    let Tref = ByteArrayAllele::new(b"T", true);
-    let A = ByteArrayAllele::new(b"A", false);
+    let _Cref = ByteArrayAllele::new(b"C", true);
+    let _Gref = ByteArrayAllele::new(b"G", true);
+    let _Tref = ByteArrayAllele::new(b"T", true);
+    let _A = ByteArrayAllele::new(b"A", false);
     let T = ByteArrayAllele::new(b"T", false);
     let C = ByteArrayAllele::new(b"C", false);
     let G = ByteArrayAllele::new(b"G", false);
     let ATC = ByteArrayAllele::new(b"ATC", false);
-    let ATCref = ByteArrayAllele::new(b"ATC", true);
+    let _ATCref = ByteArrayAllele::new(b"ATC", true);
     let ATCATC = ByteArrayAllele::new(b"ATCATC", false);
     let ATCATCT = ByteArrayAllele::new(b"ATCATCT", false);
     let ATref = ByteArrayAllele::new(b"AT", true);
@@ -412,7 +409,7 @@ fn test_merge_alleles(cfg: MergeAllelesTest) {
 
     let priorities = vcs2priority(&inputs);
     let original_size = priorities.len();
-    let mut merged = VariantContextUtils::simple_merge(
+    let merged = VariantContextUtils::simple_merge(
         inputs,
         Some(priorities),
         original_size,
@@ -438,7 +435,7 @@ fn makeVC<S: Into<String>>(
     source: S,
     alleles: Vec<ByteArrayAllele>,
     genotypes: Option<Vec<Genotype>>,
-    filters: Option<HashSet<String>>,
+    _filters: Option<HashSet<String>>,
 ) -> VariantContext {
     let start = 10;
     let stop = start + alleles[0].len() - 1;
@@ -495,7 +492,7 @@ struct MergeGenotypesTest {
 }
 
 impl MergeGenotypesTest {
-    fn new(name: &str, priority: &str, mut arg: Vec<VariantContext>) -> Self {
+    fn new(_name: &str, priority: &str, mut arg: Vec<VariantContext>) -> Self {
         let last = arg.remove(arg.len() - 1);
         let priorities = priority
             .split(",")
@@ -512,20 +509,20 @@ impl MergeGenotypesTest {
 #[test]
 fn merge_genotypes_data() {
     let Aref = ByteArrayAllele::new(b"A", true);
-    let Cref = ByteArrayAllele::new(b"C", true);
-    let Gref = ByteArrayAllele::new(b"G", true);
-    let Tref = ByteArrayAllele::new(b"T", true);
-    let A = ByteArrayAllele::new(b"A", false);
+    let _Cref = ByteArrayAllele::new(b"C", true);
+    let _Gref = ByteArrayAllele::new(b"G", true);
+    let _Tref = ByteArrayAllele::new(b"T", true);
+    let _A = ByteArrayAllele::new(b"A", false);
     let T = ByteArrayAllele::new(b"T", false);
     let C = ByteArrayAllele::new(b"C", false);
-    let G = ByteArrayAllele::new(b"G", false);
+    let _G = ByteArrayAllele::new(b"G", false);
     let ATC = ByteArrayAllele::new(b"ATC", false);
-    let ATCref = ByteArrayAllele::new(b"ATC", true);
-    let ATCATC = ByteArrayAllele::new(b"ATCATC", false);
-    let ATCATCT = ByteArrayAllele::new(b"ATCATCT", false);
-    let ATref = ByteArrayAllele::new(b"AT", true);
-    let Anoref = ByteArrayAllele::new(b"A", false);
-    let GT = ByteArrayAllele::new(b"GT", false);
+    let _ATCref = ByteArrayAllele::new(b"ATC", true);
+    let _ATCATC = ByteArrayAllele::new(b"ATCATC", false);
+    let _ATCATCT = ByteArrayAllele::new(b"ATCATCT", false);
+    let _ATref = ByteArrayAllele::new(b"AT", true);
+    let _Anoref = ByteArrayAllele::new(b"A", false);
+    let _GT = ByteArrayAllele::new(b"GT", false);
 
     test_merge_genotypes(MergeGenotypesTest::new(
         "TakeGenotypeByPriority-1,2",
@@ -979,7 +976,7 @@ fn test_merge_genotypes(cfg: MergeGenotypesTest) {
 fn assert_genotypes_are_mostly_equal(
     actual: &GenotypesContext,
     expected: &GenotypesContext,
-    priorities: &Vec<String>,
+    _priorities: &Vec<String>,
 ) {
     if actual == expected {
         assert!(true, "genotypes are equal")

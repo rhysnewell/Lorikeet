@@ -1,11 +1,11 @@
-use annotator::tandem_repeat::TandemRepeat;
-use assembly::assembly_region::AssemblyRegion;
-use model::variant_context::VariantContext;
-use rayon::prelude::*;
-use reference::reference_reader::ReferenceReader;
 use std::cmp::{max, min};
 use std::collections::BTreeSet;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::annotator::tandem_repeat::TandemRepeat;
+use crate::assembly::assembly_region::AssemblyRegion;
+use crate::model::variant_context::VariantContext;
+use crate::reference::reference_reader::ReferenceReader;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * Helper component to manage active region trimming
@@ -20,7 +20,7 @@ use utils::simple_interval::{Locatable, SimpleInterval};
  */
 #[derive(Debug, Clone)]
 pub struct AssemblyRegionTrimmer {
-    assembly_region_padding: usize,
+    // assembly_region_padding: usize,
     indel_padding_for_genotyping: usize,
     snp_padding_for_genotyping: usize,
     str_padding_for_genotyping: usize,
@@ -29,14 +29,14 @@ pub struct AssemblyRegionTrimmer {
 
 impl AssemblyRegionTrimmer {
     pub fn new(
-        assembly_region_padding: usize,
+        // assembly_region_padding: usize,
         indel_padding_for_genotyping: usize,
         snp_padding_for_genotyping: usize,
         str_padding_for_genotyping: usize,
         max_extension_into_region_padding: usize,
     ) -> AssemblyRegionTrimmer {
         Self {
-            assembly_region_padding,
+            // assembly_region_padding,
             indel_padding_for_genotyping,
             snp_padding_for_genotyping,
             str_padding_for_genotyping,
@@ -60,7 +60,7 @@ impl AssemblyRegionTrimmer {
      */
     pub fn trim(
         &self,
-        ref_idx: usize,
+        _ref_idx: usize,
         region: AssemblyRegion,
         variants: BTreeSet<VariantContext>,
         legacy_trimming: bool,
@@ -118,10 +118,10 @@ impl AssemblyRegionTrimmer {
 
         let padded_variant_span = SimpleInterval::new(region.get_contig(), min_start, max_end)
             .intersect(&region.get_padded_span());
-        debug!(
-            "Padded and trimmed the region to this span: {:?}",
-            &padded_variant_span
-        );
+        // debug!(
+        //     "Padded and trimmed the region to this span: {:?}",
+        //     &padded_variant_span
+        // );
 
         return AssemblyRegionTrimmerResult::new(
             region,
@@ -166,7 +166,7 @@ impl AssemblyRegionTrimmer {
             }
         }
 
-        let padding = if found_non_snp {
+        let _padding = if found_non_snp {
             self.indel_padding_for_genotyping
         } else {
             self.snp_padding_for_genotyping

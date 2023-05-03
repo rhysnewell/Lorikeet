@@ -1,13 +1,12 @@
-use haplotype::haplotype::Haplotype;
-use hashlink::LinkedHashSet;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variant_context::{VariantContext, VariantType};
-use rayon::prelude::*;
 use rust_htslib::bam::record::Cigar;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use utils::base_utils::BaseUtils;
-use utils::errors::BirdToolError;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::haplotype::haplotype::Haplotype;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::model::variant_context::{VariantContext, VariantType};
+use crate::utils::base_utils::BaseUtils;
+use crate::utils::errors::BirdToolError;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 // lazy_static! {
 //     pub static ref SYMBOLIC_UNASSEMBLED_EVENT_ALLELE = Allele
@@ -26,9 +25,9 @@ pub struct EventMap {
 }
 
 impl EventMap {
-    const MIN_NUMBER_OF_EVENTS_TO_COMBINE_INTO_BLOCK_SUBSTITUTION: usize = 3;
-    const MAX_EVENT_PER_HAPLOTYPE: usize = 3;
-    const MAX_INDELS_PER_HAPLOTYPE: usize = 3;
+    // const MIN_NUMBER_OF_EVENTS_TO_COMBINE_INTO_BLOCK_SUBSTITUTION: usize = 3;
+    // const MAX_EVENT_PER_HAPLOTYPE: usize = 3;
+    // const MAX_INDELS_PER_HAPLOTYPE: usize = 3;
 
     pub fn empty() -> Self {
         Self {
@@ -100,7 +99,7 @@ impl EventMap {
         let mut alignment_pos = 0;
         for cigar_index in 0..cigar.0.len() {
             let ce = &cigar.0[cigar_index];
-            // debug!("Cigar {:?}", ce);
+            // // debug!("Cigar {:?}", ce);
 
             match ce {
                 Cigar::Ins(len) => {
@@ -147,7 +146,7 @@ impl EventMap {
                 Cigar::Del(len) => {
                     if ref_pos > 0 {
                         // protect against trying to create insertions/deletions at the beginning of a contig
-                        let mut deletion_bases = &reference[ref_pos - 1..(ref_pos + *len as usize)];
+                        let deletion_bases = &reference[ref_pos - 1..(ref_pos + *len as usize)];
                         let mut deletion_alleles = Vec::new();
                         let deletion_start = self.reference_loc.start + ref_pos - 1;
                         let ref_byte = reference[ref_pos - 1];
@@ -239,7 +238,7 @@ impl EventMap {
             };
         }
 
-        debug!("Found {} events", proposed_events.len());
+        // debug!("Found {} events", proposed_events.len());
         for proposed_event in proposed_events {
             // debug!("Adding event {:?}", &proposed_event);
             self.add_vc(proposed_event, true)
@@ -293,8 +292,8 @@ impl EventMap {
             );
         }
 
-        let mut reference;
-        let mut alt;
+        let reference;
+        let alt;
 
         let mut b = VariantContext::build_from_vc(&vc1);
         if vc1.is_snp() {
@@ -370,7 +369,7 @@ impl EventMap {
     {
         // Using the cigar from each called haplotype figure out what events need to be written out in a VCF file
         let mut hap_number = 0;
-        debug!("=== Best Haplotypes ===");
+        // debug!("=== Best Haplotypes ===");
         // let debug = ref_loc.get_start() <= 1102345 && ref_loc.get_end() >= 1102335;
         let mut start_pos_key_set = BTreeSet::new();
         for h in haplotypes.into_iter() {
@@ -400,9 +399,9 @@ impl EventMap {
                 }
             }
 
-            debug!("{:?}", &h.genome_location);
-            debug!("> Cigar {:?}", &h.cigar);
-            debug!(">> Events = {:?}", &h.event_map);
+            // debug!("{:?}", &h.genome_location);
+            // debug!("> Cigar {:?}", &h.cigar);
+            // debug!(">> Events = {:?}", &h.event_map);
         }
 
         return Ok(start_pos_key_set);
@@ -428,10 +427,10 @@ impl EventMap {
      * Returns any events in the map that overlap loc, including spanning deletions and events that start at loc.
      */
     pub fn get_overlapping_events<'b>(&'b self, loc: usize) -> Vec<&'b VariantContext> {
-        let mut overlapping_events = self
+        let overlapping_events = self
             .map
             .range(..=loc)
-            .filter(|(k, v)| v.loc.get_end() >= loc)
+            .filter(|(_k, v)| v.loc.get_end() >= loc)
             .map(|(_, v)| v)
             .collect::<Vec<&'b VariantContext>>();
 

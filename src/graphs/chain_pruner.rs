@@ -1,9 +1,3 @@
-use graphs::adaptive_chain_pruner::AdaptiveChainPruner;
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::low_weight_chain_pruner::LowWeightChainPruner;
-use graphs::path::Path;
 use petgraph::stable_graph::EdgeIndex;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -12,6 +6,13 @@ use rayon::prelude::*;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
+use crate::graphs::adaptive_chain_pruner::AdaptiveChainPruner;
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::low_weight_chain_pruner::LowWeightChainPruner;
+use crate::graphs::path::Path;
+
 #[derive(Debug, Clone)]
 pub enum ChainPruner {
     AdaptiveChainPruner(AdaptiveChainPruner),
@@ -19,6 +20,22 @@ pub enum ChainPruner {
 }
 
 impl ChainPruner {
+    pub fn is_adaptive(&self) -> bool {
+        match self {
+            ChainPruner::AdaptiveChainPruner(_) => true,
+            ChainPruner::LowWeightChainPruner(_) => false,
+        }
+    }
+
+    pub fn set_prune_factor(&mut self, new_prune_factor: usize) {
+        match self {
+            ChainPruner::LowWeightChainPruner(pruner) => pruner.prune_factor = new_prune_factor,
+            _ => {
+                // do nothing
+            }
+        }
+    }
+
     pub fn prune_low_weight_chains<
         V: BaseVertex + std::marker::Sync,
         E: BaseEdge + std::marker::Sync,
@@ -27,10 +44,10 @@ impl ChainPruner {
         graph: &mut BaseGraph<V, E>,
     ) {
         let chains = Self::find_all_chains(&graph);
-        debug!("Chains {}", chains.len());
+        // debug!("Chains {}", chains.len());
 
         let chains_to_remove = self.chains_to_remove(&chains, &graph);
-        debug!("Chains to remove {}", chains_to_remove.len());
+        // debug!("Chains to remove {}", chains_to_remove.len());
         chains_to_remove
             .into_iter()
             .for_each(|chain| graph.remove_all_edges(chain.get_edges()));
@@ -119,7 +136,7 @@ impl ChainPruner {
                     graph,
                     adaptive.initial_error_probability,
                 );
-                debug!("Probable error chains {}", probable_error_chains.len());
+                // debug!("Probable error chains {}", probable_error_chains.len());
 
                 let error_count = probable_error_chains
                     .into_par_iter()
@@ -136,7 +153,7 @@ impl ChainPruner {
                             .get_multiplicity()
                     })
                     .sum::<usize>();
-                debug!("Error count {}", error_count);
+                // debug!("Error count {}", error_count);
 
                 let total_bases = chains
                     .par_iter()
@@ -149,9 +166,9 @@ impl ChainPruner {
                     })
                     .sum::<usize>();
 
-                debug!("Total bases {}", total_bases);
+                // debug!("Total bases {}", total_bases);
                 let error_rate = error_count as f64 / total_bases as f64;
-                debug!("Error rate {}", error_rate);
+                // debug!("Error rate {}", error_rate);
                 adaptive
                     .likely_error_chains(&chains, graph, error_rate)
                     .into_par_iter()

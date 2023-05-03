@@ -1,19 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate rand;
 
 use lorikeet_genome::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use lorikeet_genome::graphs::path::Path;
@@ -28,10 +21,10 @@ fn test_make_path() {
     let v3 = SeqVertex::new(b"c".to_vec());
     let v4 = SeqVertex::new(b"d".to_vec());
 
-    let v1_index = g.base_graph.add_node(v1.clone());
-    let v2_index = g.base_graph.add_node(v2.clone());
-    let v3_index = g.base_graph.add_node(v3.clone());
-    let v4_index = g.base_graph.add_node(v4.clone());
+    let v1_index = g.base_graph.add_node(&v1);
+    let v2_index = g.base_graph.add_node(&v2);
+    let v3_index = g.base_graph.add_node(&v3);
+    let v4_index = g.base_graph.add_node(&v4);
 
     let e1_index =
         g.base_graph
@@ -47,14 +40,14 @@ fn test_make_path() {
         g.base_graph
             .graph
             .add_edge(v2_index, v3_index, BaseEdgeStruct::new(false, 1, 0));
-    let e3_index =
+    let _e3_index =
         g.base_graph
             .graph
             .add_edge(v3_index, v4_index, BaseEdgeStruct::new(false, 1, 0));
 
-    let mut path = Path::new(v2_index, Vec::new());
-    let mut path1 = path.new_add_edge(e2_index, &g.base_graph);
-    let mut path2 = path1.new_prepend_edge(e1_index, &g.base_graph);
+    let path = Path::new(v2_index, Vec::new());
+    let path1 = path.new_add_edge(e2_index, &g.base_graph);
+    let path2 = path1.new_prepend_edge(e1_index, &g.base_graph);
 
     assert_eq!(path.len(), 0);
     assert_eq!(path1.len(), 1);

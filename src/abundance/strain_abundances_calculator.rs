@@ -41,7 +41,7 @@ impl StrainAbundanceCalculator {
 
         let mut theta_prev;
         let mut theta_curr = vec![1.; sample_genotypes.len()];
-        let mut n = 0;
+        // let mut n = 0;
 
         while omega > eps {
             // Update theta values
@@ -66,15 +66,15 @@ impl StrainAbundanceCalculator {
                     .par_iter()
                     .enumerate()
                     .map(|(variant_index, w)| {
-                        debug!(
-                            "All weights for {}: {:?} -> {:?}",
-                            variant_index,
-                            &sample_genotypes[index].variant_genotype_ids[variant_index],
-                            sample_genotypes[index].variant_genotype_ids[variant_index]
-                                .iter()
-                                .map(|genotype_index| theta_curr[*genotype_index])
-                                .collect::<Vec<f64>>()
-                        );
+                        // debug!(
+                        //     "All weights for {}: {:?} -> {:?}",
+                        //     variant_index,
+                        //     &sample_genotypes[index].variant_genotype_ids[variant_index],
+                        //     sample_genotypes[index].variant_genotype_ids[variant_index]
+                        //         .iter()
+                        //         .map(|genotype_index| theta_curr[*genotype_index])
+                        //         .collect::<Vec<f64>>()
+                        // );
                         let mut pooled_weights = sample_genotypes[index].variant_genotype_ids
                             [variant_index]
                             .iter()
@@ -84,14 +84,14 @@ impl StrainAbundanceCalculator {
                         if pooled_weights <= f64::EPSILON {
                             pooled_weights = 1.0;
                         }
-                        debug!(
-                            "Variant index {} weight {} pooled weight {} theta curr {} {}",
-                            variant_index,
-                            w,
-                            pooled_weights,
-                            theta_curr[index],
-                            theta_curr[index] / pooled_weights
-                        );
+                        // debug!(
+                        //     "Variant index {} weight {} pooled weight {} theta curr {} {}",
+                        //     variant_index,
+                        //     w,
+                        //     pooled_weights,
+                        //     theta_curr[index],
+                        //     theta_curr[index] / pooled_weights
+                        // );
                         // if variant weights are between 0 and 1
                         let w = (w * sample_genotypes[index].abundance_weight) / (pooled_weights);
                         w
@@ -106,11 +106,11 @@ impl StrainAbundanceCalculator {
                 // sample_genotypes[index].abundance_weight
                 let mut abundance_weight = (variant_weights.iter().sum::<f64>()) / denominator;
 
-                debug!(
-                    "Index {} abundance weight {} variant weights",
-                    index,
-                    abundance_weight, //&genotype.variant_weights
-                );
+                // debug!(
+                //     "Index {} abundance weight {} variant weights",
+                //     index,
+                //     abundance_weight, //&genotype.variant_weights
+                // );
 
                 if abundance_weight.is_nan()
                     // || genotype.variant_weights.contains(&0.0)
@@ -146,12 +146,12 @@ impl StrainAbundanceCalculator {
                 .map(|(curr, prev)| (curr - prev).abs())
                 .sum::<f64>();
 
-            debug!(
-                "Theta Current {:?} Prev {:?} Omega {}",
-                &theta_curr, &theta_prev, &omega,
-            );
-            n += 1;
+            // debug!(
+            //     "Theta Current {:?} Prev {:?} Omega {}",
+            //     &theta_curr, &theta_prev, &omega,
+            // );
+            // n += 1;
         }
-        debug!("EM Algorithm Finished in {} iterations", n);
+        // debug!("EM Algorithm Finished in {} iterations", n);
     }
 }

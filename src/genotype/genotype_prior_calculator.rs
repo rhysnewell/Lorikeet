@@ -1,8 +1,8 @@
-use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
 use ordered_float::OrderedFloat;
-use rayon::prelude::*;
-use utils::math_utils::MathUtils;
+
+use crate::utils::math_utils::MathUtils;
+use crate::genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
 
 lazy_static! {
     static ref NUMBER_OF_ALLELE_TYPES: usize = 4;
@@ -139,15 +139,11 @@ impl GenotypePriorCalculator {
     }
 
     pub fn make(args: &clap::ArgMatches) -> GenotypePriorCalculator {
-        let snp_het = args
-            .value_of("snp-heterozygosity")
-            .unwrap()
-            .parse::<f64>()
+        let snp_het = *args
+            .get_one::<f64>("snp-heterozygosity")
             .unwrap();
         let ind_het = args
-            .value_of("indel-heterozygosity")
-            .unwrap()
-            .parse::<f64>()
+            .get_one::<f64>("indel-heterozygosity")
             .unwrap();
 
         GenotypePriorCalculator::assuming_hw(snp_het.log10(), ind_het.log10(), None)

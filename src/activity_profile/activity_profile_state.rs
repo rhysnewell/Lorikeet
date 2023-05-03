@@ -1,5 +1,5 @@
 use num::traits::Float;
-use utils::simple_interval::{Locatable, SimpleInterval};
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * Captures the probability that a specific locus in the genome represents an "active" site containing
@@ -8,17 +8,17 @@ use utils::simple_interval::{Locatable, SimpleInterval};
  * @author Rhys Newell <rhys.newell@hdr.qut.edu.au>
  */
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
-pub enum Type<T: Float + Copy> {
+pub enum ActivityProfileDataType<T: Float + Copy> {
     None,
     HighQualitySoftClips(T),
 }
 
-impl<T: Float + Copy> Type<T> {
-    pub fn new(high_quality_soft_clips_mean: T, threshold: T) -> Type<T> {
+impl<T: Float + Copy> ActivityProfileDataType<T> {
+    pub fn new(high_quality_soft_clips_mean: T, threshold: T) -> ActivityProfileDataType<T> {
         if high_quality_soft_clips_mean >= threshold {
-            Type::HighQualitySoftClips(high_quality_soft_clips_mean)
+            ActivityProfileDataType::HighQualitySoftClips(high_quality_soft_clips_mean)
         } else {
-            Type::None
+            ActivityProfileDataType::None
         }
     }
 }
@@ -27,7 +27,7 @@ impl<T: Float + Copy> Type<T> {
 pub struct ActivityProfileState {
     loc: SimpleInterval,
     pub active_prob: f32,
-    result_state: Type<f32>,
+    result_state: ActivityProfileDataType<f32>,
 }
 
 impl ActivityProfileState {
@@ -47,7 +47,7 @@ impl ActivityProfileState {
     pub fn new(
         loc: SimpleInterval,
         active_prob: f32,
-        result_state: Type<f32>,
+        result_state: ActivityProfileDataType<f32>,
     ) -> ActivityProfileState {
         if loc.size() != 1 {
             panic!(
@@ -81,14 +81,14 @@ impl ActivityProfileState {
         self.active_prob = active_prob
     }
 
-    pub fn get_result_state(&self) -> &Type<f32> {
+    pub fn get_result_state(&self) -> &ActivityProfileDataType<f32> {
         &self.result_state
     }
 
     pub fn get_result_value(&self) -> f32 {
         match self.result_state {
-            Type::None => 0.0,
-            Type::HighQualitySoftClips(count) => count,
+            ActivityProfileDataType::None => 0.0,
+            ActivityProfileDataType::HighQualitySoftClips(count) => count,
         }
     }
 

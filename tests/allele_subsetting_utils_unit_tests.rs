@@ -1,22 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate bio;
-extern crate itertools;
-extern crate rand;
-extern crate term;
 
 use lorikeet_genome::genotype::genotype_builder::{
     AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext,
@@ -76,9 +66,9 @@ fn make_update_pls_sacs_and_ad_data() {
     let AA = vec![A_ref.clone(), A_ref.clone()];
     let AC = vec![A_ref.clone(), C.clone()];
     let CC = vec![C.clone(), C.clone()];
-    let CG = vec![C.clone(), G.clone()];
+    // let CG = vec![C.clone(), G.clone()];
     let AG = vec![A_ref.clone(), G.clone()];
-    let GG = vec![G.clone(), G.clone()];
+    // let GG = vec![G.clone(), G.clone()];
     let ACG = vec![A_ref.clone(), C.clone(), G.clone()];
     let mut vc_base = VariantContext::build(20, 10, 10, AC.clone());
 
@@ -87,7 +77,7 @@ fn make_update_pls_sacs_and_ad_data() {
     let hom_var_pl = MathUtils::normalize_sum_to_one(vec![0.01, 0.09, 0.9]);
     let uninformative = vec![0.0, 0.0, 0.0];
 
-    let mut base = Genotype::build_from_alleles(Vec::new(), "NA12878".to_string());
+    // let mut base = Genotype::build_from_alleles(Vec::new(), "NA12878".to_string());
 
     // the simple case where no selection occurs
     let mut aa_gt = Genotype::build_from_alleles(AA.clone(), "NA12878".to_string());
@@ -145,7 +135,7 @@ fn make_update_pls_sacs_and_ad_data() {
         vec![uninformative_gt.clone()],
     );
 
-    let mut empty_gt = Genotype::build_from_alleles(
+    let empty_gt = Genotype::build_from_alleles(
         VariantContextUtils::no_call_alleles(2),
         "NA12878".to_string(),
     );
@@ -154,11 +144,11 @@ fn make_update_pls_sacs_and_ad_data() {
     test_update_pls_and_ad_data(vc_empty, vc_base.clone(), vec![empty_gt.clone()]);
 
     // actually subsetting down from multiple alt values
-    let homRef3AllelesPL = vec![0.0, -30.0, -60.0, -30.0, -60.0, -60.0];
-    let hetRefC3AllelesPL = vec![-20.0, 0.0, -20.0, -30.0, -40.0, -60.0];
-    let homC3AllelesPL = vec![-50.0, -30.0, 0.0, -70.0, -30.0, -70.0];
-    let hetRefG3AllelesPL = vec![-50.0, -30.0, -70.0, 0.0, -30.0, -20.0];
-    let homG3AllelesPL = vec![-50.0, -70.0, -70.0, -30.0, -30.0, 0.0]; // AA, AC, CC, AG, CG, GG;
+    // let homRef3AllelesPL = vec![0.0, -30.0, -60.0, -30.0, -60.0, -60.0];
+    // let hetRefC3AllelesPL = vec![-20.0, 0.0, -20.0, -30.0, -40.0, -60.0];
+    // let homC3AllelesPL = vec![-50.0, -30.0, 0.0, -70.0, -30.0, -70.0];
+    // let hetRefG3AllelesPL = vec![-50.0, -30.0, -70.0, 0.0, -30.0, -20.0];
+    // let homG3AllelesPL = vec![-50.0, -70.0, -70.0, -30.0, -30.0, 0.0]; // AA, AC, CC, AG, CG, GG;
 
     let homRef3AllelesAD = vec![20, 0, 1];
     let hetRefC3AllelesAD = vec![14, 7, 1];

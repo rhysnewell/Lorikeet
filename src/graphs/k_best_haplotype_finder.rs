@@ -1,13 +1,14 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use hashlink::LinkedHashSet;
 use petgraph::algo::is_cyclic_directed;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
+use hashlink::LinkedHashSet;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
 
 /**
  * A common interface for the different KBestHaplotypeFinder implementations to conform to
@@ -32,14 +33,14 @@ impl KBestHaplotypeFinder {
             "source does not belong to the graph"
         );
 
-        let mut result = KBestHaplotypeFinder { sinks, sources };
+        let result = KBestHaplotypeFinder { sinks, sources };
 
         //TODO dealing with cycles here due to a bug in some of the graph transformations that produces cycles.
         //     Once that is solve, the if-else below should be substituted by a throw if there is any cycles,
         //     just the line commented out below if you want to trade early-bug-fail for speed.
-        debug!("Graph before cycles removed {:?}", graph);
+        // debug!("Graph before cycles removed {:?}", graph);
         result.remove_cycles_if_necessary(graph, false);
-        debug!("Graph after cycles removed {:?}", graph);
+        // debug!("Graph after cycles removed {:?}", graph);
         result
     }
 
@@ -58,7 +59,7 @@ impl KBestHaplotypeFinder {
             "source does not belong to the graph"
         );
 
-        let mut result = KBestHaplotypeFinder { sinks, sources };
+        let result = KBestHaplotypeFinder { sinks, sources };
 
         //TODO dealing with cycles here due to a bug in some of the graph transformations that produces cycles.
         //TODO Once that is solve, the if-else below should be substituted by a throw if there is any cycles,
@@ -111,8 +112,8 @@ impl KBestHaplotypeFinder {
             "Cannot find a way to remove the cycles"
         );
 
-        debug!("Nodes to remove {:?}", &vertices_to_remove);
-        debug!("Edges to remove {:?}", &edges_to_remove);
+        // debug!("Nodes to remove {:?}", &vertices_to_remove);
+        // debug!("Edges to remove {:?}", &edges_to_remove);
         original.remove_all_edges(&edges_to_remove);
         original.remove_all_vertices(&vertices_to_remove);
     }
@@ -149,16 +150,16 @@ impl KBestHaplotypeFinder {
             .map(|e| e.id())
             .collect::<LinkedHashSet<EdgeIndex>>();
 
-        debug!(
-            "Current vertex {:?} outgoing edges {:?}",
-            &current_vertex, &outgoing_edges
-        );
+        // debug!(
+        //     "Current vertex {:?} outgoing edges {:?}",
+        //     &current_vertex, &outgoing_edges
+        // );
         parent_vertices.insert(current_vertex);
 
         let mut reaches_sink = false;
         for e in outgoing_edges {
             let child = graph.get_edge_target(e);
-            debug!("Current edge {:?} child {:?}", &e, &child);
+            // debug!("Current edge {:?} child {:?}", &e, &child);
             if parent_vertices.contains(&child) {
                 edges_to_remove.insert(e);
             } else {

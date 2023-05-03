@@ -1,22 +1,22 @@
-use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
-use graphs::base_vertex::BaseVertex;
-use graphs::path::Path;
-use graphs::seq_graph::SeqGraph;
-use graphs::seq_vertex::SeqVertex;
 use hashlink::LinkedHashSet;
 use petgraph::prelude::{EdgeIndex, NodeIndex};
-use petgraph::stable_graph::{Externals, IndexType, StableDiGraph};
+use petgraph::stable_graph::{Externals, StableDiGraph};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use petgraph::{algo, Directed, EdgeType};
-use rayon::prelude::*;
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use petgraph::{algo, Directed};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
-use utils::base_utils::BaseUtils;
+
+use crate::read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use crate::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::path::Path;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::graphs::seq_vertex::SeqVertex;
+use crate::utils::base_utils::BaseUtils;
 
 /**
  * Common code for graphs used for local assembly.
@@ -397,7 +397,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
             .node_indices()
             .filter(|v| self.is_singleton_orphan(*v))
             .collect::<HashSet<NodeIndex>>();
-        debug!("Orphans {}", to_remove.len());
+        // debug!("Orphans {}", to_remove.len());
         self.remove_all_vertices(&to_remove)
     }
 
@@ -506,7 +506,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         let mut graph_writer = File::create(destination).unwrap();
 
         if write_header {
-            graph_writer.write(b"digraph assemblyGraphs {\n");
+            graph_writer.write(b"digraph assemblyGraphs {\n").expect("Failed to write to file");
         };
 
         for edge in self.graph.edge_indices() {
@@ -515,7 +515,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
                 self.get_edge_source(edge).index(),
                 self.get_edge_target(edge).index()
             );
-            let mut edge_label_string;
+            let edge_label_string;
             let edge_weight = self.graph.edge_weight(edge).unwrap();
             if edge_weight.get_multiplicity() > 0 && edge_weight.get_multiplicity() < prune_factor {
                 edge_label_string = format!(
@@ -525,10 +525,10 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
             } else {
                 edge_label_string = format!("[label=\"{}\"];", edge_weight.get_dot_label());
             }
-            graph_writer.write(edge_string.as_bytes());
-            graph_writer.write(edge_label_string.as_bytes());
+            graph_writer.write(edge_string.as_bytes()).expect("Failed to write to file");
+            graph_writer.write(edge_label_string.as_bytes()).expect("Failed to write to file");
             if edge_weight.is_ref() {
-                graph_writer.write(format!("{} [color=red];\n", edge_string).as_bytes());
+                graph_writer.write(format!("{} [color=red];\n", edge_string).as_bytes()).expect("Failed to write to file");
             }
         }
 
@@ -545,11 +545,11 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
                     )
                 )
                 .as_bytes(),
-            );
+            ).expect("Failed to write to file");
         }
 
         if write_header {
-            graph_writer.write(b"}\n");
+            graph_writer.write(b"}\n").expect("Failed to write to file");
         };
     }
 
@@ -600,7 +600,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
     pub fn subset_to_neighbours(&self, target: NodeIndex, distance: usize) -> BaseGraph<V, E> {
         let to_keep = self.vertices_within_distance(target, distance);
         let mut result = self.graph.clone();
-        result.retain_nodes(|gr, v| to_keep.contains(&v));
+        result.retain_nodes(|_gr, v| to_keep.contains(&v));
         BaseGraph {
             kmer_size: self.kmer_size,
             graph: result,
@@ -637,7 +637,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         );
 
         // get the set of vertices we can reach by going backward from the ref sink
-        let mut on_path_from_ref_sink = self.get_all_connected_nodes_from_node(
+        let on_path_from_ref_sink = self.get_all_connected_nodes_from_node(
             self.get_reference_sink_vertex().unwrap(),
             Direction::Incoming,
         );
@@ -692,7 +692,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         let mut visited = HashSet::new();
         to_visit.push(starting_node);
 
-        let mut v = None;
+        let mut v;
         while !to_visit.is_empty() {
             v = to_visit.pop();
             if !visited.contains(&v.unwrap()) {
@@ -984,7 +984,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
                 self.graph.add_edge(source, target, e);
             }
             Some(prev) => {
-                let mut prev_weight = self.graph.edge_weight_mut(prev).unwrap();
+                let prev_weight = self.graph.edge_weight_mut(prev).unwrap();
                 prev_weight.add(e);
             }
         }

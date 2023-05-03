@@ -1,7 +1,7 @@
-use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use std::io::Error;
-use utils::errors::BirdToolError;
+
+use crate::reads::cigar_utils::CigarUtils;
+use crate::utils::errors::BirdToolError;
 
 #[derive(Debug, Eq, PartialEq)]
 enum Section {
@@ -66,7 +66,7 @@ impl CigarBuilder {
                     None => true,
                     Some(operator) => match operator {
                         Cigar::SoftClip(_) | Cigar::HardClip(_) => true,
-                        Cigar::Ins(length) => {
+                        Cigar::Ins(_length) => {
                             if self.cigar_elements.len() == 1
                                 || CigarUtils::is_clipping(
                                     &self.cigar_elements[self.cigar_elements.len() - 2],

@@ -1,9 +1,10 @@
-use graphs::base_vertex::BaseVertex;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use rayon::prelude::*;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+
+use crate::graphs::base_vertex::BaseVertex;
 
 /**
  * A graph vertex containing a sequence of bases and a unique ID that
@@ -143,7 +144,7 @@ impl BaseVertex for SeqVertex {
      * @param source is this vertex a source vertex (i.e., no in nodes) in the graph
      * @return a byte[] of the sequence added by this vertex to the overall sequence
      */
-    fn get_additional_sequence(&self, source: bool) -> &[u8] {
+    fn get_additional_sequence(&self, _source: bool) -> &[u8] {
         self.sequence.as_slice()
     }
 

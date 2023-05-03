@@ -1,21 +1,15 @@
-use compare::{Compare, Extract};
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::chain_pruner::ChainPruner;
-use graphs::path::{Chain, Path};
-use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
-use hashlink::LinkedHashSet;
 use multimap::MultiMap;
 use ordered_float::OrderedFloat;
-use petgraph::prelude::{EdgeIndex, EdgeRef};
-use petgraph::stable_graph::NodeIndex;
 use petgraph::Direction;
-use rayon::iter::ParallelBridge;
-use rayon::prelude::*;
-use std::cmp::{Ordering, Reverse};
+use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
-use utils::base_utils::BaseUtils;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::path::{Chain, Path};
+use crate::haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
+use crate::utils::base_utils::BaseUtils;
 
 #[derive(Debug, Clone)]
 pub struct AdaptiveChainPruner {
@@ -63,23 +57,23 @@ impl AdaptiveChainPruner {
         let mut vertex_to_seedable_chains = MultiMap::new();
         let mut vertex_to_good_incoming_chains = MultiMap::new();
         let mut vertex_to_good_outgoing_chains = MultiMap::new();
-        let mut right = 0;
-        let mut left = 0;
-        let mut seed = 0;
+        // let mut right = 0;
+        // let mut left = 0;
+        // let mut seed = 0;
 
-        for (index, chain) in chains.iter().enumerate() {
+        for (_index, chain) in chains.iter().enumerate() {
             if chain_log_odds.get(chain).unwrap().1 >= self.log_odds_threshold
                 || graph.edge_is_ref(chain.edges_in_order[0])
             {
                 vertex_to_good_incoming_chains.insert(chain.get_last_vertex(), chain);
-                right += 1;
+                // right += 1;
             }
 
             if chain_log_odds.get(chain).unwrap().0 >= self.log_odds_threshold
                 || graph.edge_is_ref(chain.edges_in_order[0])
             {
                 vertex_to_good_outgoing_chains.insert(chain.get_first_vertex(graph), chain);
-                left += 1;
+                // left += 1;
             }
 
             // seed-worthy chains must pass the more stringent seeding log odds threshold on both sides
@@ -89,7 +83,7 @@ impl AdaptiveChainPruner {
             {
                 vertex_to_seedable_chains.insert(chain.get_first_vertex(graph), chain);
                 vertex_to_seedable_chains.insert(chain.get_last_vertex(), chain);
-                seed += 2;
+                // seed += 2;
             }
         }
 
@@ -143,7 +137,7 @@ impl AdaptiveChainPruner {
         let mut variant_count = 0;
         // starting from the high-confidence seed vertices, grow the "good" subgraph along chains with above-threshold log odds,
         // discovering good chains as we go.
-        let mut checked = 0;
+        let _checked = 0;
         while !chains_to_add.is_empty() && variant_count <= self.max_unpruned_variants {
             let chain = chains_to_add.pop().unwrap().0;
 

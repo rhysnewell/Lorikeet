@@ -5,16 +5,16 @@ pub fn calculate_fst(
     output_prefix: &str,
     genome_name: &str,
     vcf_path: &str,
-    ploidy: usize,
+    _ploidy: usize,
     depth_per_sample_filter: i64,
 ) -> PyResult<()> {
     pyo3::prepare_freethreaded_python();
     Python::with_gil(|py| {
         // let sys = py.import("allel")?;
         // let version: String = sys.getattr("version")?.extract()?;
-        let np = py.import("numpy")?;
-        let allel = py.import("allel")?;
-        let pr = py.import("polars")?;
+        let _np = py.import("numpy")?;
+        let _allel = py.import("allel")?;
+        let _pr = py.import("polars")?;
         let depth_per_sample_str = format!("{depth_per_sample_filter}");
         let locals = [
             ("output_prefix", output_prefix),

@@ -1,33 +1,20 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-extern crate bio;
-extern crate gkl;
-extern crate itertools;
-extern crate petgraph;
-extern crate rand;
-extern crate term;
 
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
+use gkl::smithwaterman::Parameters;
+use hashlink::LinkedHashMap;
 use itertools::Itertools;
 use lorikeet_genome::assembly::kmer::Kmer;
 use lorikeet_genome::graphs::base_edge::BaseEdge;
 use lorikeet_genome::graphs::base_vertex::BaseVertex;
 use lorikeet_genome::graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
 use lorikeet_genome::read_threading::abstract_read_threading_graph::{
-    AbstractReadThreadingGraph, DanglingChainMergeHelper,
+    AbstractReadThreadingGraph, DanglingChainMergeHelper, SequenceForKmers,
 };
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
@@ -54,16 +41,19 @@ fn get_bytes(alignment: &str) -> String {
     return alignment.replace("-", "");
 }
 
-fn assert_non_uniques(assembler: &mut ReadThreadingGraph, non_uniques: HashSet<&str>) {
+fn assert_non_uniques(assembler: &mut ReadThreadingGraph, non_uniques: HashSet<Kmer>, pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers>>) {
     let mut actual = HashSet::new();
-    assembler.build_graph_if_necessary();
-    let mut non_uniques_from_graph = assembler
+    assembler.build_graph_if_necessary(pending);
+    println!("Pending: {:?}", pending);
+
+    let non_uniques_from_graph = assembler
         .get_non_uniques()
         .iter()
         .cloned()
         .collect::<Vec<Kmer>>();
-    for kmer in non_uniques_from_graph.iter_mut() {
-        actual.insert(std::str::from_utf8(kmer.bases()).unwrap());
+    println!("Non-unique {:?}", &non_uniques_from_graph);
+    for kmer in non_uniques_from_graph {
+        actual.insert(kmer);
     }
 
     assert_eq!(non_uniques, actual);
@@ -74,27 +64,30 @@ fn test_simple_haplotype_rethreading() {
     let mut assembler = ReadThreadingGraph::default_with_kmer_size(11);
     let reference = "CATGCACTTTAAAACTTGCCTTTTTAACAAGACTTCCAGATG";
     let alternate = "CATGCACTTTAAAACTTGCCGTTTTAACAAGACTTCCAGATG";
+    let mut pending = LinkedHashMap::new();
 
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
         true,
     );
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        alternate.as_bytes().to_vec(),
+        alternate.as_bytes(),
         0,
         alternate.len(),
         1,
         false,
     );
 
-    assembler.build_graph_if_necessary();
+    assembler.build_graph_if_necessary(&mut pending);
     assert_ne!(
         reference.len() - 11 + 1,
         assembler.get_base_graph().vertex_set().len(),
@@ -107,7 +100,7 @@ fn test_simple_haplotype_rethreading() {
     );
 
     let start_alt = assembler.find_kmer(&Kmer::new_with_start_and_length(
-        alternate.as_bytes().to_vec(),
+        alternate.as_bytes(),
         20,
         11,
     ));
@@ -120,35 +113,39 @@ fn test_non_unique_middle() {
     let reference = "GACACACAGTCA";
     let read1 = "GACACGTCA";
     let read2 = "CACGTCA";
+    let mut pending = LinkedHashMap::new();
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
         true,
     );
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        read1.as_bytes().to_vec(),
+        read1.as_bytes(),
         0,
         read1.len(),
         1,
         false,
     );
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        read2.as_bytes().to_vec(),
+        read2.as_bytes(),
         0,
         read2.len(),
         1,
         false,
     );
 
-    assert_non_uniques(&mut assembler, vec!["ACA", "CAC"].into_iter().collect());
+    assert_non_uniques(&mut assembler, vec![Kmer::new(b"ACA"), Kmer::new(b"CAC")].into_iter().collect(), &mut pending);
 }
 
 #[test]
@@ -157,35 +154,39 @@ fn test_read_creation_non_unique() {
     let reference = "GCACGTCA"; // CAC is unique
     let read1 = "GCACACGTCA"; // makes CAC non unique because it has a duplication
     let read2 = "CACGTCA"; // shouldn't be allowed to match CAC as start
+    let mut pending = LinkedHashMap::new();
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
         true,
     );
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        read1.as_bytes().to_vec(),
+        read1.as_bytes(),
         0,
         read1.len(),
         1,
         false,
     );
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        read2.as_bytes().to_vec(),
+        read2.as_bytes(),
         0,
         read2.len(),
         1,
         false,
     );
 
-    assert_non_uniques(&mut assembler, vec!["CAC"].into_iter().collect());
+    assert_non_uniques(&mut assembler, vec![Kmer::new(b"CAC")].into_iter().collect(), &mut pending);
 }
 
 #[test]
@@ -193,25 +194,28 @@ fn test_counting_of_start_edges() {
     let mut assembler = ReadThreadingGraph::default_with_kmer_size(3);
     let reference = "NNNGTCAAA"; // ref has some bases before start
     let read1 = "GTCAAA"; // starts at first non N base
+    let mut pending = LinkedHashMap::new();
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
         true,
     );
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        read1.as_bytes().to_vec(),
+        read1.as_bytes(),
         0,
         read1.len(),
         1,
         false,
     );
-    assembler.build_graph_if_necessary();
+    assembler.build_graph_if_necessary(&mut pending);
 
     for edge in assembler.get_base_graph().graph.edge_indices() {
         let source = assembler.get_base_graph().get_edge_source(edge);
@@ -259,34 +263,38 @@ fn test_counting_of_start_edges_with_multiple_prefixes() {
     let reference = "NNNGTCAXX"; // ref has some bases before start
     let alt1 = "NNNCTCAXX"; // alt1 has SNP right after N
     let read1 = "TCAXX"; // starts right after SNP, but merges right before branch
+    let mut pending = LinkedHashMap::new();
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
         true,
     );
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        alt1.as_bytes().to_vec(),
+        alt1.as_bytes(),
         0,
         alt1.len(),
         1,
         false,
     );
     assembler.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        read1.as_bytes().to_vec(),
+        read1.as_bytes(),
         0,
         read1.len(),
         1,
         false,
     );
-    assembler.build_graph_if_necessary();
+    assembler.build_graph_if_necessary(&mut pending);
     // assembler.get_base_graph().print_graph("test.dot", true, 0);
 
     let one_count_vertices = vec!["NNN", "NNG", "NNC", "NGT", "NCT"];
@@ -348,11 +356,13 @@ fn test_cycles_in_graph() {
     }
 
     // test that there are cycles detected for small kmer
+    let mut pending = LinkedHashMap::new();
     let mut rtgraph25 = ReadThreadingGraph::default_with_kmer_size(25);
     rtgraph25.add_sequence(
+        &mut pending,
         "ref".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
@@ -360,19 +370,22 @@ fn test_cycles_in_graph() {
     );
 
     let samples = vec!["anonymous_sample".to_string()];
+    let mut count = 0;
     for read in reads.iter() {
-        rtgraph25.add_read(read, &samples)
+        rtgraph25.add_read(read, &samples, &mut count, &mut pending)
     }
 
-    rtgraph25.build_graph_if_necessary();
+    rtgraph25.build_graph_if_necessary(&mut pending);
     assert!(rtgraph25.has_cycles());
 
     // test that there are no cycles detected for large kmer
     let mut rtgraph75 = ReadThreadingGraph::default_with_kmer_size(75);
+    let mut pending = LinkedHashMap::new();
     rtgraph75.add_sequence(
+        &mut pending,
         "ref".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
@@ -380,11 +393,12 @@ fn test_cycles_in_graph() {
     );
 
     let samples = vec!["anonymous_sample".to_string()];
+    let mut count = 0;
     for read in reads.iter() {
-        rtgraph75.add_read(read, &samples)
+        rtgraph75.add_read(read, &samples, &mut count, &mut pending)
     }
 
-    rtgraph75.build_graph_if_necessary();
+    rtgraph75.build_graph_if_necessary(&mut pending);
     assert!(!rtgraph75.has_cycles());
 }
 
@@ -410,10 +424,12 @@ fn test_empty_read_being_added_to_graph() {
 
     // test that there are cycles detected for small kmer
     let mut rtgraph25 = ReadThreadingGraph::default_with_kmer_size(25);
+    let mut pending = LinkedHashMap::new();
     rtgraph25.add_sequence(
+        &mut pending,
         "ref".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
@@ -421,11 +437,12 @@ fn test_empty_read_being_added_to_graph() {
     );
 
     let samples = vec!["anonymous_sample".to_string()];
+    let mut count = 0;
     for read in reads.iter() {
-        rtgraph25.add_read(read, &samples)
+        rtgraph25.add_read(read, &samples, &mut count, &mut pending)
     }
 
-    rtgraph25.build_graph_if_necessary();
+    rtgraph25.build_graph_if_necessary(&mut pending);
     assert!(rtgraph25.has_cycles());
 }
 
@@ -435,10 +452,13 @@ fn test_Ns_in_reads_are_not_used_for_graph() {
     let reference = vec![b'A'; length];
 
     let mut rtgraph = ReadThreadingGraph::default_with_kmer_size(25);
+    let mut reads = Vec::new();
+    let mut pending = LinkedHashMap::new();
     rtgraph.add_sequence(
+        &mut pending,
         "ref".to_string(),
         0,
-        reference.clone(),
+        reference.as_slice(),
         0,
         reference.len(),
         1,
@@ -447,6 +467,7 @@ fn test_Ns_in_reads_are_not_used_for_graph() {
 
     let samples = vec!["anonymous_sample".to_string()];
     let quals = vec![30; length];
+    let mut count = 0;
     // add reads with Ns at any position
     for i in 0..length {
         let mut bases = reference.clone();
@@ -456,9 +477,12 @@ fn test_Ns_in_reads_are_not_used_for_graph() {
             &quals,
             CigarString::try_from("100M").unwrap(),
         );
-        rtgraph.add_read(&read, &samples);
+        reads.push(read);
     }
-    rtgraph.build_graph_if_necessary();
+    for read in reads.iter() {
+        rtgraph.add_read(read, &samples, &mut count, &mut pending);
+    }
+    rtgraph.build_graph_if_necessary(&mut pending);
 
     let mut graph = rtgraph.to_sequence_graph();
     let source = graph.base_graph.get_reference_source_vertex().unwrap();
@@ -487,19 +511,27 @@ fn test_dangling_tails(
         num_leading_matches_allowed
     );
     let kmer_size = 15;
-    let mut rng = ThreadRng::default();
+    // let mut rng = ThreadRng::default();
 
     // construct the haplotypes
     let common_prefix = "AAAAAAAAAACCCCCCCCCCGGGGGGGGGGTTTTTTTTTT";
     let reference = common_prefix.to_string() + ref_end;
     let alternate = common_prefix.to_string() + alt_end;
+    let quals = vec![30; alternate.len()];
+    let read = ArtificialReadUtils::create_artificial_read(
+        alternate.as_bytes(),
+        &quals,
+        CigarString::try_from(format!("{}M", alternate.len()).as_str()).unwrap(),
+    );
 
     // create the graph and populate it
     let mut rtgraph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
+    let mut pending = LinkedHashMap::new();
     rtgraph.add_sequence(
+        &mut pending,
         "ref".to_string(),
         0,
-        reference.as_bytes().to_vec(),
+        reference.as_bytes(),
         0,
         reference.len(),
         1,
@@ -532,16 +564,12 @@ fn test_dangling_tails(
     //     rtgraph.add_sequence("anonymous".to_string(), 0, r.to_vec(), 0, r.len(), 1, false)
     // });
 
-    let quals = vec![30; alternate.len()];
-    let read = ArtificialReadUtils::create_artificial_read(
-        alternate.as_bytes(),
-        &quals,
-        CigarString::try_from(format!("{}M", alternate.len()).as_str()).unwrap(),
-    );
+    
     let samples = vec!["anonymous".to_string()];
-    rtgraph.add_read(&read, &samples);
+    let mut count = 0;
+    rtgraph.add_read(&read, &samples, &mut count, &mut pending);
     rtgraph.set_min_matching_bases_to_dangling_end_recovery(num_leading_matches_allowed);
-    rtgraph.build_graph_if_necessary();
+    rtgraph.build_graph_if_necessary(&mut pending);
 
     // confirm that we have just a single dangling tail
     let mut alt_sink = None;
@@ -669,19 +697,6 @@ fn test_forked_dangling_ends_with_suffix_code() {
     let reference = common_prefix.to_string() + ref_end;
     let alt1 = common_prefix.to_string() + alt_end1;
     let alt2 = common_prefix.to_string() + alt_end2;
-
-    // create the graph and populate it
-    let mut rtgraph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
-    rtgraph.add_sequence(
-        "ref".to_string(),
-        0,
-        reference.as_bytes().to_vec(),
-        0,
-        reference.len(),
-        1,
-        true,
-    );
-
     let quals1 = vec![30; alt1.len()];
     let quals2 = vec![30; alt2.len()];
     let read1 = ArtificialReadUtils::create_artificial_read(
@@ -694,13 +709,30 @@ fn test_forked_dangling_ends_with_suffix_code() {
         &quals2,
         CigarString::try_from(format!("{}M", alt2.len()).as_str()).unwrap(),
     );
+
+    // create the graph and populate it
+    let mut rtgraph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
+    let mut pending = LinkedHashMap::new();
+    rtgraph.add_sequence(
+        &mut pending,
+        "ref".to_string(),
+        0,
+        reference.as_bytes(),
+        0,
+        reference.len(),
+        1,
+        true,
+    );
+
+    
     let samples = vec!["anonymous".to_string()];
 
     rtgraph.set_min_matching_bases_to_dangling_end_recovery(1);
-    rtgraph.add_read(&read2, &samples);
-    rtgraph.add_read(&read1, &samples);
+    let mut count = 0;
+    rtgraph.add_read(&read2, &samples, &mut count, &mut pending);
+    rtgraph.add_read(&read1, &samples, &mut count, &mut pending);
 
-    rtgraph.build_graph_if_necessary();
+    rtgraph.build_graph_if_necessary(&mut pending);
     assert_eq!(rtgraph.get_base_graph().get_sinks().len(), 3);
 
     // Testing a degenerate case where the wrong "reference" path is selected and assuring that when
@@ -763,19 +795,6 @@ fn test_forked_dangling_ends() {
     let reference = common_prefix.to_string() + ref_end;
     let alt1 = common_prefix.to_string() + alt_end1;
     let alt2 = common_prefix.to_string() + alt_end2;
-
-    // create the graph and populate it
-    let mut rtgraph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
-    rtgraph.add_sequence(
-        "ref".to_string(),
-        0,
-        reference.as_bytes().to_vec(),
-        0,
-        reference.len(),
-        1,
-        true,
-    );
-
     let quals1 = vec![30; alt1.len()];
     let quals2 = vec![30; alt2.len()];
     let read1 = ArtificialReadUtils::create_artificial_read(
@@ -788,13 +807,30 @@ fn test_forked_dangling_ends() {
         &quals2,
         CigarString::try_from(format!("{}M", alt2.len()).as_str()).unwrap(),
     );
+
+    // create the graph and populate it
+    let mut rtgraph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
+    let mut pending = LinkedHashMap::new();
+    rtgraph.add_sequence(
+        &mut pending,
+        "ref".to_string(),
+        0,
+        reference.as_bytes(),
+        0,
+        reference.len(),
+        1,
+        true,
+    );
+
+    
     let samples = vec!["anonymous".to_string()];
 
     rtgraph.set_min_matching_bases_to_dangling_end_recovery(1);
-    rtgraph.add_read(&read1, &samples);
-    rtgraph.add_read(&read2, &samples);
+    let mut count = 0;
+    rtgraph.add_read(&read1, &samples, &mut count, &mut pending);
+    rtgraph.add_read(&read2, &samples, &mut count, &mut pending);
 
-    rtgraph.build_graph_if_necessary();
+    rtgraph.build_graph_if_necessary(&mut pending);
     assert_eq!(rtgraph.get_base_graph().get_sinks().len(), 3);
 
     for alt_sink in rtgraph.get_base_graph().get_sinks().into_iter() {
@@ -859,17 +895,19 @@ fn get_bases_for_path() {
     let test_string = "AATGGGGCAATACTA";
 
     let mut graph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
+    let mut pending = LinkedHashMap::new();
     graph.add_sequence(
+        &mut pending,
         "anonymous".to_string(),
         0,
-        test_string.as_bytes().to_vec(),
+        test_string.as_bytes(),
         0,
         test_string.len(),
         1,
         true,
     );
 
-    graph.build_graph_if_necessary();
+    graph.build_graph_if_necessary(&mut pending);
 
     let mut vertices = Vec::new();
     let mut v = graph.get_reference_source_vertex();
@@ -901,29 +939,33 @@ fn test_dangling_heads(
         reference, alternate, cigar, should_be_merged, num_leading_matches_allowed
     );
     let kmer_size = 5;
-
-    // create the graph and populate it
-    let mut rtgraph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
-    rtgraph.add_sequence(
-        "ref".to_string(),
-        0,
-        reference.as_bytes().to_vec(),
-        0,
-        reference.len(),
-        1,
-        true,
-    );
-
     let quals = vec![30; alternate.len()];
     let read = ArtificialReadUtils::create_artificial_read(
         alternate.as_bytes(),
         &quals,
         CigarString::try_from(format!("{}M", alternate.len()).as_str()).unwrap(),
     );
+
+    // create the graph and populate it
+    let mut rtgraph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
+    let mut pending = LinkedHashMap::new();
+    rtgraph.add_sequence(
+        &mut pending,
+        "ref".to_string(),
+        0,
+        reference.as_bytes(),
+        0,
+        reference.len(),
+        1,
+        true,
+    );
+
+    
     let samples = vec!["anonymous".to_string()];
-    rtgraph.add_read(&read, &samples);
+    let mut count = 0;
+    rtgraph.add_read(&read, &samples, &mut count, &mut pending);
     rtgraph.set_min_matching_bases_to_dangling_end_recovery(num_leading_matches_allowed);
-    rtgraph.build_graph_if_necessary();
+    rtgraph.build_graph_if_necessary(&mut pending);
 
     // confirm that we have just a single dangling tail
     let mut alt_source = None;

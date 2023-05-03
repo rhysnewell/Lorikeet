@@ -1,7 +1,8 @@
-use genotype::genotype_allele_counts::GenotypeAlleleCounts;
-use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use ndarray::{Array, Array2};
-use utils::math_utils::MathUtils;
+
+use crate::genotype::genotype_allele_counts::GenotypeAlleleCounts;
+use crate::genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
+use crate::utils::math_utils::MathUtils;
 
 #[derive(Debug, Clone)]
 pub struct GenotypeLikelihoodCalculators {
@@ -12,7 +13,7 @@ pub struct GenotypeLikelihoodCalculators {
 }
 
 impl GenotypeLikelihoodCalculators {
-    pub const MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY: usize = 1000;
+    pub const MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY: usize = 100000;
 
     pub fn build_empty() -> GenotypeLikelihoodCalculators {
         GenotypeLikelihoodCalculators {

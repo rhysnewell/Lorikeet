@@ -1,52 +1,28 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate hashlink;
-extern crate ndarray;
-extern crate ordered_float;
-extern crate rand;
 
 use hashlink::LinkedHashMap;
-use lorikeet_genome::genotype::genotype_allele_counts::GenotypeAlleleCounts;
-use lorikeet_genome::genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
-use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use lorikeet_genome::haplotype::haplotype_caller_genotyping_engine::HaplotypeCallerGenotypingEngine;
-use lorikeet_genome::model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
 use lorikeet_genome::model::allele_likelihoods::{AlleleLikelihoods, LOG_10_INFORMATIVE_THRESHOLD};
 use lorikeet_genome::model::allele_list::AlleleList;
 use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::reads::read_clipper::ReadClipper;
-use lorikeet_genome::test_utils::read_clipper_test_utils::ReadClipperTestUtils;
-use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
-use lorikeet_genome::utils::math_utils::MathUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
+use lorikeet_genome::utils::simple_interval::SimpleInterval;
 use ndarray::Array2;
 use ordered_float::OrderedFloat;
 use rand::distributions::Distribution;
 use rand::distributions::Normal;
-use rand::{rngs::ThreadRng, Error, Rng};
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
-use std::cmp::{max, min, Ordering};
+use rand::{rngs::ThreadRng, Rng};
+use std::cmp::max;
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::ops::Deref;
-use std::sync::Mutex;
 
 lazy_static! {
     static ref READ_COUNTS: Vec<Vec<usize>> = vec![
@@ -231,7 +207,6 @@ fn test_allele_queries(
     let mut allele_indices = HashSet::new();
     for allele in alleles.iter() {
         let index_of_allele = result.index_of_allele(allele).unwrap();
-        assert!(index_of_allele >= 0);
         assert!(!allele_indices.contains(&index_of_allele));
         allele_indices.insert(index_of_allele);
         assert_eq!(allele, &alleles[index_of_allele]);
@@ -246,7 +221,6 @@ fn test_sample_queries(
     let mut sample_ids = HashSet::new();
     for (idx, sample) in samples.iter().enumerate() {
         let index_of_sample = result.index_of_sample(sample).unwrap();
-        assert!(index_of_sample >= 0);
         assert!(!sample_ids.contains(&index_of_sample));
         sample_ids.insert(index_of_sample);
 
@@ -307,7 +281,7 @@ fn test_best_alleles<A: Allele>(
                 }
             }));
 
-        let mut sample_matrix = original.sample_matrix(s);
+        let sample_matrix = original.sample_matrix(s);
         let mut best_lk_array = vec![0.0; sample_read_count];
         let mut best_index_array = vec![0; sample_read_count];
         let mut confidence_array = vec![0.0; sample_read_count];
@@ -448,7 +422,7 @@ fn test_filer_poorly_modeled_reads(
     // fill_two_with_random_likelihoods(&samples, &alleles, &mut original, &mut result);
 
     check_evidence_to_index_map_is_correct(&result);
-    result.filter_poorly_modeled_evidence(Box::new(|read| -100.0));
+    result.filter_poorly_modeled_evidence(Box::new(|_read| -100.0));
     check_evidence_to_index_map_is_correct(&result);
 
     for s in 0..samples.len() {
@@ -508,7 +482,7 @@ fn test_filter_reads_to_overlap(
                         .unwrap(),
                     r
                 );
-                let mut sample_matrix = original.sample_matrix(s);
+                let sample_matrix = original.sample_matrix(s);
                 new_likelihood[[a, r]] = sample_matrix[[a, r << 1]];
             }
         }
@@ -593,7 +567,7 @@ fn make_good_and_bad_likelihoods<A: Allele>(
     samples: &Vec<String>,
     alleles: &Vec<A>,
     reads: &HashMap<usize, Vec<BirdToolRead>>,
-    reads_to_skip: Box<Fn(usize) -> bool>,
+    reads_to_skip: Box<dyn Fn(usize) -> bool>,
 ) -> AlleleLikelihoods<A> {
     let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
     for s in 0..samples.len() {
@@ -657,7 +631,7 @@ fn test_marginalization_with_overlap(
         let old_alleles = new_to_old_allele_mapping.get(&a).unwrap();
         for s in 0..samples.len() {
             let old_sample_likelihoods = original.sample_matrix(s).clone();
-            let sample_likelihoods = marginalized.sample_matrix(s).clone();
+            let _sample_likelihoods = marginalized.sample_matrix(s).clone();
 
             let old_sample_read_count = old_sample_likelihoods.ncols();
             let sample_read_count = marginalized.sample_evidence_count(s);
@@ -700,7 +674,7 @@ fn test_marginalization(
     new_to_old_allele_mapping: LinkedHashMap<usize, Vec<&ByteArrayAllele>>,
 ) {
     let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
-    let even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
+    let _even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
     fill_with_random_likelihoods(&samples, &alleles, &mut original);
 
     println!(
@@ -721,7 +695,7 @@ fn test_marginalization(
         let old_alleles = new_to_old_allele_mapping.get(&a).unwrap();
         for s in 0..samples.len() {
             let old_sample_likelihoods = original.sample_matrix(s).clone();
-            let sample_likelihoods = marginalized.sample_matrix(s).clone();
+            let _sample_likelihoods = marginalized.sample_matrix(s).clone();
 
             let old_sample_read_count = old_sample_likelihoods.ncols();
             let sample_read_count = marginalized.sample_evidence_count(s);

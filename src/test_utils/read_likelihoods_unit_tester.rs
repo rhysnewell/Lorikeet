@@ -1,14 +1,15 @@
-use haplotype::haplotype::Haplotype;
-use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use num::abs;
-use processing::lorikeet_engine::ReadType;
-use reads::bird_tool_reads::BirdToolRead;
+
 use std::collections::HashMap;
-use test_utils::allele_list_unit_tester::AlleleListUnitTester;
-use utils::artificial_read_utils::ArtificialReadUtils;
-use utils::errors::BirdToolError;
-use utils::simple_interval::SimpleInterval;
+
+
+use crate::model::allele_likelihoods::AlleleLikelihoods;
+use crate::model::byte_array_allele::{ByteArrayAllele};
+use crate::processing::lorikeet_engine::ReadType;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::test_utils::allele_list_unit_tester::AlleleListUnitTester;
+use crate::utils::artificial_read_utils::ArtificialReadUtils;
+
+
 
 /**
  * Constains utilities for tests that need to create read-likelihoods.
@@ -32,7 +33,7 @@ impl ReadLikelihoodsUnitTester {
             AlleleLikelihoods::new_from_allele_list(allele_list, sample_list, sample_to_reads);
 
         for s in 0..sample_count {
-            let mut sample_likelihoods = &mut likelihoods.values_by_sample_index[s];
+            let sample_likelihoods = &mut likelihoods.values_by_sample_index[s];
             for a in 0..allele_count {
                 for r in 0..read_count[s] {
                     sample_likelihoods[[a, r]] = Self::test_likelihood(s, a, r);

@@ -1,8 +1,9 @@
-use assembly::kmer::Kmer;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+
+use crate::assembly::kmer::Kmer;
 
 /**
  * generic utility class that counts kmers

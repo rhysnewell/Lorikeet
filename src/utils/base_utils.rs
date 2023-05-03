@@ -1,6 +1,5 @@
 use bio::alphabets::dna::alphabet;
 use rand::{rngs::ThreadRng, Rng};
-use rayon::prelude::*;
 use std::cmp::{min, Ordering};
 use std::collections::HashSet;
 

@@ -1,23 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate bio;
-extern crate itertools;
-extern crate petgraph;
-extern crate rand;
-extern crate term;
 
 use lorikeet_genome::graphs::base_edge::BaseEdge;
 use lorikeet_genome::graphs::multi_sample_edge::MultiSampleEdge;
@@ -43,7 +32,7 @@ fn test_multiplicity(cfg: MultiplicityTestProvider) {
     assert_eq!(edge.get_multiplicity(), 0);
     assert_eq!(edge.get_pruning_multiplicity(), 0);
 
-    let mut copy = edge.clone();
+    let copy = edge.clone();
     assert_eq!(
         edge.get_current_single_sample_multiplicity(),
         copy.get_current_single_sample_multiplicity()
@@ -58,7 +47,7 @@ fn test_multiplicity(cfg: MultiplicityTestProvider) {
     let mut total = 0;
     for i in 0..cfg.counts_per_sample.len() {
         let mut count_for_sample = 0;
-        for count in 0..cfg.counts_per_sample[i] {
+        for _count in 0..cfg.counts_per_sample[i] {
             edge.inc_multiplicity(1);
             total += 1;
             count_for_sample += 1;

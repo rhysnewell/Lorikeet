@@ -1,14 +1,13 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_vertex::BaseVertex;
-use graphs::graph_utils::GraphUtils;
-use graphs::seq_graph::SeqGraph;
-use graphs::seq_vertex::SeqVertex;
 use hashlink::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
-use petgraph::{Direction, Graph};
-use rayon::prelude::*;
-use std::collections::HashSet;
+use petgraph::Direction;
+
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::graph_utils::GraphUtils;
+use crate::graphs::seq_graph::SeqGraph;
+use crate::graphs::seq_vertex::SeqVertex;
 
 /**
  * Split a collection of middle nodes in a graph into their shared prefix and suffix values
@@ -49,25 +48,25 @@ impl CommonSuffixSplitter {
         let suffix_v_template = Self::common_suffix(&graph, v, &to_split);
         match suffix_v_template {
             None => {
-                debug!(
-                    "None {:?} -> {} [{:?}]",
-                    v,
-                    std::str::from_utf8(graph.base_graph.get_sequence_from_index(v)).unwrap(),
-                    to_split
-                        .iter()
-                        .map(|ve| std::str::from_utf8(
-                            graph.base_graph.get_sequence_from_index(*ve)
-                        )
-                        .unwrap())
-                        .collect::<Vec<&str>>()
-                );
+                // debug!(
+                //     "None {:?} -> {} [{:?}]",
+                //     v,
+                //     std::str::from_utf8(graph.base_graph.get_sequence_from_index(v)).unwrap(),
+                //     to_split
+                //         .iter()
+                //         .map(|ve| std::str::from_utf8(
+                //             graph.base_graph.get_sequence_from_index(*ve)
+                //         )
+                //         .unwrap())
+                //         .collect::<Vec<&str>>()
+                // );
                 return false;
             }
             Some(suffix_v_template) => {
-                debug!(
-                    "Common {}",
-                    std::str::from_utf8(suffix_v_template.get_sequence()).unwrap()
-                );
+                // debug!(
+                //     "Common {}",
+                //     std::str::from_utf8(suffix_v_template.get_sequence()).unwrap()
+                // );
                 let mut edges_to_remove = Vec::new();
 
                 for mid in to_split.iter() {
@@ -81,17 +80,17 @@ impl CommonSuffixSplitter {
                         .without_suffix(suffix_v_template.get_sequence());
                     let out = graph.base_graph.outgoing_edge_of(*mid).unwrap();
                     // debug!("Mid {:?} out {:?}", &mid, &out);
-                    let mut incoming_target;
+                    let incoming_target;
                     match prefix_v {
                         None => {
                             // this node is entirely explained by suffix
                             incoming_target = suffix_v;
                         }
                         Some(prefix_v) => {
-                            debug!(
-                                "Prefix {}",
-                                std::str::from_utf8(prefix_v.get_sequence()).unwrap()
-                            );
+                            // debug!(
+                            //     "Prefix {}",
+                            //     std::str::from_utf8(prefix_v.get_sequence()).unwrap()
+                            // );
                             let prefix_v_index = graph.base_graph.add_node(&prefix_v);
                             incoming_target = prefix_v_index;
                             let mut out_weight =

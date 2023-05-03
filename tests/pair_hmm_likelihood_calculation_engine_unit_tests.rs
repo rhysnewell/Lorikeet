@@ -1,19 +1,12 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate rand;
 
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::assembly::assembly_result_set::AssemblyResultSet;
@@ -57,7 +50,7 @@ fn test_compute_likelihoods() {
     let sample1 = "sample1";
     per_sample_read_list.insert(0, vec![read1.clone()]);
 
-    let mut sample = vec![sample1.to_string()];
+    let sample = vec![sample1.to_string()];
     let ref_bases = vec![b'A'; n + 1];
     let mut hap1 = Haplotype::new(ref_bases.as_slice(), true);
     hap1.set_genome_location(SimpleInterval::new(
@@ -66,7 +59,7 @@ fn test_compute_likelihoods() {
         read1.get_end(),
     ));
     let mut assembly_result_set = AssemblyResultSet::<ReadThreadingGraph>::new(
-        AssemblyRegion::new(SimpleInterval::new(0, 0, n + 1), true, 0, 100, 0, 0),
+        AssemblyRegion::new(SimpleInterval::new(0, 0, n + 1), true, 0, 100, 0, 0, 0.0),
         vec![b'A'; n + 1],
         SimpleInterval::new(0, 0, n + 1),
         hap1.clone(),

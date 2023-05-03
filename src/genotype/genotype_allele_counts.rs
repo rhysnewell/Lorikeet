@@ -1,10 +1,11 @@
-use model::byte_array_allele::ByteArrayAllele;
-use rayon::prelude::*;
 use std::cmp::Ordering;
+
+use crate::model::byte_array_allele::ByteArrayAllele;
+use crate::utils::math_utils::MathUtils;
+
 /**
 The following code is adapted from the broadinstitute GATK HaplotypeCaller program
 */
-use utils::math_utils::MathUtils;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GenotypeAlleleCounts {
@@ -458,12 +459,12 @@ impl GenotypeAlleleCounts {
         // way we avoid going through the rest of positions in the sortedAlleleCounts array.
         // The range of interest is then [startRank,endRank].
         let start_rank = if minimum_allele_rank < 0 {
-            ((-minimum_allele_rank) - 1)
+            (-minimum_allele_rank) - 1
         } else {
             minimum_allele_rank
         };
         let end_rank = if maximum_allele_rank < 0 {
-            ((-maximum_allele_rank) - 2)
+            (-maximum_allele_rank) - 2
         } else {
             maximum_allele_rank
         };
@@ -638,7 +639,7 @@ impl GenotypeAlleleCounts {
         }
 
         if self.distinct_allele_count == 1 {
-            let mut result = vec![
+            let result = vec![
                 alleles_to_use
                     .get(self.sorted_allele_counts[0])
                     .unwrap()
@@ -650,7 +651,7 @@ impl GenotypeAlleleCounts {
             let result = (0..self.distinct_allele_count)
                 .into_iter()
                 .flat_map(|distinct_allele_count| {
-                    let mut allele = alleles_to_use
+                    let allele = alleles_to_use
                         .get(self.sorted_allele_counts[2 * distinct_allele_count])
                         .unwrap();
 

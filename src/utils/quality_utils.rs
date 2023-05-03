@@ -1,12 +1,16 @@
-use num::traits::Float;
+use num::traits::{Float, AsPrimitive};
 use rayon::prelude::*;
 use std::cmp::{max, min};
-use utils::math_utils::MathUtils;
+
+use crate::utils::math_utils::MathUtils;
 
 lazy_static! {
     static ref MIN_LOG10_SCALED_QUAL: f64 = (std::f64::MIN).log10();
     static ref MIN_PHRED_SCALED_QUAL: f64 = -10.0 * *MIN_LOG10_SCALED_QUAL;
 }
+
+pub const TEN: f64 = 10.0;
+pub const ONE: f64 = 1.0;
 
 pub struct QualityUtils {}
 
@@ -19,6 +23,7 @@ impl QualityUtils {
     pub const MIN_USABLE_Q_SCORE: u8 = 6;
     pub const MAX_QUAL: u8 = 254;
 
+
     /**
      * Convert a phred-scaled quality score to its log10 probability of being wrong (Q30 => log10(0.001))
      *
@@ -29,12 +34,13 @@ impl QualityUtils {
      * @param qual a phred-scaled quality score encoded as a double
      * @return log of probability (0.0-1.0)
      */
-    pub fn qual_to_error_prob_log10(qual: u8) -> f64 {
-        (qual as f64) * -0.1
+    pub fn qual_to_error_prob_log10<P: AsPrimitive<f64>>(qual: P) -> f64 {
+        let float_val = qual.as_();
+        float_val * -0.1
     }
 
     pub fn qual_to_prob_log10(qual: u8) -> f64 {
-        (1.0 - 10.0.powf((qual as f64) / -10.0)).log10()
+        (ONE - TEN.powf((qual as f64) / -TEN)).log10()
     }
 
     pub fn get_phred_score_from_obs_and_errors(probability: f64) -> u8 {

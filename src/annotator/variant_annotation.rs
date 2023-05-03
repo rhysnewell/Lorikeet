@@ -1,19 +1,15 @@
-use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
-use genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
-use haplotype::haplotype::Haplotype;
 use hashlink::{LinkedHashMap, LinkedHashSet};
-use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variant_context::VariantContext;
 use rand::distributions::{Distribution, Normal};
 use rand::rngs::ThreadRng;
-use reads::bird_tool_reads::BirdToolRead;
-use reads::read_utils::ReadUtils;
-use statrs::statistics::Median;
 use std::cmp::Ordering;
-use std::collections::HashMap;
-use utils::math_utils::MathUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
+
+use crate::genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
+use crate::model::allele_likelihoods::AlleleLikelihoods;
+use crate::model::byte_array_allele::Allele;
+use crate::model::variant_context::VariantContext;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::read_utils::ReadUtils;
+use crate::utils::math_utils::MathUtils;
 
 /// Determine whether the annotation appears in the info or format field of the VCF
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -103,7 +99,7 @@ impl VariantAnnotations {
     ) -> AttributeObject {
         match self {
             Self::Depth => {
-                debug!("Depth");
+                // debug!("Depth");
                 match annotation_type {
                     AnnotationType::Format => {
                         let mut genotype = genotype.unwrap();
@@ -126,8 +122,8 @@ impl VariantAnnotations {
                 }
             }
             Self::AlleleFraction => {
-                let mut genotype = genotype.unwrap();
-                debug!("Allele Fraction");
+                let genotype = genotype.unwrap();
+                // debug!("Allele Fraction");
                 if genotype.has_ad() {
                     let allele_fractions = MathUtils::normalize_sum_to_one(
                         genotype
@@ -164,8 +160,8 @@ impl VariantAnnotations {
                 }
             }
             Self::AlleleCount => {
-                let mut genotype = genotype.unwrap();
-                debug!("Allele Count");
+                let genotype = genotype.unwrap();
+                // debug!("Allele Count");
                 if genotype.has_ad() {
                     let allele_counts = genotype.get_ad().into_iter().filter(|ad| **ad > 0).count();
                     genotype.attribute(
@@ -256,7 +252,7 @@ impl VariantAnnotations {
                 }
                 let mut allele_counts = LinkedHashMap::new();
                 // let mut subset = LinkedHashMap::new();
-                for (allele_index, allele) in alleles.iter().enumerate() {
+                for (allele_index, _allele) in alleles.iter().enumerate() {
                     allele_counts.insert(allele_index, 0);
                     // subset.insert(allele_index, vec![allele]);
                 }
@@ -276,39 +272,39 @@ impl VariantAnnotations {
                     });
                 let mut counts = vec![0; vc.alleles.len()];
                 counts[0] = *allele_counts.get(&vc.get_reference_and_index().0).unwrap();
-                debug!("Allele counts {:?}", &allele_counts);
+                // debug!("Allele counts {:?}", &allele_counts);
                 for (vec_index, (allele_index, _)) in vc
                     .get_alternate_alleles_with_index()
                     .into_iter()
                     .enumerate()
                 {
-                    debug!(
-                        "{} {} \n {:?}",
-                        vec_index,
-                        allele_index,
-                        allele_counts.get(&allele_index)
-                    );
+                    // debug!(
+                    //     "{} {} \n {:?}",
+                    //     vec_index,
+                    //     allele_index,
+                    //     allele_counts.get(&allele_index)
+                    // );
                     counts[vec_index + 1] = *allele_counts.get(&allele_index).unwrap();
                 }
 
-                debug!("{:?}", &counts);
+                // debug!("{:?}", &counts);
                 genotype.ad = counts;
 
                 return AttributeObject::None;
             }
             Self::QualByDepth => {
-                debug!("Qual by depth");
-                debug!(
-                    "vc log10_p_error {} {}",
-                    vc.log10_p_error,
-                    vc.has_log10_p_error()
-                );
+                // debug!("Qual by depth");
+                // debug!(
+                //     "vc log10_p_error {} {}",
+                //     vc.log10_p_error,
+                //     vc.has_log10_p_error()
+                // );
                 if !vc.has_log10_p_error() {
                     return AttributeObject::None;
                 }
 
-                let mut genotypes = vc.get_genotypes_mut();
-                debug!("genotypes empty {}", genotypes.is_empty());
+                let genotypes = vc.get_genotypes_mut();
+                // debug!("genotypes empty {}", genotypes.is_empty());
                 if genotypes.is_empty() {
                     return AttributeObject::None;
                 }
@@ -320,13 +316,13 @@ impl VariantAnnotations {
 
                 let qual = -10.0 * vc.log10_p_error;
                 let mut QD = qual / (depth as f64);
-                debug!(
-                    "Log10 p error {} depth {} QD {}",
-                    vc.log10_p_error, depth, QD
-                );
+                // debug!(
+                //     "Log10 p error {} depth {} QD {}",
+                //     vc.log10_p_error, depth, QD
+                // );
 
                 QD = Self::fix_too_high_qd(QD);
-                debug!("Updated QD {}", QD);
+                // debug!("Updated QD {}", QD);
 
                 return AttributeObject::f64(QD);
             }
@@ -371,12 +367,12 @@ impl VariantAnnotations {
         for genotype in genotypes.genotypes_mut() {
             // we care only about variant calls with likelihoods
             if !genotype.is_het() && !genotype.is_hom_var() && !genotype.is_hom_ref() {
-                debug!(
-                    "Skipping: {} {} {:?}",
-                    genotype.is_het(),
-                    genotype.is_hom_var(),
-                    genotype.genotype_type
-                );
+                // debug!(
+                //     "Skipping: {} {} {:?}",
+                //     genotype.is_het(),
+                //     genotype.is_hom_var(),
+                //     genotype.genotype_type
+                // );
                 continue;
             }
 

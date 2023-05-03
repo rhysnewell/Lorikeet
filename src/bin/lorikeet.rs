@@ -1,42 +1,21 @@
-extern crate openssl;
-extern crate openssl_sys;
-
-extern crate lorikeet_genome;
+use clap::crate_version;
 use lorikeet_genome::cli::*;
 use lorikeet_genome::external_command_checker;
-use reference::reference_reader_utils::GenomesAndContigs;
 use lorikeet_genome::utils::utils::*;
-use lorikeet_genome::*;
-
-extern crate coverm;
-use coverm::bam_generator::*;
-use coverm::mosdepth_genome_coverage_estimators::*;
-use coverm::FlagFilter;
-use coverm::*;
-
-extern crate bird_tool_utils;
-
-use std::env;
-use std::process;
-extern crate tempfile;
-use tempfile::NamedTempFile;
-
-extern crate clap;
-use clap::*;
-
-extern crate clap_complete;
-use clap_complete::{generate, Shell};
-
-#[macro_use]
-extern crate log;
-use log::LevelFilter;
-extern crate env_logger;
-use env_logger::Builder;
+use lorikeet_genome::bam_parsing::bam_generator::*;
 use lorikeet_genome::processing::lorikeet_engine::{
     run_summarize, start_lorikeet_engine, ReadType
 };
-use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
+use lorikeet_genome::reference::reference_reader_utils::{ReferenceReaderUtils, GenomesAndContigs};
 use lorikeet_genome::utils::errors::BirdToolError;
+use lorikeet_genome::bam_parsing::FlagFilter;
+
+use log::{info, warn};
+use std::env;
+use tempfile::NamedTempFile;
+use clap_complete::{generate, Shell};
+use log::LevelFilter;
+use env_logger::Builder;
 
 fn main() {
     let mut app = build_cli();
@@ -48,7 +27,7 @@ fn main() {
             let m = matches.subcommand_matches("summarise").unwrap();
             bird_tool_utils::clap_utils::print_full_help_if_needed(&m, summarise_full_help());
             rayon::ThreadPoolBuilder::new()
-                .num_threads(m.value_of("threads").unwrap().parse().unwrap())
+                .num_threads(*m.get_one::<usize>("threads").unwrap())
                 .build_global()
                 .unwrap();
             run_summarize(m);
@@ -86,7 +65,7 @@ fn main() {
         Some("shell-completion") => {
             let m = matches.subcommand_matches("shell-completion").unwrap();
             set_log_level(m, true);
-            let mut file = std::fs::File::create(m.value_of("output-file").unwrap())
+            let mut file = std::fs::File::create(m.get_one::<String>("output-file").unwrap())
                 .expect("failed to open output file");
 
             if let Some(generator) = m.get_one::<Shell>("shell").copied() {
@@ -98,7 +77,6 @@ fn main() {
         }
         _ => {
             app.print_help().unwrap();
-            println!();
         }
     }
 }
@@ -107,9 +85,8 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
     // This function is amazingly painful. It handles every combination of longread and short read
     // mapping or bam file reading. Could not make it smaller using dynamic or static dispatch
     set_log_level(m, true);
-    let mut estimators = EstimatorsAndTaker::generate_from_clap(m);
     let filter_params = FilterParameters::generate_from_clap(m);
-    let threads = m.value_of("threads").unwrap().parse().unwrap();
+    let threads = *m.get_one::<usize>("threads").unwrap();
     rayon::ThreadPoolBuilder::new()
         .num_threads(threads)
         .build_global()
@@ -119,11 +96,11 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
     let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
 
     // Temp directory that will house all cached bams for variant calling
-    let tmp_dir = match m.is_present("bam-file-cache-directory") {
+    let tmp_dir = match m.contains_id("bam-file-cache-directory") {
         false => {
             let tmp_direct = tempdir::TempDir::new("lorikeet_fifo")
                 .expect("Unable to create temporary directory");
-            debug!("Temp directory {}", tmp_direct.as_ref().to_str().unwrap());
+            // debug!("Temp directory {}", tmp_direct.as_ref().to_str().unwrap());
             std::fs::create_dir(format!("{}/long", &tmp_direct.as_ref().to_str().unwrap()))
                 .unwrap();
             std::fs::create_dir(format!("{}/short", &tmp_direct.as_ref().to_str().unwrap()))
@@ -141,13 +118,13 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
 
     let (concatenated_genomes, genomes_and_contigs_option) =
         ReferenceReaderUtils::setup_genome_fasta_files(&m);
-    debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
-    if m.is_present("bam-files") {
-        let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
+    // debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
+    if m.contains_id("bam-files") {
+        let bam_files: Vec<&str> = m.get_many::<String>("bam-files").unwrap().map(|s| &**s).collect();
 
         // Associate genomes and contig names, if required
         if filter_params.doing_filtering() {
-            let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
+            let bam_readers = generate_filtered_bam_readers_from_bam_files(
                 bam_files,
                 filter_params.flag_filters.clone(),
                 filter_params.min_aligned_length_single,
@@ -158,14 +135,13 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 filter_params.min_aligned_percent_pair,
             );
 
-            if m.is_present("longread-bam-files") {
-                let bam_files = m.values_of("longread-bam-files").unwrap().collect();
+            if m.contains_id("longread-bam-files") {
+                let bam_files = m.get_many::<String>("longread-bam-files").unwrap().map(|s| &**s).collect();
                 let long_readers =
-                    bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
+                    generate_named_bam_readers_from_bam_files(bam_files);
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     bam_readers,
                     filter_params.flag_filters,
                     Some(long_readers),
@@ -173,7 +149,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     tmp_dir,
                     concatenated_genomes,
                 );
-            } else if m.is_present("longreads") {
+            } else if m.contains_id("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
                     &m,
@@ -185,7 +161,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     bam_readers,
                     filter_params.flag_filters,
                     Some(long_generators),
@@ -197,7 +172,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     bam_readers,
                     filter_params.flag_filters,
                     None::<Vec<PlaceholderBamFileReader>>,
@@ -207,16 +181,15 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 );
             }
         } else {
-            let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
+            let bam_readers = generate_named_bam_readers_from_bam_files(bam_files);
 
-            if m.is_present("longread-bam-files") {
-                let bam_files = m.values_of("longread-bam-files").unwrap().collect();
+            if m.contains_id("longread-bam-files") {
+                let bam_files = m.get_many::<String>("longread-bam-files").unwrap().map(|s| &**s).collect();
                 let long_readers =
-                    bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
+                    generate_named_bam_readers_from_bam_files(bam_files);
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     bam_readers,
                     filter_params.flag_filters,
                     Some(long_readers),
@@ -224,7 +197,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     tmp_dir,
                     concatenated_genomes,
                 );
-            } else if m.is_present("longreads") {
+            } else if m.contains_id("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
                     &m,
@@ -236,7 +209,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     bam_readers,
                     filter_params.flag_filters,
                     Some(long_generators),
@@ -248,7 +220,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     bam_readers,
                     filter_params.flag_filters,
                     None::<Vec<PlaceholderBamFileReader>>,
@@ -259,11 +230,11 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
             }
         }
     } else {
-        let mapping_program = parse_mapping_program(m.value_of("mapper"));
+        let mapping_program = parse_mapping_program(m.get_one::<String>("mapper").map(|s| &**s));
         external_command_checker::check_for_samtools();
 
         if filter_params.doing_filtering() {
-            debug!("Filtering..");
+            // debug!("Filtering..");
             let readtype = ReadType::Short;
             let generator_sets = get_streamed_filtered_bam_readers(
                 m,
@@ -282,15 +253,14 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     all_generators.push(g)
                 }
             }
-            debug!("Finished collecting generators.");
-            if m.is_present("longread-bam-files") {
-                let bam_files = m.values_of("longread-bam-files").unwrap().collect();
+            // debug!("Finished collecting generators.");
+            if m.contains_id("longread-bam-files") {
+                let bam_files = m.get_many::<String>("longread-bam-files").unwrap().map(|s| &**s).collect();
                 let long_readers =
-                    bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
+                    generate_named_bam_readers_from_bam_files(bam_files);
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     all_generators,
                     filter_params.flag_filters,
                     Some(long_readers),
@@ -298,7 +268,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     tmp_dir,
                     concatenated_genomes,
                 );
-            } else if m.is_present("longreads") {
+            } else if m.contains_id("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
                     &m,
@@ -310,7 +280,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     all_generators,
                     filter_params.flag_filters,
                     Some(long_generators),
@@ -322,7 +291,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     all_generators,
                     filter_params.flag_filters,
                     None::<Vec<PlaceholderBamFileReader>>,
@@ -332,7 +300,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 );
             }
         } else {
-            debug!("Not filtering..");
+            // debug!("Not filtering..");
             let readtype = ReadType::Short;
             let generator_sets = get_streamed_bam_readers(
                 m,
@@ -351,15 +319,14 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 }
             }
 
-            if m.is_present("longread-bam-files") {
-                let bam_files = m.values_of("longread-bam-files").unwrap().collect();
+            if m.contains_id("longread-bam-files") {
+                let bam_files = m.get_many::<String>("longread-bam-files").unwrap().map(|s| &**s).collect();
                 let long_readers =
-                    bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
+                    generate_named_bam_readers_from_bam_files(bam_files);
 
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     all_generators,
                     filter_params.flag_filters,
                     Some(long_readers),
@@ -367,7 +334,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     tmp_dir,
                     concatenated_genomes,
                 );
-            } else if m.is_present("longreads") {
+            } else if m.contains_id("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
                     &m,
@@ -379,7 +346,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     all_generators,
                     filter_params.flag_filters,
                     Some(long_generators),
@@ -391,7 +357,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 return run_pileup(
                     m,
                     mode,
-                    &mut estimators,
                     all_generators,
                     filter_params.flag_filters,
                     None::<Vec<PlaceholderBamFileReader>>,
@@ -404,107 +369,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
     }
 }
 
-struct EstimatorsAndTaker {
-    estimators: Vec<CoverageEstimator>,
-}
-
-impl EstimatorsAndTaker {
-    pub fn generate_from_clap(m: &clap::ArgMatches) -> EstimatorsAndTaker {
-        let mut estimators = vec![];
-        let min_fraction_covered = parse_percentage(&m, "min-covered-fraction");
-        let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
-
-        let methods: Vec<&str> = m.values_of("method").unwrap().collect();
-
-        if doing_metabat(&m) {
-            estimators.push(CoverageEstimator::new_estimator_length());
-            estimators.push(CoverageEstimator::new_estimator_mean(
-                min_fraction_covered,
-                contig_end_exclusion,
-                false,
-            ));
-            estimators.push(CoverageEstimator::new_estimator_variance(
-                min_fraction_covered,
-                contig_end_exclusion,
-            ));
-
-            debug!("Cached regular coverage taker for metabat mode being used");
-        } else {
-            for (_i, method) in methods.iter().enumerate() {
-                match method {
-                    &"mean" => {
-                        estimators.push(CoverageEstimator::new_estimator_length());
-
-                        estimators.push(CoverageEstimator::new_estimator_mean(
-                            min_fraction_covered,
-                            contig_end_exclusion,
-                            false,
-                        )); // TODO: Parameterise exclude_mismatches
-
-                        estimators.push(CoverageEstimator::new_estimator_variance(
-                            min_fraction_covered,
-                            contig_end_exclusion,
-                        ));
-                    }
-                    &"trimmed_mean" => {
-                        let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-                        let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-                        if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                            error!(
-                                "error: Trim bounds must be between 0 and 1, and \
-                                 min must be less than max, found {} and {}",
-                                min, max
-                            );
-                            process::exit(1);
-                        }
-                        estimators.push(CoverageEstimator::new_estimator_length());
-
-                        estimators.push(CoverageEstimator::new_estimator_trimmed_mean(
-                            min,
-                            max,
-                            min_fraction_covered,
-                            contig_end_exclusion,
-                        ));
-
-                        estimators.push(CoverageEstimator::new_estimator_variance(
-                            min_fraction_covered,
-                            contig_end_exclusion,
-                        ));
-                    }
-                    _ => unreachable!(),
-                };
-            }
-        }
-
-        // Check that min-covered-fraction is being used as expected
-        if min_fraction_covered != 0.0 {
-            let die = |estimator_name| {
-                error!(
-                    "The '{}' coverage estimator cannot be used when \
-                     --min-covered-fraction is > 0 as it does not calculate \
-                     the covered fraction. You may wish to set the \
-                     --min-covered-fraction to 0 and/or run this estimator \
-                     separately.",
-                    estimator_name
-                );
-                process::exit(1)
-            };
-            for e in &estimators {
-                match e {
-                    CoverageEstimator::ReadCountCalculator { .. } => die("counts"),
-                    CoverageEstimator::ReferenceLengthCalculator { .. } => die("length"),
-                    CoverageEstimator::ReadsPerBaseCalculator { .. } => die("reads_per_base"),
-                    _ => {}
-                }
-            }
-        }
-
-        return EstimatorsAndTaker {
-            estimators: estimators,
-        };
-    }
-}
-
 fn run_pileup<
     'a,
     R: NamedBamReader,
@@ -514,7 +378,6 @@ fn run_pileup<
 >(
     m: &clap::ArgMatches,
     mode: &str,
-    estimators: &mut EstimatorsAndTaker,
     bam_readers: Vec<S>,
     flag_filters: FlagFilter,
     long_readers: Option<Vec<U>>,
@@ -529,7 +392,6 @@ fn run_pileup<
         bam_readers,
         long_readers,
         mode,
-        estimators.estimators.clone(),
         flag_filters,
         genomes_and_contigs,
         tmp_bam_file_cache,
@@ -541,11 +403,11 @@ fn run_pileup<
 fn set_log_level(matches: &clap::ArgMatches, is_last: bool) {
     let mut log_level = LevelFilter::Info;
     let mut specified = false;
-    if matches.is_present("verbose") {
+    if matches.get_flag("verbose") {
         specified = true;
         log_level = LevelFilter::Debug;
     }
-    if matches.is_present("quiet") {
+    if matches.get_flag("quiet") {
         specified = true;
         log_level = LevelFilter::Error;
     }

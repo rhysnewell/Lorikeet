@@ -1,12 +1,12 @@
-use haplotype::haplotype::Haplotype;
 use hashlink::LinkedHashSet;
-use model::allele_list::AlleleList;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
 use rand::{rngs::ThreadRng, Rng};
 use std::collections::HashSet;
 use std::hash::Hash;
-use test_utils::random_dna::RandomDNA;
-use utils::errors::BirdToolError;
+
+use crate::model::allele_list::AlleleList;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::test_utils::random_dna::RandomDNA;
+use crate::utils::errors::BirdToolError;
 
 /**
  * Helper class for those unit-test classes that test on implementations of SampleList.

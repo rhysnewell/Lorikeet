@@ -1,12 +1,13 @@
-use graphs::base_edge::BaseEdge;
-use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
-use graphs::path::Path;
-use haplotype::haplotype::Haplotype;
 use ordered_float::OrderedFloat;
 use petgraph::prelude::{EdgeIndex, NodeIndex};
 use std::cmp::Ordering;
-use utils::simple_interval::Locatable;
+
+use crate::utils::simple_interval::Locatable;
+use crate::graphs::base_edge::BaseEdge;
+use crate::graphs::base_graph::BaseGraph;
+use crate::graphs::base_vertex::BaseVertex;
+use crate::graphs::path::Path;
+use crate::haplotype::haplotype::Haplotype;
 
 /**
  * Represents a result from a K-best haplotype search.

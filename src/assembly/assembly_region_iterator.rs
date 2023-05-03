@@ -1,22 +1,20 @@
-use assembly::assembly_region::AssemblyRegion;
-use coverm::bam_generator::{
-    generate_indexed_named_bam_readers_from_bam_files, IndexedNamedBamReader,
-};
-use coverm::FlagFilter;
 use ordered_float::OrderedFloat;
-use processing::lorikeet_engine::ReadType;
 use rayon::prelude::*;
-use reads::bird_tool_reads::BirdToolRead;
 use std::cmp::Reverse;
-use std::fs::File;
-
-use reads::alignment_utils::AlignmentUtils;
-use reads::cigar_utils::CigarUtils;
-use reads::read_utils::ReadUtils;
 use rust_htslib::bam::Record;
-use std::ops::Deref;
-use utils::interval_utils::IntervalUtils;
-use utils::simple_interval::SimpleInterval;
+
+use crate::processing::lorikeet_engine::ReadType;
+use crate::reads::bird_tool_reads::BirdToolRead;
+use crate::reads::read_utils::ReadUtils;
+use crate::utils::interval_utils::IntervalUtils;
+use crate::utils::simple_interval::SimpleInterval;
+use crate::assembly::assembly_region::AssemblyRegion;
+use crate::bam_parsing::{
+    FlagFilter, 
+    bam_generator::{
+        generate_indexed_named_bam_readers_from_bam_files, IndexedNamedBamReader,
+    }
+};
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -36,20 +34,20 @@ use utils::simple_interval::SimpleInterval;
 #[derive(Debug)]
 pub struct AssemblyRegionIterator<'a> {
     indexed_bam_readers: &'a [String],
-    n_threads: u32,
+    // n_threads: u32,
     // previous_regions_reads: Vec<BirdToolRead>,
 }
 
 impl<'a> AssemblyRegionIterator<'a> {
     const DUMMY_LIMITING_INTERVAL: Option<SimpleInterval> = None;
 
-    pub fn new(indexed_bam_readers: &'a [String], n_threads: u32) -> AssemblyRegionIterator<'a> {
+    pub fn new(indexed_bam_readers: &'a [String], _n_threads: u32) -> AssemblyRegionIterator<'a> {
         // Assume no forced conversion here since we have already traverse the entire
         // activity profile prior to reaching here. This is quite different to how
         // GATK handles it but I assume it ends up working the same?
         AssemblyRegionIterator {
             indexed_bam_readers,
-            n_threads,
+            // n_threads,
         }
     }
 
@@ -59,26 +57,22 @@ impl<'a> AssemblyRegionIterator<'a> {
         flag_filters: &FlagFilter,
         n_threads: u32,
         short_read_bam_count: usize,
-        long_read_bam_count: usize,
+        _long_read_bam_count: usize,
         max_input_depth: usize,
         args: &clap::ArgMatches,
     ) {
         // We don't need to check previous region reads as the implementation of fetch we have
         // should retrieve all reads regardless of if they have been seen before
 
-        let min_mapq = args.value_of("min-mapq").unwrap().parse::<u8>().unwrap();
-        let min_long_read_size = args
-            .value_of("min-long-read-size")
-            .unwrap()
-            .parse::<usize>()
+        let min_mapq = *args.get_one::<u8>("min-mapq").unwrap();
+        let min_long_read_size = *args
+            .get_one::<usize>("min-long-read-size")
             .unwrap();
-        let min_long_read_average_base_qual = args
-            .value_of("min-long-read-average-base-qual")
-            .unwrap()
-            .parse::<usize>()
+        let min_long_read_average_base_qual = *args
+            .get_one::<usize>("min-long-read-average-base-qual")
             .unwrap();
 
-        let limiting_interval = IntervalUtils::parse_limiting_interval(args);
+        let _limiting_interval = IntervalUtils::parse_limiting_interval(args);
 
         let mut records: Vec<BirdToolRead> = self
             .indexed_bam_readers
@@ -112,7 +106,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                             region.get_contig() as i32,
                             region.get_padded_span().start as i64,
                             region.get_padded_span().end as i64 + 1,
-                        ));
+                        )).expect("Failed to fetch reads");
 
                         let mut records = Vec::new(); // container for the records to be collected
 
@@ -140,7 +134,6 @@ impl<'a> AssemblyRegionIterator<'a> {
 
                         records
                     }
-                    _ => Vec::new(),
                 }
             })
             .collect::<Vec<BirdToolRead>>();
@@ -156,11 +149,11 @@ impl<'a> AssemblyRegionIterator<'a> {
             records = records.into_iter().take(max_input_depth).collect();
         }
 
-        debug!(
-            "Region {:?} No. reads {}",
-            &region.padded_span,
-            records.len()
-        );
+        // debug!(
+        //     "Region {:?} No. reads {}",
+        //     &region.padded_span,
+        //     records.len()
+        // );
         records.par_sort_unstable();
         region.add_all(records);
     }

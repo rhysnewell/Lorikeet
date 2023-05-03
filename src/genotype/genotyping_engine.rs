@@ -1,30 +1,29 @@
-use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
-use genotype::genotype_builder::{
+use hashlink::LinkedHashMap;
+use ordered_float::OrderedFloat;
+use std::collections::{BinaryHeap, HashSet};
+
+use crate::assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
+use crate::genotype::genotype_builder::{
     AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext,
 };
-use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use genotype::genotype_prior_calculator::GenotypePriorCalculator;
-use hashlink::LinkedHashMap;
-use model::allele_frequency_calculator::AlleleFrequencyCalculator;
-use model::allele_frequency_calculator_result::AFCalculationResult;
-use model::allele_subsetting_utils::AlleleSubsettingUtils;
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variant_context::VariantContext;
-use model::variants::{Filter, NON_REF_ALLELE};
-use ordered_float::OrderedFloat;
-use rayon::prelude::*;
-use std::collections::HashMap;
-use std::collections::{BinaryHeap, HashSet};
-use utils::math_utils::MathUtils;
-use utils::quality_utils::QualityUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
-use utils::vcf_constants::*;
+use crate::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use crate::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use crate::genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use crate::model::allele_frequency_calculator::AlleleFrequencyCalculator;
+use crate::model::allele_frequency_calculator_result::AFCalculationResult;
+use crate::model::allele_subsetting_utils::AlleleSubsettingUtils;
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::model::variant_context::VariantContext;
+use crate::model::variants::{Filter, NON_REF_ALLELE};
+use crate::utils::math_utils::MathUtils;
+use crate::utils::quality_utils::QualityUtils;
+use crate::utils::simple_interval::{Locatable, SimpleInterval};
+use crate::utils::vcf_constants::*;
 
 #[derive(Debug, Clone)]
 pub struct GenotypingEngine {
     pub(crate) allele_frequency_calculator: AlleleFrequencyCalculator,
-    pub(crate) number_of_genomes: usize,
+    // pub(crate) number_of_genomes: usize,
     pub(crate) samples: Vec<String>,
     // the top of the queue is the upstream deletion that ends first
     // note that we can get away with ordering just by the end and not the contig as long as we preserve the invariant
@@ -53,19 +52,19 @@ impl GenotypingEngine {
         args: &clap::ArgMatches,
         samples: Vec<String>,
         do_allele_specific_calcs: bool,
-        sample_ploidy: usize,
+        _sample_ploidy: usize,
     ) -> GenotypingEngine {
         GenotypingEngine {
             allele_frequency_calculator: AlleleFrequencyCalculator::make_calculator(args),
-            number_of_genomes: samples.len() * sample_ploidy,
+            // number_of_genomes: samples.len() * sample_ploidy,
             samples,
             do_allele_specific_calcs,
             upstream_deletions_loc: BinaryHeap::new(),
             genotype_assignment_method: GenotypeAssignmentMethod::from_args(args),
             use_posterior_probabilities_to_calculate_qual: args
-                .is_present("use-posteriors-to-calculate-qual"),
+                .get_flag("use-posteriors-to-calculate-qual"),
             annotate_number_of_alleles_discovered: args
-                .is_present("annotate-with-num-discovered-alleles"),
+                .get_flag("annotate-with-num-discovered-alleles"),
         }
     }
 
@@ -91,6 +90,7 @@ impl GenotypingEngine {
         }
 
         let mut reduced_vc: VariantContext;
+        let debug = vc.loc.start == 483;
         if VariantContext::MAX_ALTERNATE_ALLELES < (vc.get_alternate_alleles().len()) {
             let alleles_to_keep = AlleleSubsettingUtils::calculate_most_likely_alleles(
                 &vc,
@@ -119,6 +119,11 @@ impl GenotypingEngine {
             reduced_vc = vc.clone();
         }
 
+        if debug {
+            debug!("FOUND POSITION {}", vc.loc.start);
+            debug!("GC {:?}", &reduced_vc.genotypes);
+        }
+
         //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
         let max_pl_length =
             GenotypeLikelihoods::calc_num_likelihoods(reduced_vc.get_n_alleles(), ploidy);
@@ -138,7 +143,7 @@ impl GenotypingEngine {
         let given_alleles_empty = given_alleles.is_empty();
         let output_alternative_alleles =
             self.calculate_output_allele_subset(&af_result, &vc, given_alleles, stand_min_conf);
-        debug!("Ouput alt alleles {:?}", &output_alternative_alleles);
+        // debug!("Ouput alt alleles {:?}", &output_alternative_alleles);
         // note the math.abs is necessary because -10 * 0.0 => -0.0 which isn't nice
         let log10_confidence = if !output_alternative_alleles.site_is_monomorphic {
             af_result.log10_prob_only_ref_allele_exists() + 0.0
@@ -171,6 +176,12 @@ impl GenotypingEngine {
                 "Did not pass emit threshold {} {}",
                 phred_scaled_confidence, stand_min_conf
             );
+            debug!("Site is mono {}", output_alternative_alleles.site_is_monomorphic);
+            debug!("No alleles or first allele is not NON_REF {:?}", GenotypingEngine::no_alleles_or_first_allele_is_not_non_ref(
+                &output_alternative_alleles.alleles,
+            ));
+            debug!("Given alleles empty {}", given_alleles_empty);
+            debug!("Alleles {:?}", &output_alternative_alleles.alleles);
             return None;
         }
 
@@ -330,7 +341,7 @@ impl GenotypingEngine {
      */
     fn record_deletions(&mut self, vc: &VariantContext, emitted_alleles: &Vec<ByteArrayAllele>) {
         while !self.upstream_deletions_loc.is_empty() {
-            let mut condition_met = false;
+            let condition_met;
             match self.upstream_deletions_loc.peek() {
                 Some(upstream) => {
                     if !upstream.contigs_match(&vc.loc) || upstream.get_end() < vc.loc.get_start() {
@@ -396,7 +407,7 @@ impl GenotypingEngine {
         let alleles = af_calculation_result.get_alleles_used_in_genotyping();
         let alternative_allele_count = alleles.len() - 1;
         let mut _reference_size;
-
+        // debug!("Number of alleles {}", alleles.len());
         let forced_alleles: HashSet<&ByteArrayAllele> =
             AssemblyBasedCallerUtils::get_alleles_consistent_with_given_alleles(given_alleles, vc);
         for allele in alleles.iter() {
@@ -417,19 +428,19 @@ impl GenotypingEngine {
                     "plausible {} {} {}",
                     is_plausible,
                     af_calculation_result.get_log10_posterior_of_allele_absent(allele),
-                    QualityUtils::qual_to_error_prob_log10(stand_min_conf as u8)
+                    QualityUtils::qual_to_error_prob_log10(stand_min_conf)
                 );
 
                 //it's possible that the upstream deletion that spanned this site was not emitted, mooting the symbolic spanning deletion allele
                 let is_spurious_spanning_deletion = VCFConstants::is_spanning_deletion(allele)
                     || self.is_vc_covered_by_deletion(vc);
-                debug!("is spurious spanning del {}", is_spurious_spanning_deletion);
+                // debug!("is spurious spanning del {}", is_spurious_spanning_deletion);
 
                 let to_output = (is_plausible
                     || is_non_ref_which_is_lone_alt_allele
                     || forced_alleles.contains(&allele))
                     && !is_spurious_spanning_deletion;
-                debug!("to output {}", to_output);
+                // debug!("to output {}", to_output);
                 site_is_monomorphic =
                     site_is_monomorphic & !(is_plausible && !is_spurious_spanning_deletion);
 

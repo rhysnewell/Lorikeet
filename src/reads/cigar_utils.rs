@@ -1,10 +1,10 @@
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
-use rayon::prelude::*;
-use reads::alignment_utils::AlignmentUtils;
-use reads::cigar_builder::CigarBuilder;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
-use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, SmithWatermanAlignmentResult};
+
+use crate::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use crate::reads::alignment_utils::AlignmentUtils;
+use crate::reads::cigar_builder::CigarBuilder;
+use crate::smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, SmithWatermanAlignmentResult};
 
 lazy_static! {
     static ref SW_PAD: String = format!("NNNNNNNNNN");
@@ -285,7 +285,7 @@ impl CigarUtils {
         for element in cigar.iter() {
             match element {
                 // copy hard clips
-                Cigar::HardClip(len) => continue,
+                Cigar::HardClip(_len) => continue,
                 Cigar::SoftClip(len)
                 | Cigar::Diff(len)
                 | Cigar::Equal(len)
@@ -412,7 +412,7 @@ impl CigarUtils {
         let base_start = SW_PAD.len();
         let base_end = padded_path.len() - SW_PAD.len() - 1; // -1 becuase it is inclusive
 
-        let mut trimmed_cigar_and_deletions_removed = AlignmentUtils::trim_cigar_by_bases(
+        let trimmed_cigar_and_deletions_removed = AlignmentUtils::trim_cigar_by_bases(
             alignment.cigar,
             base_start as u32,
             base_end as u32,
@@ -425,12 +425,12 @@ impl CigarUtils {
             ));
         }
 
-        let mut left_alignment_result = AlignmentUtils::left_align_indels(
+        let left_alignment_result = AlignmentUtils::left_align_indels(
             CigarString::from(non_standard),
             ref_seq,
             alt_seq,
             trimmed_cigar_and_deletions_removed.leading_deletion_bases_removed,
-        );
+        ).expect("Failed to left align indel");
 
         // we must account for possible leading deletions removed when trimming the padding and when left-aligning
         // trailing deletions removed when trimming have already been restored for left-alignment, but left-alingment may have removed them again.

@@ -1,36 +1,20 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rayon;
-extern crate rust_htslib;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-extern crate bio;
-extern crate coverm;
-extern crate itertools;
-extern crate rand;
-extern crate term;
-
-use bio::io::fasta::IndexedReader;
-use bio::utils::Interval;
-use coverm::genomes_and_contigs::GenomesAndContigs;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::processing::lorikeet_engine::ReadType;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reference::reference_reader::ReferenceReader;
-use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
+use lorikeet_genome::reference::reference_reader_utils::{ReferenceReaderUtils, GenomesAndContigs};
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
 use lorikeet_genome::utils::interval_utils::IntervalUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
 use std::cmp::{max, min};
+
+#[macro_use]
+extern crate lazy_static;
 
 lazy_static! {
     pub static ref CONTIG_LEN: usize = ReferenceReaderUtils::generate_faidx(b37_reference_20_21)
@@ -43,7 +27,7 @@ static b37_reference_20_21: &str = "tests/resources/large/human_g1k_v37.20.21.fa
 #[test]
 fn test_constructor() {
     let loc = SimpleInterval::new(1, 10, 20);
-    let ar = AssemblyRegion::new(loc.clone(), true, 2, *CONTIG_LEN, 0, 0);
+    let ar = AssemblyRegion::new(loc.clone(), true, 2, *CONTIG_LEN, 0, 0, 0.0);
     assert_eq!(ar.is_active(), true);
     assert_eq!(ar.get_span(), &loc);
     assert_eq!(ar.get_contig(), 0)
@@ -55,7 +39,7 @@ fn test_creating_assembly_regions(
     extension: usize,
     reader: &mut ReferenceReader,
 ) {
-    let mut region = AssemblyRegion::new(loc.clone(), is_active, extension, *CONTIG_LEN, 0, 0);
+    let mut region = AssemblyRegion::new(loc.clone(), is_active, extension, *CONTIG_LEN, 0, 0, 0.0);
     println!(
         "loc {:?} active {} extension {} Contig Length {}",
         &loc, is_active, extension, *CONTIG_LEN
@@ -158,7 +142,7 @@ fn make_polling_data() {
 }
 
 fn test_assembly_region_reads(loc: SimpleInterval, read: BirdToolRead) {
-    let mut region = AssemblyRegion::new(loc.clone(), true, 0, *CONTIG_LEN, 0, 0);
+    let mut region = AssemblyRegion::new(loc.clone(), true, 0, *CONTIG_LEN, 0, 0, 0.0);
     let dummy_reads = Vec::new();
     let dummy_reads_with_one = vec![read.clone()];
 
@@ -181,12 +165,12 @@ fn test_assembly_region_reads(loc: SimpleInterval, read: BirdToolRead) {
     assert_eq!(region.len(), 1);
     assert_eq!(&region.get_padded_span(), &loc);
 
-    let mut region = region.remove_all(&dummy_reads);
+    let region = region.remove_all(&dummy_reads);
     assert_eq!(region.get_reads(), &dummy_reads_with_one);
     assert_eq!(region.len(), 1);
     assert_eq!(&region.get_padded_span(), &loc);
 
-    let mut region = region.remove_all(&dummy_reads_with_one);
+    let region = region.remove_all(&dummy_reads_with_one);
     assert_eq!(region.get_reads(), &dummy_reads);
     assert_eq!(region.len(), 0);
     assert_eq!(&region.get_padded_span(), &loc);
@@ -199,11 +183,11 @@ fn test_assembly_region_reads(loc: SimpleInterval, read: BirdToolRead) {
 fn make_assembly_region_reads() {
     println!("Assembly region reading in ref...");
 
-    let mut ref_reader = ReferenceReader::new_with_target_names(
-        &Some(b37_reference_20_21.to_string()),
-        GenomesAndContigs::new(),
-        vec![b"20", b"21"],
-    );
+    // let mut ref_reader = ReferenceReader::new_with_target_names(
+    //     &Some(b37_reference_20_21.to_string()),
+    //     GenomesAndContigs::new(),
+    //     vec![b"20", b"21"],
+    // );
 
     for start in vec![0, 10, 100, *CONTIG_LEN as i64 - 10, *CONTIG_LEN as i64 - 1] {
         for read_start_offset in vec![-100, -10, 0, 10, 100] {
@@ -250,7 +234,7 @@ fn make_assembly_region_reads() {
 
 fn test_bad_read(read1: BirdToolRead, read2: BirdToolRead) {
     let loc = SimpleInterval::new(0, read1.get_start(), read1.get_end());
-    let mut region = AssemblyRegion::new(loc, true, 0, *CONTIG_LEN, 0, 0);
+    let mut region = AssemblyRegion::new(loc, true, 0, *CONTIG_LEN, 0, 0, 0.0);
     region.add(read1);
     region.add(read2);
 }
@@ -311,9 +295,9 @@ fn test_trim_assembly_region(
     extension: usize,
     desired_span: SimpleInterval,
     expected_assembly_region: SimpleInterval,
-    expected_extension: usize,
+    _expected_extension: usize,
 ) {
-    let mut region = AssemblyRegion::new(region_loc, true, extension, *CONTIG_LEN, 0, 0);
+    let region = AssemblyRegion::new(region_loc, true, extension, *CONTIG_LEN, 0, 0, 0.0);
     let trimmed = region.trim_with_padded_span(desired_span.clone(), desired_span.clone());
     assert_eq!(
         trimmed.get_span(),

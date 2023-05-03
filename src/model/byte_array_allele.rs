@@ -1,7 +1,7 @@
-use model::variants;
-use rayon::prelude::*;
 use std::hash::{Hash, Hasher};
-use utils::vcf_constants::VCFConstants;
+
+use crate::model::variants;
+use crate::utils::vcf_constants::VCFConstants;
 
 #[derive(Debug, Clone, Ord, PartialOrd)]
 pub struct ByteArrayAllele {
@@ -181,20 +181,27 @@ impl ByteArrayAllele {
 
     pub fn acceptable_allele_bases(bases: &[u8], is_ref: bool) -> bool {
         if Self::would_be_null_allele(bases) {
+            debug!("Null allele bases are not acceptable");
             return false;
         } else if Self::would_be_no_call_allele(bases) || Self::would_be_symbolic_allele(bases) {
+            debug!("No call or symbolic allele bases are acceptable: {} {}", Self::would_be_no_call_allele(bases), Self::would_be_symbolic_allele(bases));
             return true;
         } else if Self::would_be_star_allele(bases) {
+            debug!("Star allele bases are acceptable: {}", is_ref);
             return !is_ref;
         } else {
             // return true if there are any unacceptable bases, so take conjugate value
             !bases.iter().any(|base| {
                 let base = *base as char;
-                match base {
+                let result = match base {
                     'A' | 'C' | 'T' | 'G' | 'a' | 'c' | 't' | 'g' | 'N' | 'n' | 'R' | 'Y' | 'K'
                     | 'M' | 'S' | 'W' | 'B' | 'D' | 'H' | 'V' | 'U' => false,
                     _ => true,
+                };
+                if result {
+                    debug!("Base {:?} is not acceptable", base);
                 }
+                result
             })
         }
     }

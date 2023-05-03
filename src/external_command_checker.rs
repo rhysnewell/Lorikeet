@@ -1,6 +1,4 @@
 use bird_tool_utils::external_command_checker::*;
-use std;
-use std::io::Read;
 
 pub fn check_for_bwa() {
     check_for_external_command_presence("BWA", "which bwa").expect("Failed to find installed BWA");

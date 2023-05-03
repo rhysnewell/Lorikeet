@@ -1,9 +1,9 @@
-use ordered_float::{NotNan, OrderedFloat};
-use rayon::prelude::*;
+use ordered_float::OrderedFloat;
 use statrs::function::gamma::ln_gamma;
 use std::clone::Clone;
 use std::ops::{Add, AddAssign, Mul, Sub};
-use utils::natural_log_utils::NaturalLogUtils;
+
+use crate::utils::natural_log_utils::NaturalLogUtils;
 
 lazy_static! {
     static ref cache: Vec<f64> = (0..((JacobianLogTable::MAX_TOLERANCE
@@ -30,6 +30,13 @@ impl MathUtils {
     // const LOG_10_CACHE: Log10Cache
     // const LOG_10_FACTORIAL_CACHE: Log10FactorialCache
     // const DIGAMMA_CACHE: DiGammaCache
+
+    pub fn median_clone<T: PartialOrd + Copy>(numbers: &[T]) -> T {
+        let mut numbers = numbers.to_vec();
+        numbers.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let mid = numbers.len() / 2;
+        numbers[mid]
+    }
 
     pub fn median<T: Ord + PartialOrd + Copy>(numbers: &mut [T]) -> T {
         numbers.sort();

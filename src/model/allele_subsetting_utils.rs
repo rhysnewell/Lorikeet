@@ -1,17 +1,17 @@
-use genotype::genotype_builder::{Genotype, GenotypeAssignmentMethod, GenotypesContext};
-use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use itertools::Itertools;
-use model::allele_list::{AlleleList, AlleleListPermutation};
-use model::byte_array_allele::{Allele, ByteArrayAllele};
-use model::variant_context::VariantContext;
-use model::variants::NON_REF_ALLELE;
 use ordered_float::OrderedFloat;
-use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
-use utils::math_utils::MathUtils;
-use utils::vcf_constants::*;
+
+use crate::genotype::genotype_builder::{Genotype, GenotypeAssignmentMethod, GenotypesContext};
+use crate::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use crate::genotype::genotype_likelihoods::GenotypeLikelihoods;
+use crate::genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use crate::model::allele_list::{AlleleList, AlleleListPermutation};
+use crate::model::byte_array_allele::{Allele, ByteArrayAllele};
+use crate::model::variant_context::VariantContext;
+use crate::model::variants::NON_REF_ALLELE;
+use crate::utils::math_utils::MathUtils;
+use crate::utils::vcf_constants::*;
 
 pub struct AlleleSubsettingUtils {}
 
@@ -87,7 +87,7 @@ impl AlleleSubsettingUtils {
             .into_iter()
             .take(num_alleles)
             .enumerate()
-            .filter(|(i, a)| {
+            .filter(|(i, _a)| {
                 *i == 0
                     || Some(*i) == non_ref_alt_allele_index
                     || proper_alt_indexes_to_keep.contains(i)

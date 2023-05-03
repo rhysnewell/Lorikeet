@@ -1,6 +1,6 @@
-use genotype::genotype_builder::Genotype;
-use model::variant_context::VariantContext;
-use utils::simple_interval::Locatable;
+use crate::genotype::genotype_builder::Genotype;
+use crate::model::variant_context::VariantContext;
+use crate::utils::simple_interval::Locatable;
 
 pub struct VariantContextTestUtils {}
 
@@ -15,8 +15,8 @@ impl VariantContextTestUtils {
     pub fn assert_variant_contexts_are_equal(
         actual: &VariantContext,
         expected: &VariantContext,
-        attributes_to_ignore: Vec<&str>,
-        attributes_with_jitter: Vec<&str>,
+        _attributes_to_ignore: Vec<&str>,
+        _attributes_with_jitter: Vec<&str>,
     ) {
         assert_eq!(actual.loc.get_contig(), expected.loc.get_contig());
         assert_eq!(actual.loc.get_start(), expected.loc.get_start());
@@ -37,7 +37,7 @@ impl VariantContextTestUtils {
     pub fn assert_genotypes_are_equal(
         actual: &Genotype,
         expected: &Genotype,
-        extended_attributes_to_ignore: &Vec<String>,
+        _extended_attributes_to_ignore: &Vec<String>,
     ) {
         assert_eq!(&actual.sample_name, &expected.sample_name, "genotype names");
         assert_eq!(&actual.alleles, &expected.alleles, "Genotype alleles");

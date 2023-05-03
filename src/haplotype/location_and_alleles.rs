@@ -1,4 +1,4 @@
-use model::byte_array_allele::Allele;
+use crate::model::byte_array_allele::Allele;
 
 /**
  * This class exists to allow VariantContext objects to be compared based only on their location and set of alleles,

@@ -1,17 +1,14 @@
-use coverm::bam_generator::*;
-use reference::reference_reader_utils::GenomesAndContigs;
 use glob::glob;
 use indicatif::{ProgressBar, ProgressStyle};
-use rayon::prelude::*;
 use rust_htslib::bam;
-use std::fs::create_dir_all;
-use std::io::Write;
+use std::collections::HashMap;
 use std::path::Path;
 use std::result::Result::Err;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use utils::errors::BirdToolError;
-// use std::io::Error;
+
+use crate::bam_parsing::bam_generator::*;
+use crate::reference::reference_reader_utils::GenomesAndContigs;
+use crate::utils::errors::BirdToolError;
 
 /// Ensures mapping is completed for provided bams. If multiple references are provided and
 /// the user has asked to run genomes in parallel, then the bams are split per reference to
@@ -20,7 +17,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bams: Vec<G>,
     n_threads: usize,
     references: &GenomesAndContigs,
-    parallel_genomes: bool,
+    split_bams: bool,
     mapping: bool,
 ) -> Result<(), BirdToolError> {
     let mut record: bam::Record = bam::Record::new();
@@ -50,7 +47,9 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             },
         ));
 
-        if mapping {
+        if split_bams {
+            split_bams_to_references(bam, references, &path, n_threads)?;
+        } else if mapping {
             while bam.read(&mut record).is_some() {
                 continue;
             }
@@ -74,6 +73,86 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     Ok(())
 }
 
+/// Splits bams by reference if the user has requested split bams.
+/// This is done to avoid file locking when reading bams in parallel.
+fn split_bams_to_references<R: NamedBamReader>(
+    mut bam_generator: R,
+    references: &GenomesAndContigs,
+    bam_path: &str,
+    n_threads: usize
+) -> Result<(), BirdToolError> {
+    let mut bam_writer_map: HashMap<String, bam::Writer> = HashMap::with_capacity(references.genomes.len());
+    let bam_header = bam_generator.header();
+    let new_header = bam::Header::from_template(bam_header);
+    debug!("Beginning bam splitting...");
+    // ensure output file exists for each reference
+    for ref_name in references.genomes.iter() {
+        let mut path_split = bam_path.rsplitn(2, '/');
+        let path_suffix = path_split.next().unwrap();
+        let path_prefix = path_split.next().unwrap();
+
+        let path = format!(
+            "{}/{}/{}",
+            path_prefix, ref_name, path_suffix
+        );
+        // ensure path exists
+        std::fs::create_dir_all(Path::new(&path).parent().unwrap())
+            .map_err(|_| BirdToolError::IOError(format!("Unable to create path {}", &path)))?;
+        
+        let writer = bam::Writer::from_path(&path, &new_header, bam::Format::Bam)
+            .map_err(|_| BirdToolError::IOError(format!("Unable to write bam at {}", &path)))?;
+
+        bam_writer_map.insert(ref_name.to_string(), writer);
+    }
+
+    debug!("Splitting bam to {} references", bam_writer_map.len());
+
+    let mut record: bam::Record = bam::Record::new();
+
+    while bam_generator.read(&mut record).is_some() {
+        let record_tid = record.tid();
+        if record_tid < 0 {
+            continue;
+        }
+        let ref_name = std::str::from_utf8(bam_generator.header().tid2name(record_tid as u32)).expect("Cannot read reference name from bam file").split('~').next().unwrap();
+
+        let writer = bam_writer_map.get_mut(ref_name).unwrap();
+        writer.write(&record).unwrap();
+    }
+
+    bam_generator.finish();
+    
+    let mut paths_to_index = Vec::with_capacity(bam_writer_map.len());
+    // build indices for writers in two loops
+    // we use two loops as the destructor for the writer needs to run
+    // otherwise there is no EOF marker in the bam file
+    for (ref_name, _) in bam_writer_map.into_iter() {
+        let mut path_split = bam_path.rsplitn(2, '/');
+        let path_suffix = path_split.next().unwrap();
+        let path_prefix = path_split.next().unwrap();
+
+        let path = format!(
+            "{}/{}/{}",
+            path_prefix, ref_name, path_suffix
+        );
+        paths_to_index.push(path);
+        
+    }
+
+    // build indices for writers
+    for path in paths_to_index.into_iter() {
+        bam::index::build(
+            &path,
+            Some(&format!("{}.bai", path)),
+            bam::index::Type::Bai,
+            n_threads as u32,
+        )
+        .unwrap_or_else(|_| panic!("Unable to index bam at {}", &path));
+    }
+
+    Ok(())
+}
+
 pub fn recover_bams(
     m: &clap::ArgMatches,
     concatenated_genomes: &Option<String>,
@@ -91,9 +170,9 @@ pub fn recover_bams(
     debug!("Bams are split {}", bams_are_split);
 
     // This is going to catch cached longread bam files from mapping
-    if m.is_present("bam-files") {
+    if m.contains_id("bam-files") {
         let bam_paths = m
-            .values_of("bam-files")
+            .get_many::<String>("bam-files")
             .unwrap()
             .map(|b| b.to_string())
             .collect::<Vec<String>>();
@@ -111,10 +190,10 @@ pub fn recover_bams(
                 ))
             }
         }
-    } else if m.is_present("read1")
-        | m.is_present("single")
-        | m.is_present("coupled")
-        | m.is_present("interleaved")
+    } else if m.contains_id("read1")
+        | m.contains_id("single")
+        | m.contains_id("coupled")
+        | m.contains_id("interleaved")
     {
         let mut all_bam_paths = vec![];
 
@@ -122,12 +201,12 @@ pub fn recover_bams(
             Some(ref _tmp_file) => {
                 let cache = format!(
                     "{}/short/{}/*.bam",
-                    match m.is_present("bam-file-cache-directory") {
+                    match m.contains_id("bam-file-cache-directory") {
                         false => {
                             tmp_bam_file_cache.as_ref().unwrap()
                         }
                         true => {
-                            m.value_of("bam-file-cache-directory").unwrap()
+                            m.get_one::<String>("bam-file-cache-directory").unwrap()
                         }
                     },
                     if bams_are_split {
@@ -152,12 +231,12 @@ pub fn recover_bams(
                 for ref_name in genomes_and_contigs.genomes.iter() {
                     let cache = format!(
                         "{}/short/{}*.bam",
-                        match m.is_present("bam-file-cache-directory") {
+                        match m.contains_id("bam-file-cache-directory") {
                             false => {
                                 tmp_bam_file_cache.as_ref().unwrap()
                             }
                             true => {
-                                m.value_of("bam-file-cache-directory").unwrap()
+                                m.get_one::<String>("bam-file-cache-directory").unwrap()
                             }
                         },
                         ref_name
@@ -184,9 +263,9 @@ pub fn recover_bams(
         bam_readers.extend(all_bam_paths);
     }
 
-    if m.is_present("longread-bam-files") {
+    if m.contains_id("longread-bam-files") {
         let bam_paths = m
-            .values_of("longread-bam-files")
+            .get_many::<String>("longread-bam-files")
             .unwrap()
             .map(|b| b.to_string())
             .collect::<Vec<String>>();
@@ -204,19 +283,19 @@ pub fn recover_bams(
                 ))
             }
         }
-    } else if m.is_present("longreads") {
+    } else if m.contains_id("longreads") {
         let mut all_bam_paths = vec![];
 
         match concatenated_genomes {
             Some(ref _tmp_file) => {
                 let cache = format!(
                     "{}/long/{}/*.bam",
-                    match m.is_present("bam-file-cache-directory") {
+                    match m.contains_id("bam-file-cache-directory") {
                         false => {
                             tmp_bam_file_cache.as_ref().unwrap()
                         }
                         true => {
-                            m.value_of("bam-file-cache-directory").unwrap()
+                            m.get_one::<String>("bam-file-cache-directory").unwrap()
                         }
                     },
                     if bams_are_split {
@@ -240,12 +319,12 @@ pub fn recover_bams(
                 for ref_name in genomes_and_contigs.genomes.iter() {
                     let cache = format!(
                         "{}/long/{}*.bam",
-                        match m.is_present("bam-file-cache-directory") {
+                        match m.contains_id("bam-file-cache-directory") {
                             false => {
                                 tmp_bam_file_cache.as_ref().unwrap()
                             }
                             true => {
-                                m.value_of("bam-file-cache-directory").unwrap()
+                                m.get_one::<String>("bam-file-cache-directory").unwrap()
                             }
                         },
                         ref_name

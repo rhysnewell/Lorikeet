@@ -1,41 +1,16 @@
 #![allow(
     non_upper_case_globals,
-    unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case
 )]
 
-extern crate lorikeet_genome;
-extern crate rust_htslib;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
-extern crate ndarray;
-extern crate rand;
 
-use lorikeet_genome::model::allele_list::AlleleList;
-use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
-use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
 use lorikeet_genome::pair_hmm::pair_hmm_model::PairHMMModel;
-use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
-use lorikeet_genome::utils::base_utils::BaseUtils;
-use lorikeet_genome::utils::math_utils::MathUtils;
 use lorikeet_genome::utils::quality_utils::QualityUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
 use ndarray::Array2;
-use rand::rngs::ThreadRng;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView, Seq};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::ops::Deref;
-use std::sync::Mutex;
 
 lazy_static! {
     static ref INS_QUALS: Vec<u8> = vec![30, 45, 20, 10, 5, 60, 123];
@@ -163,7 +138,7 @@ fn quals_to_probs(ins_qual: u8, del_qual: u8, gap_qual: u8) -> Vec<f64> {
 }
 
 struct QualsToTransProbsDataProvider {
-    read_length_iterator: Box<Iterator<Item = usize>>,
+    read_length_iterator: Box<dyn Iterator<Item = usize>>,
     quals_iterator: QualIterator,
 }
 
