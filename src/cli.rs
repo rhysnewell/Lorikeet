@@ -320,7 +320,7 @@ fn threads_options() -> Section {
             "Number of genomes to run in parallel. \
                      Increases memory usage linearly. \
                      Thread usage qill not exceed the value \
-                     provided by --threads [default 2] \n",
+                     provided by --threads [default 1] \n",
         ))
 }
 
@@ -1400,7 +1400,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("parallel-genomes")
                         .short('p').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("2"),
+                        .default_value("1"),
                 )
                 .arg(
                     Arg::new("mapper")
@@ -2185,7 +2185,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("parallel-genomes")
                         .short('p').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("2"),
+                        .default_value("1"),
                 )
                 .arg(
                     Arg::new("mapper")
@@ -2965,7 +2965,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::new("parallel-genomes")
                         .short('p').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
-                        .default_value("2"),
+                        .default_value("1"),
                 )
                 .arg(
                     Arg::new("mapper")

@@ -1,5 +1,6 @@
 use glob::glob;
 use indicatif::{ProgressBar, ProgressStyle};
+// use rayon::prelude::*;
 use rust_htslib::bam;
 use std::collections::HashMap;
 use std::path::Path;
@@ -32,6 +33,11 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     let pb1 = ProgressBar::new(bams.len() as u64);
     pb1.set_style(sty);
     pb1.enable_steady_tick(Duration::from_millis(200));
+
+    // bams.into_iter().par_bridge(|bam_generator| {
+
+    // });
+
     for bam_generator in bams {
         let mut bam = bam_generator.start();
         // bam.set_threads(std::cmp::max(n_threads / 2, 1));

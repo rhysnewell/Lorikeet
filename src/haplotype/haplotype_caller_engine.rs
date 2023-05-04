@@ -394,10 +394,10 @@ impl HaplotypeCallerEngine {
 
         let chunk_size = max(250000, max_assembly_region_size * 5);
         let contexts = tids
-            .into_iter()
+            .into_par_iter()
             .map(|tid| {
                 let target_length = reference_reader.target_lens[&tid];
-                // let mut reference_reader = reference_reader.clone();
+                let mut reference_reader = reference_reader.clone();
                 reference_reader.update_current_sequence_capacity(target_length as usize);
                 // Update all contig information
                 let retrieved =
