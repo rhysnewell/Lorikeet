@@ -5,7 +5,7 @@
 
 
 use lorikeet_genome::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
-use lorikeet_genome::graphs::base_graph::{BaseGraph, TestGraph};
+use lorikeet_genome::graphs::base_graph::{TestGraph};
 use lorikeet_genome::graphs::seq_graph::SeqGraph;
 use lorikeet_genome::graphs::seq_vertex::SeqVertex;
 use lorikeet_genome::graphs::vertex_based_transformer::VertexBasedTransformer;
@@ -231,7 +231,7 @@ fn make_linear_zip_data() {
         test_linear_zip(&graph, &graph);
 
         graph.base_graph.graph.remove_edge(c1_c1_index);
-        let g1_g1_index = graph.base_graph.graph.add_edge(
+        let _g1_g1_index = graph.base_graph.graph.add_edge(
             node_indices[2],
             node_indices[2],
             BaseEdgeStruct::new(false, 1, 0),
@@ -342,7 +342,7 @@ fn make_linear_zip_data() {
 
 fn make_vertices(n: usize) -> Vec<SeqVertex> {
     let mut vs = Vec::new();
-    let mut bases = vec!["A", "C", "G", "T", "TT", "GG", "CC", "AA"];
+    let bases = vec!["A", "C", "G", "T", "TT", "GG", "CC", "AA"];
 
     for i in 0..n {
         vs.push(SeqVertex::new(bases[i % bases.len()].as_bytes().to_vec()));
@@ -384,7 +384,7 @@ fn make_merging_data() {
     let pre1_index = graph.base_graph.add_node(&pre1);
     test_merging(&graph, &graph);
 
-    let mut top_index;
+    let top_index;
     // pre1 -> top = pre1 + top
     {
         top_index = graph.base_graph.add_node(&top);
@@ -399,7 +399,7 @@ fn make_merging_data() {
         test_merging(&graph, &expected);
     }
 
-    let mut middle1_index;
+    let middle1_index;
     // pre1 -> top -> middle1 = pre1 + top + middle1
     {
         middle1_index = graph.base_graph.add_node(&middle1);
@@ -421,7 +421,7 @@ fn make_merging_data() {
         test_merging(&graph, &expected);
     }
 
-    let mut middle2_index;
+    let middle2_index;
     // pre1 -> top -> middle1 & top -> middle2 = pre1 + top -> middle1 & -> middle2
     {
         middle2_index = graph.base_graph.add_node(&middle2);
@@ -449,9 +449,9 @@ fn make_merging_data() {
         test_merging(&graph, &expected);
     }
 
-    let mut bottom_index;
-    let mut middle3_index;
-    let mut middle4_index;
+    let bottom_index;
+    let middle3_index;
+    let middle4_index;
     // An actual diamond event to merge!
     {
         bottom_index = graph.base_graph.add_node(&bottom);

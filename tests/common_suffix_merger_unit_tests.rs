@@ -41,7 +41,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
     for common_suffix in vec!["", "A", "AT"] {
         for n_bots in vec![0, 1, 2] {
             for n_mids in vec![1, 2, 3] {
-                for n_tops in 0..n_mids {
+                for _n_tops in 0..n_mids {
                     for n_top_connections in 1..=n_mids {
                         let mut multi = 1;
                         let mut graph = SeqGraph::new(11);
@@ -121,7 +121,7 @@ fn test_merging_function() -> Box<dyn Fn(SplitMergeData)> {
 }
 
 fn assert_same_haplotypes(
-    name: String,
+    _name: String,
     mut actual: SeqGraph<BaseEdgeStruct>,
     mut original: SeqGraph<BaseEdgeStruct>,
 ) {

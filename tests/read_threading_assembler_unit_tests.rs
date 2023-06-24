@@ -147,7 +147,7 @@ fn assemble(
 }
 
 fn test_assemble_ref_and_snp(
-    mut assembler: ReadThreadingAssembler,
+    assembler: ReadThreadingAssembler,
     loc: SimpleInterval,
     n_reads_to_use: usize,
     variant_site: usize,
@@ -172,7 +172,7 @@ fn test_assemble_ref_and_snp(
         false,
     );
 
-    let mut vcb = VariantContext::build(
+    let vcb = VariantContext::build(
         loc.get_contig(),
         variant_site,
         variant_site,
@@ -182,7 +182,7 @@ fn test_assemble_ref_and_snp(
 }
 
 fn test_assemble_ref_and_deletion(
-    mut assembler: ReadThreadingAssembler,
+    _assembler: ReadThreadingAssembler,
     loc: SimpleInterval,
     n_reads_to_use: usize,
     variant_site: usize,
@@ -203,13 +203,13 @@ fn test_assemble_ref_and_deletion(
             true,
         );
         let alt_base = ByteArrayAllele::new(&ref_base.get_bases()[0..=0], false);
-        let mut vcb = VariantContext::build(
+        let vcb = VariantContext::build(
             loc.get_contig(),
             variant_site,
             variant_site + deletion_length,
             vec![ref_base, alt_base],
         );
-        let mut assembler = ReadThreadingAssembler::default();
+        let assembler = ReadThreadingAssembler::default();
 
         test_assembly_with_variant(
             assembler,
@@ -223,7 +223,7 @@ fn test_assemble_ref_and_deletion(
 }
 
 fn test_assemble_ref_and_insertion(
-    mut assembler: ReadThreadingAssembler,
+    _assembler: ReadThreadingAssembler,
     loc: SimpleInterval,
     n_reads_to_use: usize,
     variant_site: usize,
@@ -244,9 +244,9 @@ fn test_assemble_ref_and_insertion(
             &ref_bases[variant_site..=(variant_site + insertion_length + 1)],
             false,
         );
-        let mut assembler = ReadThreadingAssembler::default();
+        let assembler = ReadThreadingAssembler::default();
 
-        let mut vcb = VariantContext::build(
+        let vcb = VariantContext::build(
             loc.get_contig(),
             variant_site,
             variant_site + insertion_length,
@@ -285,7 +285,7 @@ fn test_assembly_with_variant(
     let mut counter = 0;
     let quals = vec![30; alt_bases.len()];
     let cigar = format!("{}M", alt_bases.len());
-    for i in 0..n_reads_to_use {
+    for _i in 0..n_reads_to_use {
         let bases = alt_bases.as_bytes();
         let read = ArtificialReadUtils::create_artificial_read_with_name_and_pos(
             format!("{}_{}", loc.get_contig(), counter),
@@ -418,7 +418,7 @@ fn make_assemble_intervals_with_insertion_data() {
 }
 
 fn test_simple_assembly(
-    name: &str,
+    _name: &str,
     mut assembler: ReadThreadingAssembler,
     loc: SimpleInterval,
     reference: &str,
@@ -431,7 +431,7 @@ fn test_simple_assembly(
     let quals = vec![30; alt_bases.len()];
     let cigar = format!("{}M", alt_bases.len());
     let mut reads = Vec::new();
-    for i in 0..20 {
+    for _i in 0..20 {
         let bases = alt_bases;
         let quals = quals.as_slice();
         let cigar = cigar.as_str();

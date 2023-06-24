@@ -6,24 +6,24 @@
 #[macro_use]
 extern crate approx;
 
-use itertools::Itertools;
-use lorikeet_genome::activity_profile::activity_profile::{ActivityProfile, Profile};
+
+use lorikeet_genome::activity_profile::activity_profile::{Profile};
 use lorikeet_genome::activity_profile::activity_profile_state::{ActivityProfileState, ActivityProfileDataType};
 use lorikeet_genome::activity_profile::band_pass_activity_profile::BandPassActivityProfile;
-use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
-use lorikeet_genome::haplotype::event_map::EventMap;
-use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
-use lorikeet_genome::model::variant_context::VariantContext;
-use lorikeet_genome::model::variant_context_utils::VariantContextUtils;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::reference::reference_reader::ReferenceReader;
+
+
+
+
+
+
+
+
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
 use lorikeet_genome::utils::math_utils::MathUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use rust_htslib::bam::record::{Cigar, CigarString};
+use lorikeet_genome::utils::simple_interval::{SimpleInterval};
+
 use std::cmp::{max, min};
-use std::convert::TryFrom;
+
 
 const MAX_PROB_PROPAGATION_DISTANCE: usize = 50;
 const ACTIVE_PROB_THRESHOLD: f32 = 0.002;
@@ -89,7 +89,7 @@ fn test_band_pass(
 
 #[test]
 fn make_band_pass_test() {
-    let mut ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
+    let ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
 
     let contig_len = ref_reader.index.sequences()[0].len as usize;
     for start in vec![1, 10, 100, 1000] {
@@ -121,9 +121,9 @@ fn band_pass_in_one_pass(
     let mut band_pass_prob_array = vec![0.0; active_prob_array.len()];
 
     // apply the band pass filter for activeProbArray into filteredProbArray
-    let mut gaussian_kernel = &profile.gaussian_kernel;
+    let gaussian_kernel = &profile.gaussian_kernel;
     for iii in 0..active_prob_array.len() {
-        let kernel = &gaussian_kernel[max((profile.get_filtered_size() as i64 - iii as i64), 0)
+        let kernel = &gaussian_kernel[max(profile.get_filtered_size() as i64 - iii as i64, 0)
             as usize
             ..min(
                 gaussian_kernel.len(),
@@ -131,7 +131,7 @@ fn band_pass_in_one_pass(
             )];
 
         let active_prob_sub_array =
-            &active_prob_array[max((iii as i64 - profile.get_filtered_size() as i64), 0) as usize
+            &active_prob_array[max(iii as i64 - profile.get_filtered_size() as i64, 0) as usize
                 ..min(
                     active_prob_array.len(),
                     iii + profile.get_filtered_size() + 1,
@@ -168,7 +168,7 @@ fn test_band_pass_composition(
     // add a buffer so that we can get all of the band pass values
     let mut pos = start;
     let mut raw_prob_offset = 0;
-    for i in 0..band_pass_size {
+    for _i in 0..band_pass_size {
         let loc = SimpleInterval::new(tid, pos, pos);
         pos += 1;
         let state = ActivityProfileState::new(loc, 0.0, ActivityProfileDataType::None);
@@ -178,7 +178,7 @@ fn test_band_pass_composition(
         raw_active_probs[raw_active_prob_len - raw_prob_offset] = 0.0;
     }
 
-    for i in 0..integration_length {
+    for _i in 0..integration_length {
         let next_loc = SimpleInterval::new(tid, pos, pos);
         pos += 1;
         profile.add(ActivityProfileState::new(next_loc, 1.0, ActivityProfileDataType::None));
@@ -218,7 +218,7 @@ fn test_band_pass_composition(
 
 #[test]
 fn make_band_pass_composition() {
-    let mut ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
+    let ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
 
     let contig_len = ref_reader.index.sequences()[0].len as usize;
     for band_pass_size in vec![0, 1, 10, 100, BandPassActivityProfile::MAX_FILTER_SIZE] {
@@ -252,7 +252,7 @@ fn test_kernel_creation(sigma: f64, max_size: usize, contig_len: usize, expected
 
 #[test]
 fn make_kernel_creation() {
-    let mut ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
+    let ref_reader = ReferenceReaderUtils::generate_faidx(b37_reference_20_21);
 
     let contig_len = ref_reader.index.sequences()[0].len as usize;
     test_kernel_creation(0.01, 1000, contig_len, vec![1.0]);

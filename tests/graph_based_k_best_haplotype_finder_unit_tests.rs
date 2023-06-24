@@ -20,7 +20,7 @@ use lorikeet_genome::model::byte_array_allele::Allele;
 use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use lorikeet_genome::reads::cigar_builder::CigarBuilder;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
+    NEW_SW_PARAMETERS,
 };
 use lorikeet_genome::utils::simple_interval::SimpleInterval;
 use petgraph::prelude::NodeIndex;
@@ -63,7 +63,7 @@ fn test_score() {
         .base_graph
         .get_sinks_generic()
         .collect::<HashSet<NodeIndex>>();
-    let mut finder = GraphBasedKBestHaplotypeFinder::new(&mut g.base_graph, sources, sinks);
+    let finder = GraphBasedKBestHaplotypeFinder::new(&mut g.base_graph, sources, sinks);
     assert_eq!(finder.k_best_haplotype_finder.sources.len(), 1);
     assert_eq!(finder.k_best_haplotype_finder.sinks.len(), 3);
 
@@ -113,7 +113,7 @@ fn test_cycle_remove() {
         .base_graph
         .get_sinks_generic()
         .collect::<HashSet<NodeIndex>>();
-    let mut finder = GraphBasedKBestHaplotypeFinder::new(&mut g.base_graph, sources, sinks);
+    let finder = GraphBasedKBestHaplotypeFinder::new(&mut g.base_graph, sources, sinks);
     assert_eq!(finder.k_best_haplotype_finder.sources.len(), 1);
     assert_eq!(finder.k_best_haplotype_finder.sinks.len(), 1);
 }
@@ -137,16 +137,16 @@ fn test_no_source_or_sink() {
         .base_graph
         .get_sinks_generic()
         .collect::<HashSet<NodeIndex>>();
-    let mut finder =
+    let finder =
         GraphBasedKBestHaplotypeFinder::new(&mut g.base_graph, sources.clone(), sinks.clone());
     assert_eq!(finder.k_best_haplotype_finder.sources.len(), 1);
     assert_eq!(finder.k_best_haplotype_finder.sinks.len(), 1);
 
-    let mut finder = GraphBasedKBestHaplotypeFinder::new(&mut g.base_graph, HashSet::new(), sinks);
+    let finder = GraphBasedKBestHaplotypeFinder::new(&mut g.base_graph, HashSet::new(), sinks);
     assert_eq!(finder.k_best_haplotype_finder.sources.len(), 0);
     assert_eq!(finder.k_best_haplotype_finder.sinks.len(), 1);
 
-    let mut finder =
+    let finder =
         GraphBasedKBestHaplotypeFinder::new(&mut g.base_graph, sources, HashSet::new());
     assert_eq!(finder.k_best_haplotype_finder.sources.len(), 1);
     assert_eq!(finder.k_best_haplotype_finder.sinks.len(), 0);
@@ -187,11 +187,11 @@ fn test_dead_node() {
         .get_sinks_generic()
         .collect::<HashSet<NodeIndex>>();
     let mut g_copy = g.clone();
-    let mut finder = GraphBasedKBestHaplotypeFinder::new(&mut g_copy.base_graph, sources, sinks);
+    let finder = GraphBasedKBestHaplotypeFinder::new(&mut g_copy.base_graph, sources, sinks);
     assert_eq!(finder.k_best_haplotype_finder.sources.len(), 1);
     assert_eq!(finder.k_best_haplotype_finder.sinks.len(), 2);
 
-    let mut finder =
+    let finder =
         GraphBasedKBestHaplotypeFinder::new_from_singletons(&mut g.base_graph, nodes[0], nodes[3]);
     assert_eq!(finder.k_best_haplotype_finder.sources.len(), 1);
     assert_eq!(finder.k_best_haplotype_finder.sinks.len(), 1);
@@ -213,7 +213,7 @@ fn test_basic_path_finding(n_start_nodes: usize, n_branches_per_bubble: usize, n
         Some(source_sink[0]),
         &mut weight,
     );
-    let bubbles = create_vertices(
+    let _bubbles = create_vertices(
         &mut graph,
         n_branches_per_bubble,
         Some(source_sink[0]),
@@ -244,10 +244,10 @@ fn create_vertices(
     target: Option<NodeIndex>,
     weight: &mut usize,
 ) -> HashSet<NodeIndex> {
-    let mut seqs = vec![b"A".to_vec(), b"C".to_vec(), b"G".to_vec(), b"T".to_vec()];
+    let seqs = vec![b"A".to_vec(), b"C".to_vec(), b"G".to_vec(), b"T".to_vec()];
     let mut vertices = HashSet::new();
     for i in 0..n {
-        let mut v = SeqVertex::new(seqs[i].clone());
+        let v = SeqVertex::new(seqs[i].clone());
         let node = graph.base_graph.add_node(&v);
         vertices.insert(node);
         match source {
@@ -442,11 +442,11 @@ fn test_triple_bubble_data(
         .base_graph
         .graph
         .add_edge(pre_v_i, v_i, BaseEdgeStruct::new(false, 1, 0));
-    let r1_i = graph
+    let _r1_i = graph
         .base_graph
         .graph
         .add_edge(v_i, v2_ref_i, BaseEdgeStruct::new(true, 10, 0));
-    let r2_i = graph
+    let _r2_i = graph
         .base_graph
         .graph
         .add_edge(v2_ref_i, v3_i, BaseEdgeStruct::new(true, 10, 0));
@@ -466,19 +466,19 @@ fn test_triple_bubble_data(
         .base_graph
         .graph
         .add_edge(v4_ref_i, v5_i, BaseEdgeStruct::new(true, 10, 0));
-    let a3_i = graph
+    let _a3_i = graph
         .base_graph
         .graph
         .add_edge(v3_i, v4_alt_i, BaseEdgeStruct::new(false, 5, 0));
-    let a4_i = graph
+    let _a4_i = graph
         .base_graph
         .graph
         .add_edge(v4_alt_i, v5_i, BaseEdgeStruct::new(false, 5, 0));
-    let r5_i = graph
+    let _r5_i = graph
         .base_graph
         .graph
         .add_edge(v5_i, v6_ref_i, BaseEdgeStruct::new(true, 11, 0));
-    let r6_i = graph
+    let _r6_i = graph
         .base_graph
         .graph
         .add_edge(v6_ref_i, v7_i, BaseEdgeStruct::new(true, 11, 0));

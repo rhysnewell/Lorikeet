@@ -66,7 +66,7 @@ impl ReadClipperTestUtils {
     pub fn array_from_array_with_length(array: &[u8], length: usize) -> Vec<u8> {
         let mut output = vec![0; length];
         for j in 0..length {
-            output[j] = array[(j % array.len())]
+            output[j] = array[j % array.len()]
         }
 
         return output;

@@ -29,7 +29,7 @@ fn test_qual_to_probs(ins_qual: u8, del_qual: u8, gcp: u8, expected: Vec<f64>) {
 }
 
 fn test_qual_to_probs_log10(ins_qual: u8, del_qual: u8, gcp: u8, expected: Vec<f64>) {
-    let mut log_expected = expected
+    let log_expected = expected
         .into_iter()
         .map(|v| v.log10())
         .collect::<Vec<f64>>();
@@ -80,7 +80,7 @@ fn assert_equals_double_array(actual: &[f64], expected: &[f64], tolerance: f64) 
 
 #[test]
 fn make_test_qual_to_probs() {
-    let mut qual_to_probs_data_provider = QualsToProbsDataProvider::new();
+    let qual_to_probs_data_provider = QualsToProbsDataProvider::new();
     for (ins_qual, del_qual, gcp, expected) in qual_to_probs_data_provider.into_iter() {
         test_qual_to_probs(ins_qual, del_qual, gcp, expected);
     }
@@ -88,7 +88,7 @@ fn make_test_qual_to_probs() {
 
 #[test]
 fn make_test_qual_to_probs_log10() {
-    let mut qual_to_probs_data_provider = QualsToProbsDataProvider::new();
+    let qual_to_probs_data_provider = QualsToProbsDataProvider::new();
     for (ins_qual, del_qual, gcp, expected) in qual_to_probs_data_provider.into_iter() {
         test_qual_to_probs_log10(ins_qual, del_qual, gcp, expected);
     }
@@ -96,7 +96,7 @@ fn make_test_qual_to_probs_log10() {
 
 #[test]
 fn make_test_quals_to_trans_probs() {
-    let mut qual_to_trans_probs_data_provider = QualsToTransProbsDataProvider::new();
+    let qual_to_trans_probs_data_provider = QualsToTransProbsDataProvider::new();
     for (ins_quals, del_quals, gap_quals, expected) in qual_to_trans_probs_data_provider.into_iter()
     {
         test_quals_to_trans_probs(ins_quals, del_quals, gap_quals, expected)
