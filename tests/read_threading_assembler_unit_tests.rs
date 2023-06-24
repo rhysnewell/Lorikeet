@@ -131,7 +131,9 @@ fn assemble(
         AssemblyRegion::new(loc.clone(), true, 0, contig_len, loc.get_contig(), 0, 0.0);
     active_region.add_all(reads);
     let samples = vec!["sample_1".to_string()];
-    let assembly_result_set = assembler.run_local_assembly(
+    
+
+    assembler.run_local_assembly(
         active_region,
         ref_haplotype,
         ref_bases.to_vec(),
@@ -141,9 +143,7 @@ fn assemble(
         *NEW_SW_PARAMETERS,
         AVXMode::detect_mode(),
         None
-    );
-
-    assembly_result_set
+    )
 }
 
 fn test_assemble_ref_and_snp(
