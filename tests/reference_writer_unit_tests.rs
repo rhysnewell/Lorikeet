@@ -14,9 +14,9 @@ use lorikeet_genome::reference::reference_writer::ReferenceWriter;
 
 #[test]
 fn test_indel_offsetting() {
-    let mut bases = vec!['A' as u8; 100];
+    let mut bases = vec![b'A'; 100];
     let mut offset = 0;
-    bases.splice(3.., vec!['G' as u8; 97].into_iter());
+    bases.splice(3.., vec![b'G'; 97].into_iter());
     let original_bases = bases.clone();
 
     let snp_allele = ByteArrayAllele::new(b"T", false);
@@ -24,11 +24,11 @@ fn test_indel_offsetting() {
     let mut snp_vc = VariantContext::build(0, 0, 0, vec![ref_allele.clone(), snp_allele.clone()]);
 
     let mut expected_bases = bases.clone();
-    expected_bases[0] = 'T' as u8;
+    expected_bases[0] = b'T';
 
     ReferenceWriter::modify_reference_bases_based_on_variant_type(
         &mut bases,
-        snp_allele.clone(),
+        snp_allele,
         &mut snp_vc,
         VariantType::Snp,
         &mut offset,
@@ -45,13 +45,13 @@ fn test_indel_offsetting() {
 
     let insertion_allele = ByteArrayAllele::new(b"ACCCCCC", false);
     let mut insertion_vc =
-        VariantContext::build(0, 1, 1, vec![ref_allele.clone(), insertion_allele.clone()]);
+        VariantContext::build(0, 1, 1, vec![ref_allele, insertion_allele.clone()]);
 
-    expected_bases.splice(2..2, vec!['C' as u8; 6].into_iter());
+    expected_bases.splice(2..2, vec![b'C'; 6].into_iter());
 
     ReferenceWriter::modify_reference_bases_based_on_variant_type(
         &mut bases,
-        insertion_allele.clone(),
+        insertion_allele,
         &mut insertion_vc,
         VariantType::Indel,
         &mut offset,
@@ -76,13 +76,13 @@ fn test_indel_offsetting() {
     let deletion_allele = ByteArrayAllele::new(b"A", false);
     let ref_allele = ByteArrayAllele::new(b"AAAAAA", true);
     let mut deletion_vc =
-        VariantContext::build(0, 2, 7, vec![ref_allele.clone(), deletion_allele.clone()]);
+        VariantContext::build(0, 2, 7, vec![ref_allele, deletion_allele.clone()]);
 
-    expected_bases.splice(9..=13, vec!['A' as u8; 1].into_iter().skip(1));
+    expected_bases.splice(9..=13, vec![b'A'; 1].into_iter().skip(1));
 
     ReferenceWriter::modify_reference_bases_based_on_variant_type(
         &mut bases,
-        deletion_allele.clone(),
+        deletion_allele,
         &mut deletion_vc,
         VariantType::Indel,
         &mut offset,

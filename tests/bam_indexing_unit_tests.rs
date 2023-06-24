@@ -31,7 +31,7 @@ fn test_fetch_coordinates() {
     let mut records = Vec::new();
     let mut record = Record::new();
     // let mut first = true;
-    while bam_generated.read(&mut record) == true {
+    while bam_generated.read(&mut record) {
         assert!(record.pos() <= stop);
         records.push(record.clone());
     }

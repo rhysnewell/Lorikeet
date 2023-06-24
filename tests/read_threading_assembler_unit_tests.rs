@@ -104,7 +104,7 @@ fn make_assemble_intervals_data() {
         "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
     ));
 
-    for start_i in (start..end).into_iter().step_by(step_size) {
+    for start_i in (start..end).step_by(step_size) {
         let end_i = start_i + window_size;
         let ref_loc = SimpleInterval::new(0, start_i, end_i);
         test_assemble_ref(
@@ -135,7 +135,7 @@ fn assemble(
         active_region,
         ref_haplotype,
         ref_bases.to_vec(),
-        loc.clone(),
+        loc,
         &samples,
         *STANDARD_NGS,
         *NEW_SW_PARAMETERS,
@@ -143,7 +143,7 @@ fn assemble(
         None
     );
 
-    return assembly_result_set;
+    assembly_result_set
 }
 
 fn test_assemble_ref_and_snp(
@@ -339,11 +339,10 @@ fn make_assemble_intervals_with_variant_data() {
         "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
     ));
 
-    for start_i in (start..end).into_iter().step_by(step_size) {
+    for start_i in (start..end).step_by(step_size) {
         let end_i = start_i + window_size;
         let ref_loc = SimpleInterval::new(0, start_i, end_i);
         for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
-            .into_iter()
             .step_by(variant_step_size)
         {
             test_assemble_ref_and_snp(
@@ -369,11 +368,10 @@ fn make_assemble_intervals_with_deletion_data() {
         "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
     ));
 
-    for start_i in (start..end).into_iter().step_by(step_size) {
+    for start_i in (start..end).step_by(step_size) {
         let end_i = start_i + window_size;
         let ref_loc = SimpleInterval::new(0, start_i, end_i);
         for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
-            .into_iter()
             .step_by(variant_step_size)
         {
             test_assemble_ref_and_deletion(
@@ -399,11 +397,10 @@ fn make_assemble_intervals_with_insertion_data() {
         "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
     ));
 
-    for start_i in (start..end).into_iter().step_by(step_size) {
+    for start_i in (start..end).step_by(step_size) {
         let end_i = start_i + window_size;
         let ref_loc = SimpleInterval::new(0, start_i, end_i);
         for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
-            .into_iter()
             .step_by(variant_step_size)
         {
             test_assemble_ref_and_insertion(
@@ -458,7 +455,7 @@ fn test_simple_assembly(
         &mut ref_haplotype,
     )
     .get_haplotype_list();
-    assert!(haplotypes.len() > 0, "Failed to find ref haplotype");
+    assert!(!haplotypes.is_empty(), "Failed to find ref haplotype");
     assert_eq!(&haplotypes[0], &ref_haplotype);
 
     assert_eq!(haplotypes.len(), 2, "Failed to find single alt haplotype");
@@ -546,14 +543,14 @@ impl TestAssembler {
             &reads,
             &ref_haplotype,
             sample_names.as_slice(),
-            &*DANGLING_END_SW_PARAMETERS,
+            &DANGLING_END_SW_PARAMETERS,
             AVXMode::detect_mode(),
             None
         )[0]
         .clone()
         .get_seq_graph();
 
-        return graph.unwrap();
+        graph.unwrap()
     }
 }
 

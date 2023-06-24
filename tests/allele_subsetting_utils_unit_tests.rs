@@ -48,7 +48,7 @@ fn test_update_pls_and_ad_data(
             selected_vc_with_gts.get_alleles(),
             &gpc,
             &GenotypeAssignmentMethod::DoNotAssignGenotypes,
-            original_vc.get_attribute_as_int(&*DEPTH_KEY, 0) as i64,
+            original_vc.get_attribute_as_int(&DEPTH_KEY, 0) as i64,
             false,
         )
     };
@@ -80,8 +80,8 @@ fn make_update_pls_sacs_and_ad_data() {
     // let mut base = Genotype::build_from_alleles(Vec::new(), "NA12878".to_string());
 
     // the simple case where no selection occurs
-    let mut aa_gt = Genotype::build_from_alleles(AA.clone(), "NA12878".to_string());
-    aa_gt.pl = GenotypeLikelihoods::from_log10_likelihoods(hom_ref_pl.clone()).as_pls();
+    let mut aa_gt = Genotype::build_from_alleles(AA, "NA12878".to_string());
+    aa_gt.pl = GenotypeLikelihoods::from_log10_likelihoods(hom_ref_pl).as_pls();
     aa_gt.ad = vec![10, 10];
     aa_gt.attribute(
         STRAND_COUNT_BY_SAMPLE_KEY.to_string(),
@@ -90,7 +90,7 @@ fn make_update_pls_sacs_and_ad_data() {
     aa_gt.gq = 8;
 
     let mut ac_gt = Genotype::build_from_alleles(AC.clone(), "NA12878".to_string());
-    ac_gt.pl = GenotypeLikelihoods::from_log10_likelihoods(het_pl.clone()).as_pls();
+    ac_gt.pl = GenotypeLikelihoods::from_log10_likelihoods(het_pl).as_pls();
     ac_gt.ad = vec![10, 2];
     ac_gt.attribute(
         STRAND_COUNT_BY_SAMPLE_KEY.to_string(),
@@ -99,7 +99,7 @@ fn make_update_pls_sacs_and_ad_data() {
     ac_gt.gq = 8;
 
     let mut cc_gt = Genotype::build_from_alleles(CC.clone(), "NA12878".to_string());
-    cc_gt.pl = GenotypeLikelihoods::from_log10_likelihoods(hom_var_pl.clone()).as_pls();
+    cc_gt.pl = GenotypeLikelihoods::from_log10_likelihoods(hom_var_pl).as_pls();
     cc_gt.ad = vec![10, 2];
     cc_gt.attribute(
         STRAND_COUNT_BY_SAMPLE_KEY.to_string(),
@@ -123,16 +123,16 @@ fn make_update_pls_sacs_and_ad_data() {
     test_update_pls_and_ad_data(vc_cc, vc_base.clone(), vec![cc_gt.clone()]);
 
     // uninformative test cases
-    let mut uninformative_gt = Genotype::build_from_alleles(CC.clone(), "NA12878".to_string());
+    let mut uninformative_gt = Genotype::build_from_alleles(CC, "NA12878".to_string());
     uninformative_gt.pl =
-        GenotypeLikelihoods::from_log10_likelihoods(uninformative.clone()).as_pls();
+        GenotypeLikelihoods::from_log10_likelihoods(uninformative).as_pls();
     uninformative_gt.gq = 0;
     let mut vc_uninformative = vc_base.clone();
     vc_uninformative.add_genotypes(vec![uninformative_gt.clone()]);
     test_update_pls_and_ad_data(
         vc_uninformative,
         vc_base.clone(),
-        vec![uninformative_gt.clone()],
+        vec![uninformative_gt],
     );
 
     let empty_gt = Genotype::build_from_alleles(
@@ -141,7 +141,7 @@ fn make_update_pls_sacs_and_ad_data() {
     );
     let mut vc_empty = vc_base.clone();
     vc_empty.add_genotypes(vec![empty_gt.clone()]);
-    test_update_pls_and_ad_data(vc_empty, vc_base.clone(), vec![empty_gt.clone()]);
+    test_update_pls_and_ad_data(vc_empty, vc_base.clone(), vec![empty_gt]);
 
     // actually subsetting down from multiple alt values
     // let homRef3AllelesPL = vec![0.0, -30.0, -60.0, -30.0, -60.0, -60.0];
@@ -177,7 +177,7 @@ fn make_update_pls_sacs_and_ad_data() {
         Genotype::build_from_alleles(vec![A_ref.clone()], "NA12878".to_string());
     genotype_a_ref.ad = homRef3AllelesAD.clone();
     genotype_a_ref.pl = GenotypeLikelihoods::from_log10_likelihoods(haploidRef3AllelesPL).as_pls();
-    vc_acg.genotypes = GenotypesContext::new(vec![genotype_a_ref.clone()]);
+    vc_acg.genotypes = GenotypesContext::new(vec![genotype_a_ref]);
 
     let mut vc_ac = vc_base.clone();
     vc_ac.alleles = AC.clone();
@@ -188,14 +188,14 @@ fn make_update_pls_sacs_and_ad_data() {
         GenotypeLikelihoods::from_log10_likelihoods(vec![0.0, -50.0]).as_pls();
     genotype_a_ref_expected.ad = vec![20, 0];
     genotype_a_ref_expected.gq = 500;
-    test_update_pls_and_ad_data(vc_acg.clone(), vc_ac, vec![genotype_a_ref_expected]);
+    test_update_pls_and_ad_data(vc_acg, vc_ac, vec![genotype_a_ref_expected]);
 
     let mut vc_acg = vc_base.clone();
     vc_acg.alleles = ACG.clone();
     let mut genotype_c = Genotype::build_from_alleles(vec![C.clone()], "NA12878".to_string());
-    genotype_c.ad = homC3AllelesAD.clone();
+    genotype_c.ad = homC3AllelesAD;
     genotype_c.pl = GenotypeLikelihoods::from_log10_likelihoods(haploidAltC3AllelesPL).as_pls();
-    vc_acg.genotypes = GenotypesContext::new(vec![genotype_c.clone()]);
+    vc_acg.genotypes = GenotypesContext::new(vec![genotype_c]);
 
     let mut vc_ac = vc_base.clone();
     vc_ac.alleles = AC.clone();
@@ -205,14 +205,14 @@ fn make_update_pls_sacs_and_ad_data() {
     genotype_c_expected.pl = GenotypeLikelihoods::from_log10_likelihoods(vec![-30.0, 0.0]).as_pls();
     genotype_c_expected.ad = vec![0, 20];
     genotype_c_expected.gq = 300;
-    test_update_pls_and_ad_data(vc_acg.clone(), vc_ac, vec![genotype_c_expected]);
+    test_update_pls_and_ad_data(vc_acg, vc_ac, vec![genotype_c_expected]);
 
     let mut vc_acg = vc_base.clone();
     vc_acg.alleles = ACG.clone();
     let mut genotype_g = Genotype::build_from_alleles(vec![G.clone()], "NA12878".to_string());
-    genotype_g.ad = homG3AllelesAD.clone();
+    genotype_g.ad = homG3AllelesAD;
     genotype_g.pl = GenotypeLikelihoods::from_log10_likelihoods(haploidAltG3AllelesPL).as_pls();
-    vc_acg.genotypes = GenotypesContext::new(vec![genotype_g.clone()]);
+    vc_acg.genotypes = GenotypesContext::new(vec![genotype_g]);
 
     let mut vc_ag = vc_base.clone();
     vc_ag.alleles = AG.clone();
@@ -222,7 +222,7 @@ fn make_update_pls_sacs_and_ad_data() {
     genotype_g_expected.pl = GenotypeLikelihoods::from_log10_likelihoods(vec![-40.0, 0.0]).as_pls();
     genotype_g_expected.ad = vec![0, 21];
     genotype_g_expected.gq = 400;
-    test_update_pls_and_ad_data(vc_acg.clone(), vc_ag, vec![genotype_g_expected]);
+    test_update_pls_and_ad_data(vc_acg, vc_ag, vec![genotype_g_expected]);
 
     let mut vc_acg = vc_base.clone();
     vc_acg.alleles = ACG.clone();
@@ -230,9 +230,9 @@ fn make_update_pls_sacs_and_ad_data() {
         vec![A_ref.clone(), A_ref.clone(), A_ref.clone()],
         "NA12878".to_string(),
     );
-    genotype_3a.ad = homRef3AllelesAD.clone();
+    genotype_3a.ad = homRef3AllelesAD;
     genotype_3a.pl = GenotypeLikelihoods::from_log10_likelihoods(triploidRef3AllelesPL).as_pls();
-    vc_acg.genotypes = GenotypesContext::new(vec![genotype_3a.clone()]);
+    vc_acg.genotypes = GenotypesContext::new(vec![genotype_3a]);
 
     let mut vc_ac = vc_base.clone();
     vc_ac.alleles = AC.clone();
@@ -245,7 +245,7 @@ fn make_update_pls_sacs_and_ad_data() {
         GenotypeLikelihoods::from_log10_likelihoods(vec![0.0, -30.0, -60.0, -90.0]).as_pls();
     genotype_3a_expected.ad = vec![20, 0];
     genotype_3a_expected.gq = 300;
-    test_update_pls_and_ad_data(vc_acg.clone(), vc_ac, vec![genotype_3a_expected]);
+    test_update_pls_and_ad_data(vc_acg, vc_ac, vec![genotype_3a_expected]);
 
     let mut vc_acg = vc_base.clone();
     vc_acg.alleles = ACG.clone();
@@ -253,12 +253,12 @@ fn make_update_pls_sacs_and_ad_data() {
         vec![A_ref.clone(), A_ref.clone(), C.clone()],
         "NA12878".to_string(),
     );
-    genotype_3a.ad = hetRefC3AllelesAD.clone();
+    genotype_3a.ad = hetRefC3AllelesAD;
     genotype_3a.pl = GenotypeLikelihoods::from_log10_likelihoods(triploidAltC3AllelesPL).as_pls();
-    vc_acg.genotypes = GenotypesContext::new(vec![genotype_3a.clone()]);
+    vc_acg.genotypes = GenotypesContext::new(vec![genotype_3a]);
 
     let mut vc_ac = vc_base.clone();
-    vc_ac.alleles = AC.clone();
+    vc_ac.alleles = AC;
 
     let mut genotype_3a_expected = Genotype::build_from_alleles(
         vec![A_ref.clone(), A_ref.clone(), C.clone()],
@@ -268,20 +268,20 @@ fn make_update_pls_sacs_and_ad_data() {
         GenotypeLikelihoods::from_log10_likelihoods(vec![-20.0, 0.0, -20.0, -50.0]).as_pls();
     genotype_3a_expected.ad = vec![14, 7];
     genotype_3a_expected.gq = 200;
-    test_update_pls_and_ad_data(vc_acg.clone(), vc_ac, vec![genotype_3a_expected]);
+    test_update_pls_and_ad_data(vc_acg, vc_ac, vec![genotype_3a_expected]);
 
     let mut vc_acg = vc_base.clone();
-    vc_acg.alleles = ACG.clone();
+    vc_acg.alleles = ACG;
     let mut genotype_3a = Genotype::build_from_alleles(
         vec![A_ref.clone(), A_ref.clone(), G.clone()],
         "NA12878".to_string(),
     );
-    genotype_3a.ad = hetRefG3AllelesAD.clone();
+    genotype_3a.ad = hetRefG3AllelesAD;
     genotype_3a.pl = GenotypeLikelihoods::from_log10_likelihoods(triploidAltG3AllelesPL).as_pls();
-    vc_acg.genotypes = GenotypesContext::new(vec![genotype_3a.clone()]);
+    vc_acg.genotypes = GenotypesContext::new(vec![genotype_3a]);
 
-    let mut vc_ac = vc_base.clone();
-    vc_ac.alleles = AG.clone();
+    let mut vc_ac = vc_base;
+    vc_ac.alleles = AG;
 
     let mut genotype_3a_expected = Genotype::build_from_alleles(
         vec![A_ref.clone(), A_ref.clone(), G.clone()],
@@ -291,7 +291,7 @@ fn make_update_pls_sacs_and_ad_data() {
         GenotypeLikelihoods::from_log10_likelihoods(vec![-20.0, 0.0, -20.0, -50.0]).as_pls();
     genotype_3a_expected.ad = vec![14, 7];
     genotype_3a_expected.gq = 200;
-    test_update_pls_and_ad_data(vc_acg.clone(), vc_ac, vec![genotype_3a_expected]);
+    test_update_pls_and_ad_data(vc_acg, vc_ac, vec![genotype_3a_expected]);
 }
 
 fn test_that_filtering_works_correctly(
@@ -383,8 +383,8 @@ fn test_calculate_likelihood_sums() {
     g3.pl = GenotypeLikelihoods::from_log10_likelihoods(vec![1.1, 4.1, 2.3]).as_pls();
     let g4 = Genotype::build_from_alleles(two_alleles.clone(), "sample4".to_string());
 
-    let mut vc1 = VariantContext::build(0, 1, 1, two_alleles.clone());
-    vc1.add_genotypes(vec![g1.clone(), g2.clone(), g3.clone(), g4.clone()]);
+    let mut vc1 = VariantContext::build(0, 1, 1, two_alleles);
+    vc1.add_genotypes(vec![g1, g2, g3, g4]);
     assert!(
         relative_eq!(
             AlleleSubsettingUtils::calculate_likelihood_sums(&vc1, 2, false)[1],
@@ -417,8 +417,8 @@ fn test_calculate_likelihood_sums() {
     g5.pl =
         GenotypeLikelihoods::from_log10_likelihoods(vec![0.0, 1.0, 0.0, 0.0, 0.0, 0.0]).as_pls();
 
-    let mut vc2 = VariantContext::build(0, 1, 1, three_alleles.clone());
-    vc2.add_genotypes(vec![g4.clone(), g5.clone()]);
+    let mut vc2 = VariantContext::build(0, 1, 1, three_alleles);
+    vc2.add_genotypes(vec![g4, g5]);
     let likelihood_sums = AlleleSubsettingUtils::calculate_likelihood_sums(&vc2, 2, false);
     assert!(
         relative_eq!(likelihood_sums[1], 4.1, epsilon = 1.0e-8),

@@ -25,7 +25,7 @@ fn main() {
     match matches.subcommand_name() {
         Some("summarise") => {
             let m = matches.subcommand_matches("summarise").unwrap();
-            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, summarise_full_help());
+            bird_tool_utils::clap_utils::print_full_help_if_needed(m, summarise_full_help());
             rayon::ThreadPoolBuilder::new()
                 .num_threads(*m.get_one::<usize>("threads").unwrap())
                 .build_global()
@@ -34,7 +34,7 @@ fn main() {
         }
         Some("genotype") => {
             let m = matches.subcommand_matches("genotype").unwrap();
-            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, genotype_full_help());
+            bird_tool_utils::clap_utils::print_full_help_if_needed(m, genotype_full_help());
             let mode = "genotype";
 
             match prepare_pileup(m, mode) {
@@ -44,7 +44,7 @@ fn main() {
         }
         Some("call") => {
             let m = matches.subcommand_matches("call").unwrap();
-            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, call_full_help());
+            bird_tool_utils::clap_utils::print_full_help_if_needed(m, call_full_help());
             let mode = "call";
 
             match prepare_pileup(m, mode) {
@@ -54,7 +54,7 @@ fn main() {
         }
         Some("consensus") => {
             let m = matches.subcommand_matches("consensus").unwrap();
-            bird_tool_utils::clap_utils::print_full_help_if_needed(&m, consensus_full_help());
+            bird_tool_utils::clap_utils::print_full_help_if_needed(m, consensus_full_help());
             let mode = "consensus";
 
             match prepare_pileup(m, mode) {
@@ -117,7 +117,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
     };
 
     let (concatenated_genomes, genomes_and_contigs_option) =
-        ReferenceReaderUtils::setup_genome_fasta_files(&m);
+        ReferenceReaderUtils::setup_genome_fasta_files(m);
     // debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
     if m.contains_id("bam-files") {
         let bam_files: Vec<&str> = m.get_many::<String>("bam-files").unwrap().map(|s| &**s).collect();
@@ -139,7 +139,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 let bam_files = m.get_many::<String>("longread-bam-files").unwrap().map(|s| &**s).collect();
                 let long_readers =
                     generate_named_bam_readers_from_bam_files(bam_files);
-                return run_pileup(
+                run_pileup(
                     m,
                     mode,
                     bam_readers,
@@ -148,11 +148,11 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                );
+                )
             } else if m.contains_id("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
-                    &m,
+                    m,
                     &concatenated_genomes,
                     &Some(references.clone()),
                     &tmp_dir,
@@ -187,7 +187,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 let bam_files = m.get_many::<String>("longread-bam-files").unwrap().map(|s| &**s).collect();
                 let long_readers =
                     generate_named_bam_readers_from_bam_files(bam_files);
-                return run_pileup(
+                run_pileup(
                     m,
                     mode,
                     bam_readers,
@@ -196,11 +196,11 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                );
+                )
             } else if m.contains_id("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
-                    &m,
+                    m,
                     &concatenated_genomes,
                     &Some(references.clone()),
                     &tmp_dir,
@@ -258,7 +258,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 let bam_files = m.get_many::<String>("longread-bam-files").unwrap().map(|s| &**s).collect();
                 let long_readers =
                     generate_named_bam_readers_from_bam_files(bam_files);
-                return run_pileup(
+                run_pileup(
                     m,
                     mode,
                     all_generators,
@@ -267,11 +267,11 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                );
+                )
             } else if m.contains_id("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
-                    &m,
+                    m,
                     &concatenated_genomes,
                     &Some(references.clone()),
                     &tmp_dir,
@@ -324,7 +324,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 let long_readers =
                     generate_named_bam_readers_from_bam_files(bam_files);
 
-                return run_pileup(
+                run_pileup(
                     m,
                     mode,
                     all_generators,
@@ -333,11 +333,11 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
-                );
+                )
             } else if m.contains_id("longreads") {
                 // Perform mapping
                 let (long_generators, _indices) = long_generator_setup(
-                    &m,
+                    m,
                     &concatenated_genomes,
                     &Some(references.clone()),
                     &tmp_dir,

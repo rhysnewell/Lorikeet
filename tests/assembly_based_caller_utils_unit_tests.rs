@@ -56,11 +56,11 @@ fn test_finalize_region() {
     let org_read2 = bam::Record::from_sam(&mut bam::HeaderView::from_header(&bam_header), "HWI-ST807:461:C2P0JACXX:4:2204:18080:5857\t163\t1\t42596891\t39\t101M\t=\t42596803\t7\tCTCGAATGGAATCATTTTCTACTGGAAAGGAATGGAATCATCGCATAGAATCGAATGGAATTAACATGGAATGGAATCGAATGTAATCATCATCAAATGGA\t>@>:ABCDECCCEDCBBBDDBDDEBCCBEBBCBEBCBCDDCD>DECBGCDCF>CCCFCDDCBABDEDFCDCDFFDDDG?DDEGDDFDHFEGDDGECB@BAA".as_bytes()).unwrap();
 
     let reads = vec![
-        BirdToolRead::new(org_read1.clone(), 0, ReadType::Short),
-        BirdToolRead::new(org_read2.clone(), 0, ReadType::Short),
+        BirdToolRead::new(org_read1, 0, ReadType::Short),
+        BirdToolRead::new(org_read2, 0, ReadType::Short),
     ];
 
-    active_region.add_all(reads.clone());
+    active_region.add_all(reads);
     let min_bq = 9;
 
     // NOTE: this test MUST be run with correctOverlappingBaseQualities enabled otherwise this test can succeed even with unsafe code
@@ -224,8 +224,8 @@ fn get_vcs_at_this_location_from_given_alleles_data() {
     snp_vc_expected.source = "Comp1Allele0".to_string();
     test_get_variant_contexts_from_given_alleles(
         1000,
-        vec![deletion_builder.clone(), snp_vc_builder.clone()],
-        vec![del_vc_expected.clone(), snp_vc_expected.clone()],
+        vec![deletion_builder.clone(), snp_vc_builder],
+        vec![del_vc_expected.clone(), snp_vc_expected],
     );
 
     // let mut del_vc_no_span_expected = deletion_vc_no_span.clone();
@@ -241,13 +241,13 @@ fn get_vcs_at_this_location_from_given_alleles_data() {
     test_get_variant_contexts_from_given_alleles(
         1000,
         vec![
-            deletion_builder.clone(),
-            deletion_builder_false_duplicate.clone(),
-            deletion_vc_no_span.clone(),
+            deletion_builder,
+            deletion_builder_false_duplicate,
+            deletion_vc_no_span,
         ],
         vec![
-            del_vc_expected.clone(),
-            del_vc_false_duplicate_expected.clone(),
+            del_vc_expected,
+            del_vc_false_duplicate_expected,
         ],
     );
 }
@@ -279,7 +279,7 @@ fn get_event_mapper_data() {
     let mut snp_haplotype = Haplotype::new(b"ACTGGTCAACTGGTCAACTGGTCAACTGGTCA", false);
     let ref_allele = ByteArrayAllele::new(b"A", true);
     let snp_allele = ByteArrayAllele::new(b"G", false);
-    let snp_alleles = vec![ref_allele.clone(), snp_allele.clone()];
+    let snp_alleles = vec![ref_allele, snp_allele];
     let mut snp_vc = VariantContext::build(20, 1000, 1000, snp_alleles.clone());
     snp_vc.set_type(VariantType::Snp);
     snp_haplotype.set_event_map(EventMap::state_for_testing(vec![snp_vc.clone()]));

@@ -59,7 +59,7 @@ fn test_trim(
 fn make_hcf_for_cigar(bases: &str, cigar: &str) -> Haplotype<SimpleInterval> {
     let mut h = Haplotype::new(bases.as_bytes(), false);
     h.set_cigar(CigarString::try_from(cigar).unwrap().0);
-    return h;
+    h
 }
 
 fn test_trim_leading_and_trailing_insertions(

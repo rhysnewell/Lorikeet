@@ -38,7 +38,7 @@ lazy_static! {
 }
 
 fn get_bytes(alignment: &str) -> String {
-    return alignment.replace("-", "");
+    alignment.replace('-', "")
 }
 
 fn assert_non_uniques(assembler: &mut ReadThreadingGraph, non_uniques: HashSet<Kmer>, pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers>>) {
@@ -621,7 +621,7 @@ fn test_dangling_tails(
         0,
         4,
         false,
-        &*DANGLING_END_SW_PARAMETERS,
+        &DANGLING_END_SW_PARAMETERS,
     );
 
     match result {
@@ -633,7 +633,7 @@ fn test_dangling_tails(
                 result.cigar.to_string(),
                 cigar.to_string(),
                 "SW generated cigar = {}",
-                result.cigar.to_string()
+                result.cigar
             );
 
             // confirm that the goodness of the cigar agrees with our expectations
@@ -754,7 +754,7 @@ fn test_forked_dangling_ends_with_suffix_code() {
                 0,
                 2,
                 false,
-                &*DANGLING_END_SW_PARAMETERS,
+                &DANGLING_END_SW_PARAMETERS,
             );
             assert!(result.is_some());
             let result = result.unwrap();
@@ -844,7 +844,7 @@ fn test_forked_dangling_ends() {
             0,
             4,
             true,
-            &*DANGLING_END_SW_PARAMETERS,
+            &DANGLING_END_SW_PARAMETERS,
         );
         assert!(result.is_some());
         let result = result.unwrap();
@@ -1017,7 +1017,7 @@ fn test_dangling_heads(
         0,
         1,
         false,
-        &*DANGLING_END_SW_PARAMETERS,
+        &DANGLING_END_SW_PARAMETERS,
     );
 
     match result {
@@ -1029,7 +1029,7 @@ fn test_dangling_heads(
                 result.cigar.to_string(),
                 cigar.to_string(),
                 "SW generated cigar = {}",
-                result.cigar.to_string()
+                result.cigar
             );
 
             // confirm that the tail merging works as expected
@@ -1151,5 +1151,5 @@ fn generate_read_with_errors(
         }
     });
 
-    return result;
+    result
 }

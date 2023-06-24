@@ -183,14 +183,14 @@ fn print_alignment(
         print_cautiously(&matches, pos, 100);
         print_cautiously(&b_read, pos, 100);
         print_cautiously(&b_ref, pos, 100);
-        println!("");
+        println!();
         pos += 100;
     }
 }
 
 fn print_cautiously(s: &String, start: usize, width: usize) {
     if start >= s.len() {
-        println!("");
+        println!();
     } else {
         let end = min(start + width, s.len());
         println!("{}", &s[start..end]);
@@ -326,9 +326,9 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
 
     //Create two versions of the same sequence with different flanking regions.
     let padded_ref = "GCGTCGCAGTCTTAAGGCCCCGCCTTTTCAGACAGCTTCCGCTGGGCCTGGGCCGCTGCGGGGCGGTCACGGCCCCTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGAGGGGGCCCGGGGCCGCGTCCCTGGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGACCGGGCCGAGCCGGGGGAAGGGCTCCGGTGACT";
-    let padded_hap = "GCGTCGCAGTCTTAAGGCCCCGCCTTTTCAGACAGCTTCCGCTGGGCCTGGGCCGCTGCGGGGCGGTCACGGCCCCTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGA--GGGCC---------------GGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGACCGGGCCGAGCCGGGGGAAGGGCTCCGGTGACT".replace("-", "");
+    let padded_hap = "GCGTCGCAGTCTTAAGGCCCCGCCTTTTCAGACAGCTTCCGCTGGGCCTGGGCCGCTGCGGGGCGGTCACGGCCCCTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGA--GGGCC---------------GGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGACCGGGCCGAGCCGGGGGAAGGGCTCCGGTGACT".replace('-', "");
     let not_padded_ref = "CTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGAGGGGGCCCGGGGCCGCGTCCCTGGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGA";
-    let not_padded_hap = "CTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGA---------GGGCC--------GGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGA".replace("-", "");
+    let not_padded_hap = "CTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGA---------GGGCC--------GGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGA".replace('-', "");
 
     //a simplified version of the getCigar routine in the haplotype caller to align these
     let SW_PAD = "NNNNNNNNNN";
@@ -340,14 +340,14 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
     let padded_alignment = SmithWatermanAligner::align(
         paddeds_ref.as_bytes(),
         paddeds_hap.as_bytes(),
-        &*NEW_SW_PARAMETERS,
+        &NEW_SW_PARAMETERS,
         OverhangStrategy::SoftClip,
         AVXMode::detect_mode(),
     );
     let _not_padded_alignment = SmithWatermanAligner::align(
         not_paddeds_ref.as_bytes(),
         not_paddeds_hap.as_bytes(),
-        &*NEW_SW_PARAMETERS,
+        &NEW_SW_PARAMETERS,
         OverhangStrategy::SoftClip,
         AVXMode::detect_mode(),
     );
@@ -355,8 +355,8 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
     //Now verify that the two sequences have the same alignment and not match positions.
     let raw_padded = padded_alignment.get_cigar();
     let not_padded = padded_alignment.get_cigar();
-    let padded_c = raw_padded.0.clone();
-    let not_padded_c = not_padded.0.clone();
+    let padded_c = raw_padded.0;
+    let not_padded_c = not_padded.0;
 
     assert_eq!(padded_c.len(), not_padded_c.len());
     for i in 0..not_padded_c.len() {
@@ -372,7 +372,7 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
         assert_eq!(l1, l2);
         assert!(CigarUtils::cigar_elements_are_same_type(
             pc,
-            &Some(npc.clone())
+            &Some(*npc)
         ));
     }
 }
@@ -999,11 +999,9 @@ fn test_avx_mode() {
 fn assert_cigar_are_equal(reference: &[u8], read: &[u8], cigar_string: Vec<Cigar>) {
     let _cigar_string = CigarString::from(cigar_string);
     (0..1000).into_par_iter().for_each(|_| {
-        for params in vec![
-            &*NEW_SW_PARAMETERS,
+        for params in &[&*NEW_SW_PARAMETERS,
             &*STANDARD_NGS,
-            &*ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS,
-        ] {
+            &*ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS] {
             // println!("AVX Off");
             let non_avx_result = CigarUtils::calculate_cigar(
                 reference,

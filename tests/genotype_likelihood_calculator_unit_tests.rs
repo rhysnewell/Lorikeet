@@ -89,7 +89,7 @@ fn test_likelihood_calculation(ploidy: usize, allele_count: usize, read_count: &
         let sample_likelihoods = read_likelihoods.sample_matrix(s);
 
         let genotype_likelihoods =
-            calculator.genotype_likelihoods(&sample_likelihoods, &permutation, number_of_evidences);
+            calculator.genotype_likelihoods(sample_likelihoods, &permutation, number_of_evidences);
         let genotype_likelihoods_doubles = genotype_likelihoods.get_likelihoods();
         assert_eq!(genotype_likelihoods_doubles.len(), genotype_count as usize);
         // println!("sample {}", s);
@@ -161,7 +161,7 @@ fn test_likelihood_calculation(ploidy: usize, allele_count: usize, read_count: &
 
 fn calculate_genotype_count(ploidy: usize, allele_count: usize) -> usize {
     if ploidy == 0 {
-        return 0;
+        0
     } else if ploidy == 1 {
         return allele_count;
     } else if ploidy == 2 {

@@ -27,7 +27,7 @@ fn test_compute_cigar(s1: &str, s2: &str, expected_cigar: &str) {
         s1.as_bytes(),
         s2.as_bytes(),
         OverhangStrategy::InDel,
-        &*HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS,
+        &HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS,
         AVXMode::detect_mode(),
     );
     let expected = CigarString::try_from(expected_cigar).unwrap();

@@ -117,16 +117,16 @@ lazy_static! {
 #[test]
 fn ploidy_and_maximum_allele_and_read_counts_data() {
     for i in 0..PLOIDIES.len() {
-        test_calculate_likelihoods(&*PLOIDIES[i], ALLELE_COUNTS[i][0], 0, &*READ_COUNTS[i]);
+        test_calculate_likelihoods(&PLOIDIES[i], ALLELE_COUNTS[i][0], 0, &READ_COUNTS[i]);
         let discard_allele_count = ALLELE_COUNTS[i][1];
         if discard_allele_count == 0 {
             continue;
         } else {
             test_calculate_likelihoods(
-                &*PLOIDIES[i],
+                &PLOIDIES[i],
                 ALLELE_COUNTS[i][0],
                 ALLELE_COUNTS[i][1],
-                &*READ_COUNTS[i],
+                &READ_COUNTS[i],
             );
         }
     }
