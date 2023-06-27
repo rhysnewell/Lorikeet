@@ -436,11 +436,11 @@ impl VariantAnnotations {
                 }
             },
             VariantAnnotations::BaseQuality => {
-                format!("##INFO=<ID={},Number=1,Type=Integer,Description=\"Median PHRED-scaled Base Quality of the variant\">", self.to_key())
+                format!("##INFO=<ID={},Number=R,Type=Integer,Description=\"Median PHRED-scaled Base Quality of the variant\">", self.to_key())
             }
             VariantAnnotations::MappingQuality => {
                 format!(
-                    "##INFO=<ID={},Number=1,Type=Float,Description=\"RMS Mapping Quality\">",
+                    "##INFO=<ID={},Number=R,Type=Float,Description=\"RMS Mapping Quality\">",
                     self.to_key()
                 )
             }
