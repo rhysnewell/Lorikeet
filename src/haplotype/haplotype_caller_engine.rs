@@ -388,9 +388,7 @@ impl HaplotypeCallerEngine {
                             debug!("Ref idx {} tid {}", ref_idx, tid);
                             // Get contig stats
                             let n_tids = reference_reader.update_ref_index_tids(ref_idx, tid);
-                            if n_tids > 1 {
-                                panic!("Found more than one contig matching reference {}", &reference);
-                            }
+
                             reference_reader.add_target(contig_name, tid);
                             let target_len = header.target_len(tid as u32).unwrap();
                             reference_reader.add_length(tid, target_len);
@@ -398,7 +396,7 @@ impl HaplotypeCallerEngine {
 
                             let previous_tid = found_contigs.entry(contig_name.to_vec()).or_insert(tid);
                             if *previous_tid != tid {
-                                warn!("Contig {} found more than once", std::str::from_utf8(contig_name).unwrap());
+                                warn!("Contig {} found more than once with different BAM header index", std::str::from_utf8(contig_name).unwrap());
                                 warn!("Ensure Contigs occur in same order in all BAM files");
                                 panic!("Contigs out of order in BAM files.");
                             }
