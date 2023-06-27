@@ -168,7 +168,7 @@ fn test_next_one_ploidy() {
 
         for maximum_allele_index in 0..=MAXIMUM_ALLELE_INDEX {
             let mut expected = vec![0; maximum_allele_index + 1];
-            if maximum_allele_index >= current.minimum_allele_index() as usize + 1 {
+            if maximum_allele_index > current.minimum_allele_index() as usize {
                 expected[current.minimum_allele_index() as usize + 1] = 1;
             };
             assert_eq!(next.allele_counts_by_index(maximum_allele_index), expected);
@@ -233,20 +233,18 @@ fn test_ploidy_two_or_more(ploidy: usize) {
                     0.0
                 }
             )
-        } else {
-            if next.distinct_allele_count() == 1 {
-                assert!(relative_eq!(
-                    next.log10_combination_count(),
-                    0.0,
-                    epsilon = 1e-3
-                ));
-            } else if next.distinct_allele_count() == ploidy {
-                assert!(relative_eq!(
-                    next.log10_combination_count(),
-                    MathUtils::log10_factorial(ploidy as f64),
-                    epsilon = 1e-3
-                ))
-            }
+        } else if next.distinct_allele_count() == 1 {
+            assert!(relative_eq!(
+                next.log10_combination_count(),
+                0.0,
+                epsilon = 1e-3
+            ));
+        } else if next.distinct_allele_count() == ploidy {
+            assert!(relative_eq!(
+                next.log10_combination_count(),
+                MathUtils::log10_factorial(ploidy as f64),
+                epsilon = 1e-3
+            ))
         }
 
         let allele_counts_as_list = next.sorted_allele_counts.clone();
@@ -455,7 +453,7 @@ fn test_next_one_ploidy_increase() {
 
         for maximum_allele_index in 0..=MAXIMUM_ALLELE_INDEX {
             let mut expected = vec![0; maximum_allele_index + 1];
-            if maximum_allele_index >= current.minimum_allele_index() as usize + 1 {
+            if maximum_allele_index > current.minimum_allele_index() as usize {
                 expected[current.minimum_allele_index() as usize + 1] = 1;
             }
             assert_eq!(next.allele_counts_by_index(maximum_allele_index), expected);

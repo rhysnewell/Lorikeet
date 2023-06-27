@@ -38,7 +38,7 @@ impl ReadClipperUnitTest {
 
 #[test]
 fn test_hard_clip_both_ends_by_reference() {
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new().expect("Failed to create ReadClipperUnitTest");
+    let read_clipper_unit_test = ReadClipperUnitTest::new().expect("Failed to create ReadClipperUnitTest");
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -79,7 +79,7 @@ fn test_hard_clip_both_ends_by_reference() {
 
 #[test]
 fn test_hard_clip_by_reference_coordinates() {
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
+    let read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -123,7 +123,7 @@ fn test_hard_clip_by_reference_coordinates() {
 
 #[test]
 fn test_hard_clip_by_reference_coordinates_left_tail() {
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
+    let read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -152,7 +152,7 @@ fn test_hard_clip_by_reference_coordinates_left_tail() {
 
 #[test]
 fn test_hard_clip_by_reference_coordinates_right_tail() {
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
+    let read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -185,7 +185,7 @@ fn test_hard_clip_low_qual_ends() {
     let HIGH_QUAL: u8 = 30;
 
     // create a read for every cigar permutation
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
+    let read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let mut read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -240,7 +240,7 @@ fn test_hard_clip_low_qual_ends() {
 #[test]
 fn test_hard_clip_soft_clipped_bases() {
     // create a read for every cigar permutation
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
+    let read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -259,7 +259,7 @@ fn test_hard_clip_soft_clipped_bases() {
 #[test]
 fn test_revert_soft_clipped_bases() {
     // create a read for every cigar permutation
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
+    let read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let leading_soft_clips = leading_cigar_element_length(&cigar, Some(Cigar::SoftClip(0)));
@@ -303,7 +303,7 @@ fn test_revert_entirely_soft_clipped_reads() {
 #[test]
 fn test_soft_clip_both_ends_by_reference_coordinates() {
     // create a read for every cigar permutation
-    let mut read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
+    let read_clipper_unit_test = ReadClipperUnitTest::new().unwrap();
 
     for cigar in read_clipper_unit_test.cigar_list {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
@@ -487,8 +487,8 @@ impl CigarCounter {
         let zero = 0;
         for cigar_operator in self.counter.keys() {
             if CigarUtils::is_clipping(cigar_operator) {
-                let counter_total = (self.counter.get(&Cigar::HardClip(0)).unwrap_or(&zero)
-                    + self.counter.get(&Cigar::SoftClip(0)).unwrap_or(&zero));
+                let counter_total = self.counter.get(&Cigar::HardClip(0)).unwrap_or(&zero)
+                    + self.counter.get(&Cigar::SoftClip(0)).unwrap_or(&zero);
                 let clipped_hard = *clipped.counter.get(&Cigar::HardClip(0)).unwrap_or(&zero);
                 let clipped_soft = *clipped.counter.get(&Cigar::SoftClip(0)).unwrap_or(&zero);
 

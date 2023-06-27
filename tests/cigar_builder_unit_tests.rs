@@ -29,7 +29,7 @@ fn test_simple_concatenation(cigar_element_strings: Vec<&str>) {
             .make(false)
             .unwrap_or_else(|err| panic!("Unhandled error in cigar builder: {:?}", err))
             .to_string(),
-        expected.to_string()
+        expected
     );
 }
 

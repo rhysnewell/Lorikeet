@@ -52,7 +52,7 @@ impl ReferenceReaderUtils {
         let offset = find_first(target_name, split_char).unwrap_or_else(|_|
             panic!("Contig name {} does not contain split symbol, so cannot determine which genome it belongs to",
                      std::str::from_utf8(target_name).unwrap()));
-        return &target_name[(0..offset)];
+        return &target_name[0..offset];
     }
 
     // Splits a contig name based on the ~

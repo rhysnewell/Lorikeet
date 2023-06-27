@@ -94,7 +94,7 @@ fn test_likelihood_filling_and_query(
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
-    let mut result = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
+    let mut result = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads);
     let likelihoods = fill_with_random_likelihoods(&samples, &alleles, &mut result);
     test_likelihood_matrix_queries(&samples, &mut result, Some(&likelihoods));
 }
@@ -121,7 +121,7 @@ fn fill_with_random_likelihoods(
         likelihoods.push(likelihood);
     }
 
-    return likelihoods;
+    likelihoods
 }
 
 fn fill_two_with_random_likelihoods(
@@ -148,7 +148,7 @@ fn fill_two_with_random_likelihoods(
         likelihoods.push(likelihood);
     }
 
-    return likelihoods;
+    likelihoods
 }
 
 fn test_likelihood_matrix_queries(
@@ -252,7 +252,7 @@ fn test_best_alleles<A: Allele>(
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
-    let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
+    let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads);
     fill_with_random_likelihoods(&samples, &alleles, &mut original);
     let number_of_alleles = alleles.len();
     let ref_index = original.alleles().index_of_reference();
@@ -318,14 +318,8 @@ fn test_best_alleles<A: Allele>(
                     };
 
                     let ref_override = if ref_index.is_some() {
-                        if ref_index.unwrap() != best_index_array[read_index]
-                            && best_lk_array[read_index] - ref_likelihood
+                        ref_index.unwrap() != best_index_array[read_index] && best_lk_array[read_index] - ref_likelihood
                                 < *LOG_10_INFORMATIVE_THRESHOLD
-                        {
-                            true
-                        } else {
-                            false
-                        }
                     } else {
                         false
                     };
@@ -459,7 +453,7 @@ fn test_filter_reads_to_overlap(
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
     let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
-    let mut result = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
+    let mut result = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads);
 
     fill_two_with_random_likelihoods(&samples, &alleles, &mut original, &mut result);
 
@@ -583,7 +577,7 @@ fn make_good_and_bad_likelihoods<A: Allele>(
         }
     }
 
-    return original;
+    original
 }
 
 // Make sure that operations that add or remove evidence result in a correct evidence-to-index map
@@ -610,7 +604,7 @@ fn test_marginalization_with_overlap(
     reads: HashMap<usize, Vec<BirdToolRead>>,
     new_to_old_allele_mapping: LinkedHashMap<usize, Vec<&ByteArrayAllele>>,
 ) {
-    let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
+    let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads);
     let even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
     fill_with_random_likelihoods(&samples, &alleles, &mut original);
 
@@ -673,7 +667,7 @@ fn test_marginalization(
     reads: HashMap<usize, Vec<BirdToolRead>>,
     new_to_old_allele_mapping: LinkedHashMap<usize, Vec<&ByteArrayAllele>>,
 ) {
-    let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
+    let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads);
     let _even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
     fill_with_random_likelihoods(&samples, &alleles, &mut original);
 
@@ -734,7 +728,7 @@ fn test_normalize_cap_worst_lk(
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
     let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
-    let mut result = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
+    let mut result = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads);
 
     let original_likelihoods =
         fill_two_with_random_likelihoods(&samples, &alleles, &mut original, &mut result);
@@ -886,7 +880,7 @@ fn data_for_test_marginalization_with_overlap() {
                         allele_set_1.clone(),
                         allele_set_2.clone(),
                         data_set_reads(sample_set, &mut rnd),
-                        random_allele_map(&allele_set_1, &allele_set_2),
+                        random_allele_map(allele_set_1, allele_set_2),
                     );
                 }
             }
@@ -910,7 +904,7 @@ fn data_for_test_marginalization() {
                         allele_set_1.clone(),
                         allele_set_2.clone(),
                         data_set_reads(sample_set, &mut rnd),
-                        random_allele_map(&allele_set_1, &allele_set_2),
+                        random_allele_map(allele_set_1, allele_set_2),
                     );
                 }
             }
@@ -944,7 +938,7 @@ fn data_set_reads(samples: &Vec<String>, rnd: &mut ThreadRng) -> HashMap<usize, 
         result.insert(idx, reads);
     }
 
-    return result;
+    result
 }
 
 fn random_allele_map<'a, A: Allele>(
@@ -962,5 +956,5 @@ fn random_allele_map<'a, A: Allele>(
         next_to_index = (next_to_index + 1) % to_alleles.len();
     }
 
-    return result;
+    result
 }

@@ -366,7 +366,7 @@ fn merge_alleles_data() {
     ]));
     test_merge_alleles(MergeAllelesTest::new(vec![
         vec![Aref.clone(), T.clone(), C.clone()],
-        vec![Aref.clone(), T.clone(), C.clone()],
+        vec![Aref.clone(), T, C],
     ]));
 
     test_merge_alleles(MergeAllelesTest::new(vec![
@@ -387,14 +387,14 @@ fn merge_alleles_data() {
     ]));
     test_merge_alleles(MergeAllelesTest::new(vec![
         vec![ATref.clone(), ATC.clone(), Anoref.clone(), G.clone()],
-        vec![Aref.clone(), ATCATC.clone(), G.clone()],
+        vec![Aref, ATCATC, G.clone()],
         vec![
             ATref,
-            ATC.clone(),
-            Anoref.clone(),
-            G.clone(),
-            ATCATCT.clone(),
-            GT.clone(),
+            ATC,
+            Anoref,
+            G,
+            ATCATCT,
+            GT,
         ],
     ]));
 }
@@ -458,7 +458,7 @@ fn makeVC<S: Into<String>>(
     //     }
     // }
 
-    return vc;
+    vc
 }
 
 fn makeG<S: Into<String>>(
@@ -478,11 +478,11 @@ fn makeG<S: Into<String>>(
             // pass
         }
     }
-    return g;
+    g
 }
 
 fn vcs2priority(vcs: &Vec<VariantContext>) -> Vec<String> {
-    vcs.into_iter().map(|vc| vc.source.clone()).collect()
+    vcs.iter().map(|vc| vc.source.clone()).collect()
 }
 
 struct MergeGenotypesTest {
@@ -495,7 +495,7 @@ impl MergeGenotypesTest {
     fn new(_name: &str, priority: &str, mut arg: Vec<VariantContext>) -> Self {
         let last = arg.remove(arg.len() - 1);
         let priorities = priority
-            .split(",")
+            .split(',')
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
         Self {
@@ -904,7 +904,7 @@ fn merge_genotypes_data() {
                 "3",
                 vec![Aref.clone(), ATC.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), ATC.clone(), -1.0, None),
+                    makeG("s1", Aref.clone(), ATC, -1.0, None),
                     makeG("s3", Aref.clone(), T.clone(), -3.0, None),
                 ]),
                 None,
@@ -945,8 +945,8 @@ fn merge_genotypes_data() {
                 "3",
                 vec![Aref.clone(), C.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), C.clone(), -1.0, None),
-                    makeG("s2", Aref.clone(), T.clone(), -2.0, None),
+                    makeG("s1", Aref.clone(), C, -1.0, None),
+                    makeG("s2", Aref, T, -2.0, None),
                 ]),
                 None,
             ),
@@ -993,7 +993,7 @@ fn assert_genotypes_are_mostly_equal(
     for value in actual.genotypes() {
         let index = expected
             .genotypes()
-            .into_iter()
+            .iter()
             .position(|v| v.sample_name == value.sample_name)
             .unwrap();
         let expected_value = expected.get(index);

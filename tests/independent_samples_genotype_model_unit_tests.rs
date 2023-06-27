@@ -13,7 +13,7 @@ use lorikeet_genome::haplotype::homogenous_ploidy_model::HeterogeneousPloidyMode
 use lorikeet_genome::haplotype::independent_samples_genotype_model::IndependentSamplesGenotypesModel;
 use lorikeet_genome::model::allele_list::AlleleList;
 use lorikeet_genome::model::byte_array_allele::Allele;
-use lorikeet_genome::test_utils::allele_list_unit_tester::AlleleListUnitTester;
+
 use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
 use rand::rngs::ThreadRng;
 use rand::Rng;
@@ -28,8 +28,8 @@ fn test_calculate_likelihoods(
         "Ploidies {:?}, allele count {}, discard count {}, read_counts {:?}",
         ploidies, allele_count, discard_allele_count, read_counts
     );
-    let mut likelihoods = ReadLikelihoodsUnitTester::read_likelihoods(allele_count, read_counts);
-    let mut genotyping_allele_list = if discard_allele_count == 0 {
+    let likelihoods = ReadLikelihoodsUnitTester::read_likelihoods(allele_count, read_counts);
+    let genotyping_allele_list = if discard_allele_count == 0 {
         likelihoods.get_allele_list()
     } else {
         discard_alleles_at_random(likelihoods.get_allele_list(), discard_allele_count)
@@ -117,16 +117,16 @@ lazy_static! {
 #[test]
 fn ploidy_and_maximum_allele_and_read_counts_data() {
     for i in 0..PLOIDIES.len() {
-        test_calculate_likelihoods(&*PLOIDIES[i], ALLELE_COUNTS[i][0], 0, &*READ_COUNTS[i]);
+        test_calculate_likelihoods(&PLOIDIES[i], ALLELE_COUNTS[i][0], 0, &READ_COUNTS[i]);
         let discard_allele_count = ALLELE_COUNTS[i][1];
         if discard_allele_count == 0 {
             continue;
         } else {
             test_calculate_likelihoods(
-                &*PLOIDIES[i],
+                &PLOIDIES[i],
                 ALLELE_COUNTS[i][0],
                 ALLELE_COUNTS[i][1],
-                &*READ_COUNTS[i],
+                &READ_COUNTS[i],
             );
         }
     }

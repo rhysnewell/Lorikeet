@@ -258,7 +258,7 @@ impl<'a> ReferenceWriter<'a> {
                 };
             }
             VariantType::Snp => {
-                new_bases[((vc.loc.start as i64 + *offset) as usize)] = consensus_allele.bases[0];
+                new_bases[(vc.loc.start as i64 + *offset) as usize] = consensus_allele.bases[0];
             }
             VariantType::Indel => {
                 let allele_len = consensus_allele.bases.len();

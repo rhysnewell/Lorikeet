@@ -10,30 +10,30 @@ extern crate approx;
 
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
-use lorikeet_genome::model::allele_list::AlleleList;
-use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
+
+
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
 use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    AVXMode, PairHMMInputScoreImputator,
+    PairHMMInputScoreImputator,
 };
-use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::reads::cigar_utils::CigarUtils;
-use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
+
+
+
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
-use lorikeet_genome::utils::base_utils::{BaseUtils, BASES};
+use lorikeet_genome::utils::base_utils::{BASES};
 use lorikeet_genome::utils::math_utils::MathUtils;
 use lorikeet_genome::utils::quality_utils::QualityUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
-use rand::rngs::ThreadRng;
+use lorikeet_genome::utils::simple_interval::{SimpleInterval};
+
+
 use rayon::prelude::*;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView, Seq};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::ops::Deref;
-use std::sync::Mutex;
+
+use rust_htslib::bam::record::{Cigar, CigarString};
+use std::cmp::{max, min};
+use std::collections::{HashMap};
+
+
+
 
 static ALLOW_READS_LONGER_THAN_HAPLOTYPE: bool = true;
 static DEBUG: bool = false;
@@ -346,8 +346,8 @@ fn test_mismatch_in_every_position_in_the_read_with_centred_haplotype() {
     let mismatch_qual = 20;
     let indel_qual = 80;
     let offset = 2;
-    let mut gop = vec![indel_qual; haplotpe_1.len() - 2 * offset];
-    let mut gcp = vec![indel_qual; haplotpe_1.len() - 2 * offset];
+    let gop = vec![indel_qual; haplotpe_1.len() - 2 * offset];
+    let gcp = vec![indel_qual; haplotpe_1.len() - 2 * offset];
 
     let mut logless_hmm = PairHMM::quick_initialize(gop.len(), haplotpe_1.len());
     logless_hmm.do_not_use_tristate_correction();
@@ -385,8 +385,8 @@ fn test_mismatch_in_every_position_in_the_read() {
     let mismatch_qual = 20;
     let indel_qual = 80;
     let offset = 2;
-    let mut gop = vec![indel_qual; haplotpe_1.len() - offset];
-    let mut gcp = vec![indel_qual; haplotpe_1.len() - offset];
+    let gop = vec![indel_qual; haplotpe_1.len() - offset];
+    let gcp = vec![indel_qual; haplotpe_1.len() - offset];
 
     let mut logless_hmm = PairHMM::quick_initialize(gop.len(), haplotpe_1.len());
     logless_hmm.do_not_use_tristate_correction();
@@ -597,7 +597,7 @@ fn test_really_big_reads(read: String, reference: String) {
     let mut hmm = PairHMM::quick_initialize(read_bases.len(), ref_bases.len());
     hmm.do_not_use_tristate_correction();
     // running HMM with no haplotype caching. Should therefore pass null in place of nextRef bases
-    let d = hmm.compute_read_likelihood_given_haplotype_log10(
+    let _d = hmm.compute_read_likelihood_given_haplotype_log10(
         &ref_bases,
         &read_bases,
         &base_quals,
@@ -633,7 +633,7 @@ fn test_max_lengths_bigger_than_provided_read() {
     let mut hmm = PairHMM::quick_initialize(read_bases.len(), ref_bases.len());
     hmm.do_not_use_tristate_correction();
 
-    for n_extra_max_size in 0..100 {
+    for _n_extra_max_size in 0..100 {
         hmm.compute_read_likelihood_given_haplotype_log10(
             ref_bases.as_bytes(),
             read_bases.as_bytes(),
@@ -666,7 +666,7 @@ fn test_likelihoods_from_haplotypes() {
     let mut sample_evidence_map = HashMap::new();
     sample_evidence_map.insert(0, reads.clone());
 
-    let mut input_score_imputator = PairHMMInputScoreImputator::new(MASSIVE_QUAL);
+    let input_score_imputator = PairHMMInputScoreImputator::new(MASSIVE_QUAL);
     let mut hmm = PairHMM::quick_initialize(read_bases.len(), ref_bases.len());
     hmm.do_not_use_tristate_correction();
     let mut haplotype_mat = AlleleLikelihoods::new(
@@ -739,8 +739,8 @@ fn test_haplotype_indexing(root_1: &str, root_2: &str, root_3: &str, read: &str)
     let TOLERANCE = 1e-9;
 
     let prefix = "AACCGGTTTTTGGGCCCAAACGTACGTACAGTTGGTCAACATCGATCAGGTTCCGGAGTAC";
-    let max_read_length = read.len();
-    let max_haplotype_length = prefix.len() + root_1.len();
+    let _max_read_length = read.len();
+    let _max_haplotype_length = prefix.len() + root_1.len();
 
     let max_read_length = read.len();
     let max_haplotype_length = prefix.len() + root_1.len();
@@ -764,7 +764,7 @@ fn test_haplotype_indexing(root_1: &str, root_2: &str, root_3: &str, read: &str)
         // Then run on the second haplotype in both cached and uncached mode, and verify that results are the same
         // When evaluating actual2, it is important that we both apply old caching from hap1 and
         // set up new caching for hap3, to ensure read/write operations do not cause conflicts
-        let actual_1 = test_haplotype_indexing_calc(&mut hmm, &hap_1, Some(&hap_2), read, 0, true);
+        let _actual_1 = test_haplotype_indexing_calc(&mut hmm, &hap_1, Some(&hap_2), read, 0, true);
         let actual_2 =
             test_haplotype_indexing_calc(&mut hmm, &hap_2, Some(&hap_3), read, hap_start, false);
         let expected_2 = test_haplotype_indexing_calc(&mut hmm, &hap_2, None, read, 0, true);
@@ -777,7 +777,7 @@ fn test_haplotype_indexing_calc(
     hap: &str,
     next_hap: Option<&str>,
     read: &str,
-    hap_start: usize,
+    _hap_start: usize,
     recache: bool,
 ) -> f64 {
     let read_bases = read.as_bytes();

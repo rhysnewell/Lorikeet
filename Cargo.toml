@@ -29,7 +29,7 @@ bam = []
 approx = "^0.5"
 ansi_term = "^0.12"
 bio = "^1.1"
-bio-types = "^0.13"
+bio-types = "^1.0"
 bird_tool_utils = "^0.4"
 bird_tool_utils-man = "^0.4"
 bstr = "^0.2.17"
@@ -60,7 +60,7 @@ pyo3 = { version = "^0.17", optional = true }
 rand = "0.6"
 rayon = "^1.5.1"
 roff = "^0.2"
-rust-htslib = { version="^0.41", default-features = false}
+rust-htslib = { version="^0.44", default-features = false}
 serde = "^1"
 serde_derive = "^1"
 strum = "^0.17"

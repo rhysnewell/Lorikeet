@@ -10,12 +10,12 @@ extern crate approx;
 
 use lorikeet_genome::haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use lorikeet_genome::utils::quality_utils::QualityUtils;
-use mathru::statistics::distrib::Beta;
+
 use statrs::function::beta::ln_beta;
 
 fn test_leading_order_in_error_rate(num_ref: usize, num_alt: usize, error_rate: f64) {
     let qual = QualityUtils::error_prob_to_qual(error_rate);
-    let alt_quals = vec![qual; num_alt];
+    let _alt_quals = vec![qual; num_alt];
 
     let calculated =
         HaplotypeCallerEngine::log_likelihood_ratio_constant_error(num_ref, num_alt, error_rate);

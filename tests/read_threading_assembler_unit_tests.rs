@@ -104,7 +104,7 @@ fn make_assemble_intervals_data() {
         "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
     ));
 
-    for start_i in (start..end).into_iter().step_by(step_size) {
+    for start_i in (start..end).step_by(step_size) {
         let end_i = start_i + window_size;
         let ref_loc = SimpleInterval::new(0, start_i, end_i);
         test_assemble_ref(
@@ -131,23 +131,23 @@ fn assemble(
         AssemblyRegion::new(loc.clone(), true, 0, contig_len, loc.get_contig(), 0, 0.0);
     active_region.add_all(reads);
     let samples = vec!["sample_1".to_string()];
-    let assembly_result_set = assembler.run_local_assembly(
+    
+
+    assembler.run_local_assembly(
         active_region,
         ref_haplotype,
         ref_bases.to_vec(),
-        loc.clone(),
+        loc,
         &samples,
         *STANDARD_NGS,
         *NEW_SW_PARAMETERS,
         AVXMode::detect_mode(),
         None
-    );
-
-    return assembly_result_set;
+    )
 }
 
 fn test_assemble_ref_and_snp(
-    mut assembler: ReadThreadingAssembler,
+    assembler: ReadThreadingAssembler,
     loc: SimpleInterval,
     n_reads_to_use: usize,
     variant_site: usize,
@@ -172,7 +172,7 @@ fn test_assemble_ref_and_snp(
         false,
     );
 
-    let mut vcb = VariantContext::build(
+    let vcb = VariantContext::build(
         loc.get_contig(),
         variant_site,
         variant_site,
@@ -182,7 +182,7 @@ fn test_assemble_ref_and_snp(
 }
 
 fn test_assemble_ref_and_deletion(
-    mut assembler: ReadThreadingAssembler,
+    _assembler: ReadThreadingAssembler,
     loc: SimpleInterval,
     n_reads_to_use: usize,
     variant_site: usize,
@@ -203,13 +203,13 @@ fn test_assemble_ref_and_deletion(
             true,
         );
         let alt_base = ByteArrayAllele::new(&ref_base.get_bases()[0..=0], false);
-        let mut vcb = VariantContext::build(
+        let vcb = VariantContext::build(
             loc.get_contig(),
             variant_site,
             variant_site + deletion_length,
             vec![ref_base, alt_base],
         );
-        let mut assembler = ReadThreadingAssembler::default();
+        let assembler = ReadThreadingAssembler::default();
 
         test_assembly_with_variant(
             assembler,
@@ -223,7 +223,7 @@ fn test_assemble_ref_and_deletion(
 }
 
 fn test_assemble_ref_and_insertion(
-    mut assembler: ReadThreadingAssembler,
+    _assembler: ReadThreadingAssembler,
     loc: SimpleInterval,
     n_reads_to_use: usize,
     variant_site: usize,
@@ -244,9 +244,9 @@ fn test_assemble_ref_and_insertion(
             &ref_bases[variant_site..=(variant_site + insertion_length + 1)],
             false,
         );
-        let mut assembler = ReadThreadingAssembler::default();
+        let assembler = ReadThreadingAssembler::default();
 
-        let mut vcb = VariantContext::build(
+        let vcb = VariantContext::build(
             loc.get_contig(),
             variant_site,
             variant_site + insertion_length,
@@ -285,7 +285,7 @@ fn test_assembly_with_variant(
     let mut counter = 0;
     let quals = vec![30; alt_bases.len()];
     let cigar = format!("{}M", alt_bases.len());
-    for i in 0..n_reads_to_use {
+    for _i in 0..n_reads_to_use {
         let bases = alt_bases.as_bytes();
         let read = ArtificialReadUtils::create_artificial_read_with_name_and_pos(
             format!("{}_{}", loc.get_contig(), counter),
@@ -339,11 +339,10 @@ fn make_assemble_intervals_with_variant_data() {
         "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
     ));
 
-    for start_i in (start..end).into_iter().step_by(step_size) {
+    for start_i in (start..end).step_by(step_size) {
         let end_i = start_i + window_size;
         let ref_loc = SimpleInterval::new(0, start_i, end_i);
         for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
-            .into_iter()
             .step_by(variant_step_size)
         {
             test_assemble_ref_and_snp(
@@ -369,11 +368,10 @@ fn make_assemble_intervals_with_deletion_data() {
         "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
     ));
 
-    for start_i in (start..end).into_iter().step_by(step_size) {
+    for start_i in (start..end).step_by(step_size) {
         let end_i = start_i + window_size;
         let ref_loc = SimpleInterval::new(0, start_i, end_i);
         for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
-            .into_iter()
             .step_by(variant_step_size)
         {
             test_assemble_ref_and_deletion(
@@ -399,11 +397,10 @@ fn make_assemble_intervals_with_insertion_data() {
         "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
     ));
 
-    for start_i in (start..end).into_iter().step_by(step_size) {
+    for start_i in (start..end).step_by(step_size) {
         let end_i = start_i + window_size;
         let ref_loc = SimpleInterval::new(0, start_i, end_i);
         for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
-            .into_iter()
             .step_by(variant_step_size)
         {
             test_assemble_ref_and_insertion(
@@ -418,7 +415,7 @@ fn make_assemble_intervals_with_insertion_data() {
 }
 
 fn test_simple_assembly(
-    name: &str,
+    _name: &str,
     mut assembler: ReadThreadingAssembler,
     loc: SimpleInterval,
     reference: &str,
@@ -431,7 +428,7 @@ fn test_simple_assembly(
     let quals = vec![30; alt_bases.len()];
     let cigar = format!("{}M", alt_bases.len());
     let mut reads = Vec::new();
-    for i in 0..20 {
+    for _i in 0..20 {
         let bases = alt_bases;
         let quals = quals.as_slice();
         let cigar = cigar.as_str();
@@ -458,7 +455,7 @@ fn test_simple_assembly(
         &mut ref_haplotype,
     )
     .get_haplotype_list();
-    assert!(haplotypes.len() > 0, "Failed to find ref haplotype");
+    assert!(!haplotypes.is_empty(), "Failed to find ref haplotype");
     assert_eq!(&haplotypes[0], &ref_haplotype);
 
     assert_eq!(haplotypes.len(), 2, "Failed to find single alt haplotype");
@@ -546,14 +543,14 @@ impl TestAssembler {
             &reads,
             &ref_haplotype,
             sample_names.as_slice(),
-            &*DANGLING_END_SW_PARAMETERS,
+            &DANGLING_END_SW_PARAMETERS,
             AVXMode::detect_mode(),
             None
         )[0]
         .clone()
         .get_seq_graph();
 
-        return graph.unwrap();
+        graph.unwrap()
     }
 }
 

@@ -20,38 +20,38 @@ use lorikeet_genome::model::byte_array_allele::Allele;
 use lorikeet_genome::read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
+    STANDARD_NGS,
 };
 use lorikeet_genome::utils::base_utils::BaseUtils;
-use lorikeet_genome::utils::math_utils::{MathUtils, LOG10_ONE_HALF};
-use lorikeet_genome::utils::quality_utils::QualityUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
+use lorikeet_genome::utils::math_utils::{MathUtils};
+
+use lorikeet_genome::utils::simple_interval::{SimpleInterval};
+
 use petgraph::graph::NodeIndex;
-use petgraph::Direction;
+
 use rand::rngs::ThreadRng;
-use rand::seq::index::sample;
-use rand::{Rng, SeedableRng};
+
+use rand::{Rng};
 use rayon::prelude::*;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView, Seq};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::fs::File;
-use std::ops::Deref;
-use std::sync::Mutex;
+
+
+
+use std::collections::{HashSet};
+
+
+
+
 
 fn test_prune_low_weight_chains<E: BaseEdge>(
-    name: &str,
+    _name: &str,
     mut graph: SeqGraph<E>,
-    prune_factor: usize,
+    _prune_factor: usize,
     remaining_vertices: HashSet<SeqVertex>,
     chain_count_before_pruning: Option<usize>,
 ) {
     println!("remaining vertices {:?}", &remaining_vertices);
     let copy = remaining_vertices.clone();
-    let mut pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
+    let pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
         0.001,
         MathUtils::log10_to_log(2.0),
         MathUtils::log10_to_log(4.0),
@@ -87,15 +87,15 @@ fn make_prune_chains_data() {
     let v1 = SeqVertex::new(b"A".to_vec());
     let v2 = SeqVertex::new(b"C".to_vec());
     let v3 = SeqVertex::new(b"G".to_vec());
-    let v4 = SeqVertex::new(b"T".to_vec());
-    let v5 = SeqVertex::new(b"AA".to_vec());
-    let v6 = SeqVertex::new(b"CC".to_vec());
+    let _v4 = SeqVertex::new(b"T".to_vec());
+    let _v5 = SeqVertex::new(b"AA".to_vec());
+    let _v6 = SeqVertex::new(b"CC".to_vec());
 
     for edge_weight in vec![1, 2, 3] {
         for prune_factor in vec![1, 2, 3, 4] {
             for is_ref in vec![true, false] {
                 // just an isolated chain
-                let n_expected = if edge_weight < prune_factor && !is_ref {
+                let _n_expected = if edge_weight < prune_factor && !is_ref {
                     3
                 } else {
                     0
@@ -148,7 +148,7 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
     for variant_present in vec![false, true] {
         let mut graph = SeqGraph::new(20);
 
-        let node_indices = graph
+        let _node_indices = graph
             .base_graph
             .add_vertices(vec![&source, &A, &B, &C, &D, &sink]);
         graph.base_graph.add_edges(
@@ -181,7 +181,7 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
             );
         };
 
-        let mut pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
+        let pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
             0.01,
             2.0,
             MathUtils::log10_to_log(4.0),
@@ -266,7 +266,7 @@ fn test_adaptive_chain_pruning_with_bad_bubble() {
             );
         }
 
-        let mut pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
+        let pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
             0.01,
             MathUtils::log10_to_log(1.0),
             MathUtils::log10_to_log(4.0),
@@ -318,7 +318,7 @@ fn test_adaptive_pruning(
     let reads = (0..reference.len())
         .map(|start| {
             (0..depth_alignment_start)
-                .map(|n| {
+                .map(|_n| {
                     generate_read_with_errors(
                         if rng.gen_range(0.0, 1.0) < alt_fraction {
                             alternate
@@ -368,7 +368,7 @@ fn test_adaptive_pruning(
             .count()
     );
 
-    let mut pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
+    let pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
         0.001,
         log_odds_threshold,
         MathUtils::log10_to_log(4.0),

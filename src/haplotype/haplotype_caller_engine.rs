@@ -1678,7 +1678,7 @@ impl HaplotypeCallerEngine {
         // Homozygous likelihoods don't need the logSum trick.
 
         result.genotype_likelihoods[0] += ref_likelihood + log10ploidy;
-        result.genotype_likelihoods[(likelihoodcount - 1)] += non_ref_likelihood + log10ploidy;
+        result.genotype_likelihoods[likelihoodcount - 1] += non_ref_likelihood + log10ploidy;
         // Heterozygous likelihoods need the logSum trick:
 
         let mut i = 1;

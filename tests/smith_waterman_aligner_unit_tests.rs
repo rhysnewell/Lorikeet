@@ -16,44 +16,44 @@ extern crate rand;
 extern crate term;
 
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
-use itertools::Itertools;
-use lorikeet_genome::genotype::genotype_builder::Genotype;
-use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use lorikeet_genome::genotype::genotype_likelihoods::GenotypeLikelihoods;
-use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::model::allele_frequency_calculator::AlleleFrequencyCalculator;
-use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
-use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
-use lorikeet_genome::model::variant_context::VariantContext;
-use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
-use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
+
+
+
+
+
+
+
+
+
+
+
 use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    AVXMode, PairHMMInputScoreImputator,
+    AVXMode,
 };
-use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
+
 use lorikeet_genome::reads::cigar_utils::{
     CigarUtils, ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS,
 };
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     SmithWatermanAligner, SmithWatermanAlignmentResult, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
-use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
-use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
-use lorikeet_genome::utils::base_utils::BaseUtils;
-use lorikeet_genome::utils::math_utils::{MathUtils, LOG10_ONE_HALF};
-use lorikeet_genome::utils::quality_utils::QualityUtils;
-use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
-use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
-use rand::rngs::ThreadRng;
-use rand::seq::index::sample;
+
+
+
+
+
+
+
+
+
 use rayon::prelude::*;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView, Seq};
-use std::cmp::{max, min, Ordering};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::ops::Deref;
-use std::sync::Mutex;
+
+use rust_htslib::bam::record::{Cigar, CigarString};
+use std::cmp::{min};
+
+
+
+
 
 fn get_aligner() -> SmithWatermanAligner {
     SmithWatermanAligner::new()
@@ -63,7 +63,7 @@ fn print_alignment(
     reference: &[u8],
     read: &[u8],
     alignment: SmithWatermanAlignmentResult,
-    overhang_strategy: OverhangStrategy,
+    _overhang_strategy: OverhangStrategy,
 ) {
     let mut b_read = String::new();
     let mut b_ref = String::new();
@@ -75,7 +75,7 @@ fn print_alignment(
     let offset = alignment.get_alignment_offset();
     let mut cigar = alignment.get_cigar();
 
-    if let overhang_strategy = OverhangStrategy::SoftClip {
+    if let _overhang_strategy = OverhangStrategy::SoftClip {
         // we need to go through all the hassle below only if we do not do soft-clipping;
         // otherwise offset is never negative
         if offset < 0 {
@@ -183,14 +183,14 @@ fn print_alignment(
         print_cautiously(&matches, pos, 100);
         print_cautiously(&b_read, pos, 100);
         print_cautiously(&b_ref, pos, 100);
-        println!("");
+        println!();
         pos += 100;
     }
 }
 
 fn print_cautiously(s: &String, start: usize, width: usize) {
     if start >= s.len() {
-        println!("");
+        println!();
     } else {
         let end = min(start + width, s.len());
         println!("{}", &s[start..end]);
@@ -326,9 +326,9 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
 
     //Create two versions of the same sequence with different flanking regions.
     let padded_ref = "GCGTCGCAGTCTTAAGGCCCCGCCTTTTCAGACAGCTTCCGCTGGGCCTGGGCCGCTGCGGGGCGGTCACGGCCCCTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGAGGGGGCCCGGGGCCGCGTCCCTGGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGACCGGGCCGAGCCGGGGGAAGGGCTCCGGTGACT";
-    let padded_hap = "GCGTCGCAGTCTTAAGGCCCCGCCTTTTCAGACAGCTTCCGCTGGGCCTGGGCCGCTGCGGGGCGGTCACGGCCCCTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGA--GGGCC---------------GGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGACCGGGCCGAGCCGGGGGAAGGGCTCCGGTGACT".replace("-", "");
+    let padded_hap = "GCGTCGCAGTCTTAAGGCCCCGCCTTTTCAGACAGCTTCCGCTGGGCCTGGGCCGCTGCGGGGCGGTCACGGCCCCTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGA--GGGCC---------------GGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGACCGGGCCGAGCCGGGGGAAGGGCTCCGGTGACT".replace('-', "");
     let not_padded_ref = "CTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGAGGGGGCCCGGGGCCGCGTCCCTGGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGA";
-    let not_padded_hap = "CTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGA---------GGGCC--------GGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGA".replace("-", "");
+    let not_padded_hap = "CTTTAAGCCTGAGCCCCGCCCCCTGGCTCCCCGCCCCCTCTTCTCCCCTCCCCCAAGCCAGCACCTGGTGCCCCGGCGGGTCGTGCGGCGCGGCGCTCCGCGGTGAGCGCCTGACCCCGA---------GGGCC--------GGGCCCTCCCCACCCTTGCGGTGGCCTCGCGGGTCCCAGGGGCGGGGCTGGAGCGGCAGCAGGGCCGGGGAGATGGGCGGTGGGGAGCGCGGGAGGGA".replace('-', "");
 
     //a simplified version of the getCigar routine in the haplotype caller to align these
     let SW_PAD = "NNNNNNNNNN";
@@ -337,17 +337,17 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
     let not_paddeds_ref = format!("{}{}{}", SW_PAD, not_padded_ref, SW_PAD);
     let not_paddeds_hap = format!("{}{}{}", SW_PAD, not_padded_hap, SW_PAD);
 
-    let mut padded_alignment = SmithWatermanAligner::align(
+    let padded_alignment = SmithWatermanAligner::align(
         paddeds_ref.as_bytes(),
         paddeds_hap.as_bytes(),
-        &*NEW_SW_PARAMETERS,
+        &NEW_SW_PARAMETERS,
         OverhangStrategy::SoftClip,
         AVXMode::detect_mode(),
     );
-    let mut not_padded_alignment = SmithWatermanAligner::align(
+    let _not_padded_alignment = SmithWatermanAligner::align(
         not_paddeds_ref.as_bytes(),
         not_paddeds_hap.as_bytes(),
-        &*NEW_SW_PARAMETERS,
+        &NEW_SW_PARAMETERS,
         OverhangStrategy::SoftClip,
         AVXMode::detect_mode(),
     );
@@ -355,8 +355,8 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
     //Now verify that the two sequences have the same alignment and not match positions.
     let raw_padded = padded_alignment.get_cigar();
     let not_padded = padded_alignment.get_cigar();
-    let padded_c = raw_padded.0.clone();
-    let not_padded_c = not_padded.0.clone();
+    let padded_c = raw_padded.0;
+    let not_padded_c = not_padded.0;
 
     assert_eq!(padded_c.len(), not_padded_c.len());
     for i in 0..not_padded_c.len() {
@@ -372,7 +372,7 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
         assert_eq!(l1, l2);
         assert!(CigarUtils::cigar_elements_are_same_type(
             pc,
-            &Some(npc.clone())
+            &Some(*npc)
         ));
     }
 }
@@ -997,13 +997,11 @@ fn test_avx_mode() {
 }
 
 fn assert_cigar_are_equal(reference: &[u8], read: &[u8], cigar_string: Vec<Cigar>) {
-    let cigar_string = CigarString::from(cigar_string);
+    let _cigar_string = CigarString::from(cigar_string);
     (0..1000).into_par_iter().for_each(|_| {
-        for params in vec![
-            &*NEW_SW_PARAMETERS,
+        for params in &[&*NEW_SW_PARAMETERS,
             &*STANDARD_NGS,
-            &*ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS,
-        ] {
+            &*ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS] {
             // println!("AVX Off");
             let non_avx_result = CigarUtils::calculate_cigar(
                 reference,

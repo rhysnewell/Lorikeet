@@ -14,17 +14,17 @@ use lorikeet_genome::graphs::base_edge::BaseEdge;
 use lorikeet_genome::graphs::base_vertex::BaseVertex;
 use lorikeet_genome::graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
 use lorikeet_genome::read_threading::abstract_read_threading_graph::{
-    AbstractReadThreadingGraph, DanglingChainMergeHelper, SequenceForKmers,
+    AbstractReadThreadingGraph, SequenceForKmers,
 };
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::reads::read_utils::ReadUtils;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    SmithWatermanAligner, SmithWatermanAlignmentResult, ORIGINAL_DEFAULT, STANDARD_NGS,
+    STANDARD_NGS,
 };
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
 use lorikeet_genome::utils::base_utils::BaseUtils;
-use petgraph::stable_graph::NodeIndex;
+
 use petgraph::Direction;
 use rand::prelude::ThreadRng;
 use rand::Rng;
@@ -38,7 +38,7 @@ lazy_static! {
 }
 
 fn get_bytes(alignment: &str) -> String {
-    return alignment.replace("-", "");
+    alignment.replace('-', "")
 }
 
 fn assert_non_uniques(assembler: &mut ReadThreadingGraph, non_uniques: HashSet<Kmer>, pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers>>) {
@@ -302,7 +302,7 @@ fn test_counting_of_start_edges_with_multiple_prefixes() {
 
     for edge in assembler.get_base_graph().graph.edge_indices() {
         let source = assembler.get_base_graph().get_edge_source(edge);
-        let source_weight = assembler
+        let _source_weight = assembler
             .get_base_graph()
             .graph
             .node_weight(source)
@@ -616,12 +616,12 @@ fn test_dangling_tails(
     assert!(alt_sink.is_some(), "We did not find a non-reference sink");
 
     // confirm that the SW alignment agrees with our expectations
-    let mut result = rtgraph.generate_cigar_against_downwards_reference_path(
+    let result = rtgraph.generate_cigar_against_downwards_reference_path(
         alt_sink.unwrap(),
         0,
         4,
         false,
-        &*DANGLING_END_SW_PARAMETERS,
+        &DANGLING_END_SW_PARAMETERS,
     );
 
     match result {
@@ -633,7 +633,7 @@ fn test_dangling_tails(
                 result.cigar.to_string(),
                 cigar.to_string(),
                 "SW generated cigar = {}",
-                result.cigar.to_string()
+                result.cigar
             );
 
             // confirm that the goodness of the cigar agrees with our expectations
@@ -650,7 +650,7 @@ fn test_dangling_tails(
                 // confirm that we created the appropriate edge
                 if merge_point_distance_from_sink >= 0 {
                     let mut v = alt_sink.unwrap();
-                    for i in 0..merge_point_distance_from_sink {
+                    for _i in 0..merge_point_distance_from_sink {
                         if rtgraph.get_base_graph().in_degree_of(v) != 1 {
                             assert!(false, "Encountered vertex with multiple edges");
                         }
@@ -749,15 +749,15 @@ fn test_forked_dangling_ends_with_suffix_code() {
             continue;
         } else {
             // confirm that the SW alignment agrees with our expectations
-            let mut result = rtgraph.generate_cigar_against_downwards_reference_path(
+            let result = rtgraph.generate_cigar_against_downwards_reference_path(
                 alt_sink,
                 0,
                 2,
                 false,
-                &*DANGLING_END_SW_PARAMETERS,
+                &DANGLING_END_SW_PARAMETERS,
             );
             assert!(result.is_some());
-            let mut result = result.unwrap();
+            let result = result.unwrap();
             assert!(ReadThreadingGraph::cigar_is_okay_to_merge(
                 &result.cigar,
                 false,
@@ -839,15 +839,15 @@ fn test_forked_dangling_ends() {
         }
 
         // confirm that the SW alignment agrees with our expectations
-        let mut result = rtgraph.generate_cigar_against_downwards_reference_path(
+        let result = rtgraph.generate_cigar_against_downwards_reference_path(
             alt_sink,
             0,
             4,
             true,
-            &*DANGLING_END_SW_PARAMETERS,
+            &DANGLING_END_SW_PARAMETERS,
         );
         assert!(result.is_some());
-        let mut result = result.unwrap();
+        let result = result.unwrap();
         assert!(ReadThreadingGraph::cigar_is_okay_to_merge(
             &result.cigar,
             false,
@@ -1012,12 +1012,12 @@ fn test_dangling_heads(
     assert!(alt_source.is_some(), "We did not find a non-reference sink");
 
     // confirm that the SW alignment agrees with our expectations
-    let mut result = rtgraph.generate_cigar_against_upwards_reference_path(
+    let result = rtgraph.generate_cigar_against_upwards_reference_path(
         alt_source.unwrap(),
         0,
         1,
         false,
-        &*DANGLING_END_SW_PARAMETERS,
+        &DANGLING_END_SW_PARAMETERS,
     );
 
     match result {
@@ -1029,7 +1029,7 @@ fn test_dangling_heads(
                 result.cigar.to_string(),
                 cigar.to_string(),
                 "SW generated cigar = {}",
-                result.cigar.to_string()
+                result.cigar
             );
 
             // confirm that the tail merging works as expected
@@ -1151,5 +1151,5 @@ fn generate_read_with_errors(
         }
     });
 
-    return result;
+    result
 }

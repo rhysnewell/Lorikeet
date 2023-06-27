@@ -29,7 +29,7 @@ fn test_qual_to_probs(ins_qual: u8, del_qual: u8, gcp: u8, expected: Vec<f64>) {
 }
 
 fn test_qual_to_probs_log10(ins_qual: u8, del_qual: u8, gcp: u8, expected: Vec<f64>) {
-    let mut log_expected = expected
+    let log_expected = expected
         .into_iter()
         .map(|v| v.log10())
         .collect::<Vec<f64>>();
@@ -80,7 +80,7 @@ fn assert_equals_double_array(actual: &[f64], expected: &[f64], tolerance: f64) 
 
 #[test]
 fn make_test_qual_to_probs() {
-    let mut qual_to_probs_data_provider = QualsToProbsDataProvider::new();
+    let qual_to_probs_data_provider = QualsToProbsDataProvider::new();
     for (ins_qual, del_qual, gcp, expected) in qual_to_probs_data_provider.into_iter() {
         test_qual_to_probs(ins_qual, del_qual, gcp, expected);
     }
@@ -88,7 +88,7 @@ fn make_test_qual_to_probs() {
 
 #[test]
 fn make_test_qual_to_probs_log10() {
-    let mut qual_to_probs_data_provider = QualsToProbsDataProvider::new();
+    let qual_to_probs_data_provider = QualsToProbsDataProvider::new();
     for (ins_qual, del_qual, gcp, expected) in qual_to_probs_data_provider.into_iter() {
         test_qual_to_probs_log10(ins_qual, del_qual, gcp, expected);
     }
@@ -96,7 +96,7 @@ fn make_test_qual_to_probs_log10() {
 
 #[test]
 fn make_test_quals_to_trans_probs() {
-    let mut qual_to_trans_probs_data_provider = QualsToTransProbsDataProvider::new();
+    let qual_to_trans_probs_data_provider = QualsToTransProbsDataProvider::new();
     for (ins_quals, del_quals, gap_quals, expected) in qual_to_trans_probs_data_provider.into_iter()
     {
         test_quals_to_trans_probs(ins_quals, del_quals, gap_quals, expected)
@@ -134,7 +134,7 @@ fn quals_to_probs(ins_qual: u8, del_qual: u8, gap_qual: u8) -> Vec<f64> {
     trans[PairHMMModel::deletion_to_deletion] = indel_to_indel;
     trans[PairHMMModel::insertion_to_insertion] = indel_to_indel;
 
-    return trans;
+    trans
 }
 
 struct QualsToTransProbsDataProvider {
@@ -185,9 +185,9 @@ impl Iterator for QualsToTransProbsDataProvider {
                     gap_quals[i] = gap_qual;
                 }
 
-                return Some((ins_quals, del_quals, gap_quals, matrix));
+                Some((ins_quals, del_quals, gap_quals, matrix))
             }
-            None => return None,
+            None => None,
         }
     }
 }
@@ -210,7 +210,7 @@ impl Iterator for QualsToProbsDataProvider {
     fn next(&mut self) -> Option<Self::Item> {
         let quals = self.quals_iterator.next();
         match quals {
-            None => return None,
+            None => None,
             Some(quals) => {
                 let ins_qual = quals.0;
                 let del_qual = quals.1;
@@ -218,7 +218,7 @@ impl Iterator for QualsToProbsDataProvider {
 
                 let trans = quals_to_probs(ins_qual, del_qual, gap_qual);
 
-                return Some((ins_qual, del_qual, gap_qual, trans));
+                Some((ins_qual, del_qual, gap_qual, trans))
             }
         }
     }
@@ -248,9 +248,9 @@ impl Iterator for QualIterator {
             let del = indel_group % DEL_QUALS.len();
             let ins = indel_group % DEL_QUALS.len();
             self.i += 1;
-            return Some((INS_QUALS[ins], DEL_QUALS[del], GAP_QUALS[gap]));
+            Some((INS_QUALS[ins], DEL_QUALS[del], GAP_QUALS[gap]))
         } else {
-            return None;
+            None
         }
     }
 }

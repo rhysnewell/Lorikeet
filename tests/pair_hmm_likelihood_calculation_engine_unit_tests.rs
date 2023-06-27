@@ -66,7 +66,7 @@ fn test_compute_likelihoods() {
     );
     assembly_result_set.add_haplotype(hap1.clone());
 
-    let mut bases_modified = ref_bases.clone();
+    let mut bases_modified = ref_bases;
     bases_modified[5] = b'C';
     let mut hap2 = Haplotype::new(bases_modified.as_slice(), false);
     hap2.set_genome_location(SimpleInterval::new(

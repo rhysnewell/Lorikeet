@@ -147,7 +147,7 @@ fn test_determine_types() {
 
     let alleles = vec![
         vc_unit_test.ATC_ref.clone(),
-        CAT.clone(),
+        CAT,
         ByteArrayAllele::new("GGG".as_bytes(), false),
     ];
     let mut vc = VariantContext::build(0, snp_loc_stop, snp_loc_stop + 2, alleles);
@@ -162,7 +162,7 @@ fn test_determine_types() {
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop + 2, alleles);
     assert_eq!(vc.get_type(), &VariantType::Indel);
 
-    let alleles = vec![vc_unit_test.T_ref.clone(), TA.clone(), TC.clone()];
+    let alleles = vec![vc_unit_test.T_ref.clone(), TA, TC.clone()];
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop, alleles);
     assert_eq!(vc.get_type(), &VariantType::Indel);
 
@@ -184,16 +184,16 @@ fn test_determine_types() {
 
     // test MIXED
     println!("Mixed start");
-    let alleles = vec![TA_ref.clone(), vc_unit_test.T.clone(), TC.clone()];
+    let alleles = vec![TA_ref.clone(), vc_unit_test.T.clone(), TC];
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop + 1, alleles);
     assert_eq!(vc.get_type(), &VariantType::Mixed);
 
-    let alleles = vec![TA_ref.clone(), vc_unit_test.T.clone(), AC.clone()];
+    let alleles = vec![TA_ref, vc_unit_test.T.clone(), AC];
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop + 1, alleles);
     assert_eq!(vc.get_type(), &VariantType::Mixed);
 
     println!("Broken");
-    let alleles = vec![AC_ref.clone(), vc_unit_test.ATC.clone(), AT.clone()];
+    let alleles = vec![AC_ref, vc_unit_test.ATC.clone(), AT];
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop + 1, alleles);
     assert_eq!(vc.get_type(), &VariantType::Mixed);
 
@@ -206,7 +206,7 @@ fn test_determine_types() {
     assert_eq!(vc.get_type(), &VariantType::Mixed);
 
     // test symbolic
-    let alleles = vec![vc_unit_test.T_ref.clone(), symbolic.clone()];
+    let alleles = vec![vc_unit_test.T_ref, symbolic];
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop, alleles);
     assert_eq!(vc.get_type(), &VariantType::Symbolic);
 }
@@ -223,7 +223,7 @@ fn test_multiple_snp_allele_ordering() {
     let alleles_unnatural_order = vec![
         vc_unit_test.A_ref.clone(),
         vc_unit_test.T.clone(),
-        vc_unit_test.C.clone(),
+        vc_unit_test.C,
     ];
 
     let natural_vc = VariantContext::build(
