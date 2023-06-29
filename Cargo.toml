@@ -8,8 +8,8 @@ homepage = "https://rhysnewell.github.io/Lorikeet/"
 repository = "https://github.com/rhysnewell/Lorikeet"
 documentation = "https://github.com/rhysnewell/Lorikeet"
 readme = "README.md"
-keywords = ["bioinformatics", "metagenomics", "variant-calling", "strain-resolver"]
-categories = ["bioinformatics::metagenomics", "bioinformatics::variant-calling", "bioinformatics::strain-resolver"]
+keywords = ["bioinformatics", "metagenomics", "variant-calling", "strain-anlaysis"]
+categories = ["bioinformatics::metagenomics", "bioinformatics::variant-calling", "bioinformatics::strain-analysis"]
 exclude = [
   "tests/*"
 ]

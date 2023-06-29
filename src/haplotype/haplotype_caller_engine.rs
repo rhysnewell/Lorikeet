@@ -387,7 +387,7 @@ impl HaplotypeCallerEngine {
                             debug!("Found reference: {} matching reference {}", target_name, &reference);
                             debug!("Ref idx {} tid {}", ref_idx, tid);
                             // Get contig stats
-                            let n_tids = reference_reader.update_ref_index_tids(ref_idx, tid);
+                            let _n_tids = reference_reader.update_ref_index_tids(ref_idx, tid);
 
                             reference_reader.add_target(contig_name, tid);
                             let target_len = header.target_len(tid as u32).unwrap();
@@ -657,8 +657,9 @@ impl HaplotypeCallerEngine {
                         min(outer_chunk_location.end + 1, target_len as usize - 1) as i64,
                     ))
                     .unwrap_or_else(|_| {
+                        warn!("BAM index potentially outdated. Fetching of interval failed.");
                         panic!(
-                            "Failed to fetch interval {}:{}-{} contig",
+                            "Failed to fetch interval {}:{}-{} contig. Try regenerating BAM indices, or deleting old BAI files.",
                             tid,
                             outer_chunk_location.start,
                             min(outer_chunk_location.end + 1, target_len as usize - 1),
