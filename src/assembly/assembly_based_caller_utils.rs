@@ -1073,7 +1073,7 @@ impl AssemblyBasedCallerUtils {
             );
             g.attribute(
                 HAPLOTYPE_CALLER_PHASING_GT_KEY.to_string(),
-                AttributeObject::String(phase_gt.get_description().clone()),
+                AttributeObject::String(phase_gt.get_description()),
             );
             g.attribute(
                 PHASE_SET_KEY.to_string(),

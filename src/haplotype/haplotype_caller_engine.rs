@@ -6,7 +6,7 @@ use rust_htslib::bam::{record::Cigar, Record};
 use rust_htslib::bcf::record::GenotypeAllele;
 use rust_htslib::bcf::{Format, Header, Writer};
 use std::cmp::{max, min};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, BufRead, Write};
 
@@ -351,7 +351,9 @@ impl HaplotypeCallerEngine {
             Self::MINIMUM_PUTATIVE_PLOIDY_FOR_ACTIVE_REGION_DISCOVERY,
         );
 
+        // let mut tids: HashMap<Arc<[u8]>, HashMap<usize, usize>> = HashMap::new();
         let mut tids: HashSet<usize> = HashSet::new();
+        let mut found_contigs = HashMap::new();
         let reference = reference_reader.retrieve_reference_stem(ref_idx);
 
         indexed_bam_readers
@@ -382,12 +384,25 @@ impl HaplotypeCallerEngine {
                         };
                         if target_match
                         {
+                            debug!("Found reference: {} matching reference {}", target_name, &reference);
+                            debug!("Ref idx {} tid {}", ref_idx, tid);
                             // Get contig stats
-                            reference_reader.update_ref_index_tids(ref_idx, tid);
+                            let _n_tids = reference_reader.update_ref_index_tids(ref_idx, tid);
+
                             reference_reader.add_target(contig_name, tid);
                             let target_len = header.target_len(tid as u32).unwrap();
                             reference_reader.add_length(tid, target_len);
                             tids.insert(tid);
+
+                            let previous_tid = found_contigs.entry(contig_name.to_vec()).or_insert(tid);
+                            if *previous_tid != tid {
+                                warn!("Contig {} found more than once with different BAM header index", std::str::from_utf8(contig_name).unwrap());
+                                warn!("Ensure Contigs occur in same order in all BAM files");
+                                panic!("Contigs out of order in BAM files.");
+                            }
+
+                            // let tids_for_contig = tids.entry(Arc::from(contig_name)).or_insert_with(HashMap::new);
+                            // tids_for_contig.entry(sample_idx).or_insert(tid);
                         }
                     })
             });
@@ -642,11 +657,13 @@ impl HaplotypeCallerEngine {
                         min(outer_chunk_location.end + 1, target_len as usize - 1) as i64,
                     ))
                     .unwrap_or_else(|_| {
+                        warn!("BAM index potentially outdated. Fetching of interval failed.");
                         panic!(
-                            "Failed to fetch interval {}:{}-{}",
+                            "Failed to fetch interval {}:{}-{} contig. Try regenerating BAM indices, or deleting old BAI files.",
                             tid,
                             outer_chunk_location.start,
-                            min(outer_chunk_location.end + 1, target_len as usize - 1)
+                            min(outer_chunk_location.end + 1, target_len as usize - 1),
+                            // std::str::from_utf8(bam_generated.header().tid2name(tid as u32)).unwrap()
                         )
                     });
 

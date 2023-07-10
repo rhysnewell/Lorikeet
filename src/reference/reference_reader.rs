@@ -160,12 +160,13 @@ impl ReferenceReader {
         self.target_names.insert(tid, target.to_vec());
     }
 
-    pub fn update_ref_index_tids(&mut self, ref_index: usize, tid: usize) {
+    pub fn update_ref_index_tids(&mut self, ref_index: usize, tid: usize) -> usize {
         let tids = self
             .reference_index_to_tid
             .entry(ref_index)
             .or_insert_with(LinkedHashSet::new);
         tids.insert(tid);
+        tids.len()
     }
 
     pub fn retrieve_tids_for_ref_index(&self, ref_index: usize) -> Option<&LinkedHashSet<usize>> {
