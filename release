@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+
+###############################################################################
+#
+#    Copyright (C) 2020 Ben Woodcroft
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+
+__author__ = "Ben Woodcroft"
+__copyright__ = "Copyright 2023"
+__credits__ = ["Ben Woodcroft"]
+__license__ = "GPL3"
+__maintainer__ = "Ben Woodcroft"
+__email__ = "benjwoodcroft near gmail.com"
+__status__ = "Development"
+
+import argparse
+import logging
+import sys
+import os
+
+import extern
+
+sys.path = [os.path.join(os.path.dirname(os.path.realpath(__file__)),'..')] + sys.path
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', help='output debug information', action="store_true")
+    #parent_parser.add_argument('--version', help='output version information and quit',  action='version', version=repeatm.__version__)
+    parser.add_argument('--quiet', help='only output errors', action="store_true")
+
+    parser.add_argument('--version', required=True, help='e.g. 0.0.6')
+
+    args = parser.parse_args()
+
+    # Setup logging
+    if args.debug:
+        loglevel = logging.DEBUG
+    elif args.quiet:
+        loglevel = logging.ERROR
+    else:
+        loglevel = logging.INFO
+    logging.basicConfig(level=loglevel, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+
+    if args.version.startswith('v'):
+        raise Exception("--version shouldn't have a leading 'v'")
+
+    logging.info("Checking for uncommitted code")
+    try:
+        extern.run('git diff --exit-code')
+        extern.run('git diff --exit-code --cached')
+    except:
+        raise Exception("There appears to be uncommited code changes. Please commit everything first.")
+
+    print("Updating deps ...")
+    extern.run('cargo update')
+
+    print("Running tests ...")
+    extern.run('cargo test')
+
+    # Get version from Cargo.toml
+    with open('Cargo.toml') as f:
+        cargo_toml = f.read()
+        cargo_toml_version = cargo_toml.split('version = "')[1].split('"')[0]
+
+    if cargo_toml_version != args.version:
+        raise Exception("Cargo.toml version ({}) doesn't match --version ({})".format(cargo_toml_version, args.version))
+
+    # print(extern.run('git commit -am "v{}"'.format(args.version)))
+    print(extern.run('git tag v{}'.format(args.version)))
+
+    logging.info("Now run cargo publish && git push && git push --tags")
