@@ -1,12 +1,13 @@
-use bio::io::gff::GffType::GFF3;
 use bird_tool_utils::command::finish_command_safely;
 use indicatif::{style::TemplateError, MultiProgress, ProgressBar, ProgressStyle};
+use itertools::Itertools;
 use rayon::prelude::*;
 use rust_htslib::bcf::Read;
 use scoped_threadpool::Pool;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::fs::{create_dir_all, File};
+use std::fs::{create_dir_all, File, OpenOptions};
+use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -1352,34 +1353,37 @@ fn calculate_dnds(
 
     match check_for_gff(reference, output_prefix, args) {
         Some(mut genes) => {
-            let vcf_path = format!(
+            let vcf_prefix = format!(
                 "{}/{}.vcf",
                 output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx],
             );
-            if !Path::new(&vcf_path).exists() {
-                // no variants founds
-                return;
-            }
 
-            debug!("Reading VCF: {}", &vcf_path);
-
-            let mut variants = VariantContext::generate_vcf_index(vcf_path.as_str());
+            debug!("Reading VCF: {}", &vcf_prefix);
+            let mut variants = VariantContext::get_vcf_reader(vcf_prefix.as_str());
             debug!("Success!");
             let mut dnds_calculator = CodonTable::setup();
             dnds_calculator.get_codon_table(11);
 
-            let mut new_gff_writer = bio::io::gff::Writer::to_file(
-                format!(
-                    "{}/{}.gff",
+            // create new TSV file that will contain gene\tSNPs\tindels\tdN/dS
+            let tsv_file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(format!(
+                    "{}/{}_dnds.tsv",
                     output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx]
-                ),
-                GFF3,
-            )
-            .expect("Unable to create GFF file");
+                )).unwrap();
+            let mut tsv_writer = BufWriter::new(tsv_file);
+            // write header
+            tsv_writer
+                .write_all(
+                    format!(
+                        "gene\tstart\tstop\tSNPs\tindels\tdN/dS\n",
+                    ).as_bytes(),
+                ).expect("Unable to write to TSV file");
 
             for gene in genes.records() {
                 match gene {
-                    Ok(mut gene) => {
+                    Ok(gene) => {
                         let (snps, frameshifts, dnds_values) = dnds_calculator.find_mutations(
                             &gene,
                             &mut variants,
@@ -1390,20 +1394,27 @@ fn calculate_dnds(
                             qual_filter,
                             depth_per_sample_filter,
                         );
-
-                        let attributes = gene.attributes_mut();
-
-                        attributes.insert("snps".to_string(), format!("{:?}", snps));
-                        attributes.insert("indels".to_string(), format!("{:?}", frameshifts));
-                        attributes.insert("dN/dS".to_string(), format!("{:?}", dnds_values));
-                        match new_gff_writer.write(&gene) {
-                            Ok(_) => continue,
-                            Err(_) => panic!("Unable to write to GFF file"),
-                        };
+                        if snps.iter().sum::<usize>() == 0 && frameshifts.iter().sum::<usize>() == 0 {
+                            continue;
+                        }
+                        // write to TSV file
+                        tsv_writer
+                            .write_all(
+                                format!(
+                                    "{}\t{}\t{}\t{}\t{}\t{}\n",
+                                    gene.seqname(),
+                                    gene.start(),
+                                    gene.end(),
+                                    snps.into_iter().map(|s| format!("{}", s)).join(","),
+                                    frameshifts.into_iter().map(|s| format!("{}", s)).join(","),
+                                    dnds_values.into_iter().map(|s| format!("{}", s)).join(","),
+                                ).as_bytes(),
+                            ).expect("Unable to write to TSV file");
                     }
                     Err(_) => continue,
                 }
             }
+            tsv_writer.flush().expect("Unable to flush TSV writer");
         }
         None => {
             // too many GFF files in output folder, abort this genome
@@ -1411,8 +1422,8 @@ fn calculate_dnds(
         }
     };
 
-    let placeholder_gene_file = format!("{}/genes.gff", output_prefix);
-    if Path::new(&placeholder_gene_file).exists() {
-        std::fs::remove_file(&placeholder_gene_file).expect("Unable to remove placeholder gene file");
-    }
+    // let placeholder_gene_file = format!("{}/genes.gff", output_prefix);
+    // if Path::new(&placeholder_gene_file).exists() {
+    //     std::fs::remove_file(&placeholder_gene_file).expect("Unable to remove placeholder gene file");
+    // }
 }

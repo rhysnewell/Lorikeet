@@ -735,6 +735,19 @@ impl VariantContext {
         }
     }
 
+    pub fn get_vcf_reader<S: AsRef<str>>(vcf_path: S) -> IndexedReader {
+        match IndexedReader::from_path(format!("{}.gz", vcf_path.as_ref())) {
+            Ok(vcf_reader) => {
+                // debug!("Found readable VCF file");
+                return vcf_reader;
+            }
+            Err(_e) => {
+                // vcf file likely not indexed
+                Self::generate_vcf_index(vcf_path)
+            }
+        }
+    }
+
     pub fn generate_vcf_index<S: AsRef<str>>(vcf_path: S) -> IndexedReader {
         check_for_bcftools();
         // debug!("Generating VCF index");

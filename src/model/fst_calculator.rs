@@ -94,9 +94,10 @@ samples = [str(i + 1) for i in range(vcf['calldata/DP'].shape[1])]
 np.nan_to_num(mean_fst_df, copy=False, nan=0, posinf=0, neginf=0)
 mean_fst_df = np.insert(mean_fst_df, 0, np.array([i + 1 for i in range(vcf['calldata/DP'].shape[1])]), axis=1)
 samples.insert(0, "SampleID")
-mean_fst_df = pr.DataFrame(mean_fst_df, columns=samples)
+mean_fst_df = pr.DataFrame(mean_fst_df)
+mean_fst_df.columns = samples
 #pr_df.write_csv(file=f"{output_prefix}/{genome_name}_fst_values.tsv", sep='\t')
-mean_fst_df.write_csv(file=f"{output_prefix}/{genome_name}_sample_fst_values.tsv", sep='\t')"#;
+mean_fst_df.write_csv(file=f"{output_prefix}/{genome_name}_sample_fst_values.tsv", separator='\t')"#;
         py.run(code, None, Some(&locals))?;
         Ok(())
     })

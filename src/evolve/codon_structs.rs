@@ -183,7 +183,12 @@ impl Translations for CodonTable {
                 let end = *gene.end() as usize - 1;
                 // debug!("Start {} End {}", start, end);
                 // fetch variants in this window
-                variants.fetch(rid, start as u64, Some(end as u64)).expect("Unable to fetch variants");
+                match variants.fetch(rid, start as u64, Some(end as u64)) {
+                    Ok(_) => {}
+                    Err(_e) => {
+                        return (vec![0; n_samples], vec![0; n_samples], vec![1.0; n_samples]);
+                    }
+                };
 
                 // VariantContext::process_vcf_in_region()
 
