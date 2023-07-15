@@ -1377,7 +1377,7 @@ fn calculate_dnds(
             tsv_writer
                 .write_all(
                     format!(
-                        "gene\tstart\tstop\tSNPs\tindels\tdN/dS\n",
+                        "contig\tID\tstart\tstop\tSNPs\tindels\tdN/dS\n",
                     ).as_bytes(),
                 ).expect("Unable to write to TSV file");
 
@@ -1397,12 +1397,21 @@ fn calculate_dnds(
                         if snps.iter().sum::<usize>() == 0 && frameshifts.iter().sum::<usize>() == 0 {
                             continue;
                         }
+
+                        // get the ID from the attributes
+                        let id = gene
+                            .attributes()
+                            .get("ID")
+                            .expect("Unable to get ID from GFF file")
+                            .to_string();
+
                         // write to TSV file
                         tsv_writer
                             .write_all(
                                 format!(
-                                    "{}\t{}\t{}\t{}\t{}\t{}\n",
+                                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                                     gene.seqname(),
+                                    id,
                                     gene.start(),
                                     gene.end(),
                                     snps.into_iter().map(|s| format!("{}", s)).join(","),
