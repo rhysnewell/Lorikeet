@@ -1017,7 +1017,7 @@ impl<'a> LorikeetEngine<'a> {
         };
 
         let sty_eta = ProgressStyle::default_bar().template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]",
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
         )?;
 
         let sty_aux = ProgressStyle::default_bar()
