@@ -188,11 +188,18 @@ impl HaplotypeCallerGenotypingEngine {
                     );
 
                     debug!("Allele mapper 1 {:?}", &allele_mapper.iter().map(|(k, v)| (*k, v.len())).collect::<Vec<(usize, usize)>>());
-                    self.remove_alt_alleles_if_too_many_genotypes(
+                    match self.remove_alt_alleles_if_too_many_genotypes(
                         ploidy,
                         &mut allele_mapper,
                         &mut merged_vc,
-                    );
+                    ) {
+                        Ok(_) => (),
+                        Err(error) => {
+                            debug!("Error removing alt alleles {:?} for loc {}", error, loc);
+                            debug!("Likely too many alt alleles, reference allele lost.");
+                            continue;
+                        },
+                    };
                     debug!("Allele mapper 2 {:?}", &allele_mapper.iter().map(|(k, v)| (*k, v.len())).collect::<Vec<(usize, usize)>>());
                     // }
                     debug!("Alleles in read likelihoods {:?}", read_likelihoods.alleles);
@@ -566,7 +573,7 @@ impl HaplotypeCallerGenotypingEngine {
         ploidy: usize,
         allele_mapper: &mut LinkedHashMap<usize, Vec<&'b Haplotype<SimpleInterval>>>,
         merged_vc: &mut VariantContext,
-    ) {
+    ) -> anyhow::Result<()> {
         let original_allele_count = allele_mapper.len();
         let max_genotype_count_to_enumerate = self.max_genotype_count_to_enumerate;
         let practical_allele_count = self
@@ -584,7 +591,7 @@ impl HaplotypeCallerGenotypingEngine {
                 allele_mapper,
                 merged_vc,
                 *practical_allele_count,
-            );
+            )?;
             allele_mapper.retain(|allele, _| alleles_to_keep.contains(&allele));
 
             // debug!(
@@ -595,6 +602,8 @@ impl HaplotypeCallerGenotypingEngine {
 
             Self::remove_excess_alt_alleles_from_vc(merged_vc, alleles_to_keep)
         }
+
+        Ok(())
     }
 
     /**
@@ -649,9 +658,9 @@ impl HaplotypeCallerGenotypingEngine {
         allele_mapper: &mut LinkedHashMap<usize, Vec<&'b Haplotype<SimpleInterval>>>,
         merged_vc: &mut VariantContext,
         desired_num_of_alleles: usize,
-    ) -> Vec<usize> {
+    ) -> anyhow::Result<Vec<usize>> {
         if allele_mapper.len() <= desired_num_of_alleles {
-            return allele_mapper.keys().map(|a| *a).collect::<Vec<usize>>();
+            return Ok(allele_mapper.keys().map(|a| *a).collect::<Vec<usize>>());
         }
 
         let mut allele_max_priority_q = BinaryHeap::new();
@@ -690,11 +699,23 @@ impl HaplotypeCallerGenotypingEngine {
             alleles_to_retain.insert(current_allele);
         }
 
-        return allele_mapper
+        // get the reference allele index and ensure that it remains in the 
+        // alleles to retain set
+        if let Some(ref_allele_index) = merged_vc.alleles
+            .iter()
+            .position(|a| a.is_reference()) {
+                if !alleles_to_retain.contains(&ref_allele_index) {
+                    alleles_to_retain.insert(ref_allele_index);
+                }
+            } else {
+                anyhow::bail!("Reference allele not found in merged VC alleles!")
+            }
+
+        return Ok(allele_mapper
             .keys()
             .filter(|a| alleles_to_retain.contains(a))
             .map(|a| *a)
-            .collect::<Vec<usize>>();
+            .collect::<Vec<usize>>());
     }
 
     fn replace_span_dels(
