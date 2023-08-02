@@ -600,7 +600,7 @@ impl HaplotypeCallerGenotypingEngine {
             //     merged_vc.loc, ploidy, original_allele_count, practical_allele_count, &alleles_to_keep
             // );
 
-            Self::remove_excess_alt_alleles_from_vc(merged_vc, alleles_to_keep)
+            Self::remove_excess_alt_alleles_from_vc(merged_vc, alleles_to_keep)?;
         }
 
         Ok(())
@@ -616,30 +616,33 @@ impl HaplotypeCallerGenotypingEngine {
     fn remove_excess_alt_alleles_from_vc(
         input_vc: &mut VariantContext,
         alleles_to_keep: Vec<usize>,
-    ) {
+    ) -> anyhow::Result<()> {
         let input_len = input_vc.alleles.len();
-        assert!(
-            alleles_to_keep
-                .iter()
-                .any(|a| input_vc.alleles[*a].is_reference()),
-            "alleles to keep doesn't contain reference allele!"
-        );
-        assert!(
-            alleles_to_keep.iter().all(|a| a < &input_len),
-            "alleles to keep is not a subset of input VC alleles"
-        );
+
+        if !alleles_to_keep
+            .iter()
+            .any(|a| input_vc.alleles[*a].is_reference()) {
+            anyhow::bail!("alleles to keep doesn't contain reference allele!");
+        }
+
+        if !alleles_to_keep.iter().all(|a| *a < input_len) {
+            anyhow::bail!("alleles to keep is not a subset of input VC alleles");
+        }
 
         if input_vc.alleles.len() == alleles_to_keep.len() {
             // do nothing
-        } else {
-            // input_vc.alleles.retain(|a| alleles_to_keep.contains(&a));
-            let mut index = 0;
-            input_vc.alleles.retain(|_allele| {
-                let retain = alleles_to_keep.contains(&index);
-                index += 1;
-                retain
-            });
+            return Ok(());
         }
+
+        // input_vc.alleles.retain(|a| alleles_to_keep.contains(&a));
+        let mut index = 0;
+        input_vc.alleles.retain(|_allele| {
+            let retain = alleles_to_keep.contains(&index);
+            index += 1;
+            retain
+        });
+
+        Ok(())
     }
 
     /**
