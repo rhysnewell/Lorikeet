@@ -708,11 +708,12 @@ impl HaplotypeCallerGenotypingEngine {
             .iter()
             .position(|a| a.is_reference()) {
                 if !alleles_to_retain.contains(&ref_allele_index) {
-                    alleles_to_retain.insert(ref_allele_index);
+                    // alleles_to_retain.insert(ref_allele_index);
+                    anyhow::bail!("Reference allele not found in alleles to retain!")
                 }
-            } else {
-                anyhow::bail!("Reference allele not found in merged VC alleles!")
-            }
+        } else {
+            anyhow::bail!("Reference allele not found in merged VC alleles!")
+        }
 
         return Ok(allele_mapper
             .keys()
