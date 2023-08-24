@@ -80,7 +80,7 @@ impl KmerCounter {
             kmer.len(),
             self.kmer_length
         );
-        let mut counts_from_map = self
+        let counts_from_map = self
             .counts_by_kmer
             .entry(kmer.clone())
             .or_insert_with(|| CountedKmer::new(kmer));
