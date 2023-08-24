@@ -190,22 +190,22 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .help("Include secondary alignments. [default: not set] \n"),
             )
             .option(Opt::new("INT").long("--contig-end-exclusion").help(
-                "Exclude bases at the ends of reference \n
+                "Exclude bases at the ends of reference \
                          sequences from calculation [default: 0]",
             ))
             .option(Opt::new("FLOAT").long("--trim-min").help(
-                "Remove this smallest fraction of positions \n
+                "Remove this smallest fraction of positions \
                          when calculating trimmed_mean [default: 0.00]",
             ))
             .option(Opt::new("FLOAT").long("--trim-max").help(
-                "Maximum fraction for trimmed_mean \n
+                "Maximum fraction for trimmed_mean \
                          calculations [default: 1.00]",
             ))
             .flag(Flag::new().long("--split-bams").help(
                 "Split the mapped read files up per reference.
                          Useful if you think run time is being hampered
                          by I/O. Most of the time this will not improve
-                         performance and instead just increase disk usage. \n",
+                         performance and instead just increase disk usage.",
             )),
     )
 }
@@ -614,9 +614,9 @@ fn variant_calling_options_advanced() -> Section {
                      [default: 1] \n",
         ))
         .flag(Flag::new().long("--use-adaptive-pruning").help(
-            "Use more advanced pruning algorithm to prune paths in
-                     graph. Better suited when performing variant calling
-                     on when depth along a genome is variable e.g. RNA
+            "Use more advanced pruning algorithm to prune paths in \
+                     graph. Better suited when performing variant calling \
+                     on when depth along a genome is variable e.g. RNA \
                      and exome data. \n",
         ))
         .option(Opt::new("INT").long("--num-pruning-samples").help(
@@ -736,7 +736,7 @@ pub fn genotype_full_help() -> Manual {
                     .short("-o")
                     .long("--output-directory")
                     .help(
-                        "Output directory. Folder will contain subfolders for each input genome \n
+                        "Output directory. Folder will contain subfolders for each input genome \
                 [default: ./]",
                     ),
             )
@@ -986,8 +986,8 @@ pub fn summarise_full_help() -> Manual {
                 .long("--vcfs")
                 .help("Paths to input VCF files. Can provide one or more. \n"),
         )
-        .option(Opt::new("DIRECTORY").short("-o").long("--output").help(
-            "Output directory. Folder will contain subfolders for each input VCF \n
+        .option(Opt::new("DIRECTORY").short("-o").long("--output-directory").help(
+            "Output directory. Folder will contain subfolders for each input VCF \
              [default: ./] \n",
         ))
         .option(
