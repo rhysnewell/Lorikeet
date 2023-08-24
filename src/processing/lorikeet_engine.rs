@@ -152,8 +152,9 @@ impl<'a> LorikeetEngine<'a> {
                             .to_str()
                             .unwrap()
                             .to_string()
-                    });
-                    if cache.count() > 0 {
+                    })
+                    .collect::<Vec<String>>();
+                    if cache.len() > 0 {
                         if self.args.get_flag("calculate-dnds")
                             || self.args.get_flag("calculate-fst")
                         {
@@ -191,12 +192,25 @@ impl<'a> LorikeetEngine<'a> {
                                             &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                         ));
                                     }
+                                    
 
-                                    let vcf_path = format!(
+                                    let mut vcf_path = format!(
                                         "{}/{}.vcf",
                                         &output_prefix,
                                         &reference_reader.genomes_and_contigs.genomes[ref_idx]
                                     );
+
+                                    // check if we should be using gzipped vcf
+                                    if !Path::new(&vcf_path).exists() {
+                                        vcf_path = format!(
+                                            "{}.gz",
+                                            vcf_path
+                                        );
+
+                                        if !Path::new(&vcf_path).exists() {
+                                            panic!("Unable to find vcf file for Fst calculation: {}", vcf_path);
+                                        }
+                                    }
 
                                     match calculate_fst(
                                         &output_prefix,
@@ -1353,10 +1367,24 @@ fn calculate_dnds(
 
     match check_for_gff(reference, output_prefix, args) {
         Some(mut genes) => {
-            let vcf_prefix = format!(
+
+            let mut vcf_prefix = format!(
                 "{}/{}.vcf",
-                output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                &output_prefix,
+                &reference_reader.genomes_and_contigs.genomes[ref_idx]
             );
+
+            // check if we should be using gzipped vcf
+            if !Path::new(&vcf_prefix).exists() {
+                vcf_prefix = format!(
+                    "{}.gz",
+                    vcf_prefix
+                );
+
+                if !Path::new(&vcf_prefix).exists() {
+                    panic!("Unable to find vcf file for Fst calculation: {}", vcf_prefix);
+                }
+            }
 
             debug!("Reading VCF: {}", &vcf_prefix);
             let mut variants = VariantContext::get_vcf_reader(vcf_prefix.as_str());
