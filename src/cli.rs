@@ -709,18 +709,16 @@ pub fn genotype_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "
-            ======= EXPERIMENTAL =======\n
-            lorikeet genotype discovers variants within a given set of reads and genomes and \n
-            clusters the variants into candidate strain haplotypes. Lorikeet uses UMAP and HDBSCAN \n
-            to cluster variants and an Expectation-Maximization algorithm to determine strain \n
-            haplotype abudnances within each samples. Additionally, calculate strain \n
-            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst\n
-            \n
-            This process can be undertaken in several ways, for instance by specifying BAM files \n
-            or raw reads as input, using different mapping programs, thresholding read alignments \n
-            ============================\
-            "
+            "\n\
+            EXPERIMENTAL!\n\n\
+            lorikeet genotype discovers variants within a given set of reads and genomes and \
+            clusters the variants into candidate strain haplotypes. Lorikeet uses UMAP and HDBSCAN \
+            to cluster variants and an Expectation-Maximization algorithm to determine strain \
+            haplotype abudnances within each samples. Additionally, calculate strain \
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst\
+            \n\n\
+            This process can be undertaken in several ways, for instance by specifying BAM files \
+            or raw reads as input, using different mapping programs, thresholding read alignments."
         );
 
     manual = manual.custom(threads_options());
@@ -797,16 +795,12 @@ pub fn call_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "
-            ===========================\n
-            lorikeet call discovers variants within a given set of reads and genomes using a local \n
-            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \n
-            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \n\
-            \n
-            This process can be undertaken in several ways, for instance by specifying BAM files \n
-            or raw reads as input, using different mapping programs, thresholding read alignments \n
-            ============================\n
-            "
+            "lorikeet call discovers variants within a given set of reads and genomes using a local \
+            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \
+            \n\n\
+            This process can be undertaken in several ways, for instance by specifying BAM files \
+            or raw reads as input, using different mapping programs, thresholding read alignments."
         );
 
     manual = manual.custom(threads_options());
@@ -883,19 +877,15 @@ pub fn consensus_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "
-            ===========================\n
-            lorikeet consensus discovers variants within a given set of reads and genomes using a local \n
-            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \n
-            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \n\
+            "lorikeet consensus discovers variants within a given set of reads and genomes using a local \
+            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \
             \n\
             Lorikeet consensus also generates the consensus strain haplotypes for each sample and prints \
-            them as a FASTA file for each input genome in the output directory. \n\
+            them as a FASTA file for each input genome in the output directory. \
             \n\
-            This process can be undertaken in several ways, for instance by specifying BAM files \n
-            or raw reads as input, using different mapping programs, thresholding read alignments \n
-            ============================\
-            "
+            This process can be undertaken in several ways, for instance by specifying BAM files \
+            or raw reads as input, using different mapping programs, thresholding read alignments."
         );
 
     manual = manual.custom(threads_options());
@@ -972,17 +962,15 @@ pub fn summarise_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "===========================\n\
-            lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI,\n\
-            subpopANI, and Fst metrics for the variants in each file. \n\
+            "lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI, \
+            subpopANI, and Fst metrics for the variants in each file. \
             \n\
-            ANI metrics require coverage information to determine the number of shared bases\n\
-            in each sample. VCF files do not provide this information, so the shared base size is just\n\
-            the total size of the genome. In our experience, this doesn't really matter that much as\n\
-            the ANI metrics are quite insensitive when provided low coverage samples anyway.\n\
-            Fst tends to perform better for low and high coverage samples and does not require whole\n\
-            genome coverage information.\n\
-            ============================\n"
+            ANI metrics require coverage information to determine the number of shared bases \
+            in each sample. VCF files do not provide this information, so the shared base size is just \
+            the total size of the genome. In our experience, this doesn't really matter that much as \
+            the ANI metrics are quite insensitive when provided low coverage samples anyway. \
+            Fst tends to perform better for low and high coverage samples and does not require whole \
+            genome coverage information."
         );
 
     manual = manual
