@@ -972,19 +972,17 @@ pub fn summarise_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "
-            ===========================\n
-            lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI,
-            subpopANI, and Fst metrics for the variants in each file. \n
-            \n
-            ANI metrics require coverage information to determine the number of shared bases
-            in each sample. VCF files do not provide this information, so the shared base size is just
-            the total size of the genome. In our experience, this doesn't really matter that much as
-            the ANI metrics are quite insensitive when provided low coverage samples anyway.
-            Fst tends to perform better for low and high coverage samples and does not require whole
-            genome coverage information.
-            ============================\n
-            "
+            "===========================\n\
+            lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI,\n\
+            subpopANI, and Fst metrics for the variants in each file. \n\
+            \n\
+            ANI metrics require coverage information to determine the number of shared bases\n\
+            in each sample. VCF files do not provide this information, so the shared base size is just\n\
+            the total size of the genome. In our experience, this doesn't really matter that much as\n\
+            the ANI metrics are quite insensitive when provided low coverage samples anyway.\n\
+            Fst tends to perform better for low and high coverage samples and does not require whole\n\
+            genome coverage information.\n\
+            ============================\n"
         );
 
     manual = manual
@@ -3563,7 +3561,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("output")
-                        .long("output")
+                        .long("output-directory")
                         .short('o')
                         .default_value("./"),
                 )
