@@ -102,7 +102,7 @@ impl VariantAnnotations {
                 // debug!("Depth");
                 match annotation_type {
                     AnnotationType::Format => {
-                        let mut genotype = genotype.unwrap();
+                        let genotype = genotype.unwrap();
                         if !genotype.has_ad() {
                             // if there is no AD value calculate it now using likelihoods
                             Self::DepthPerAlleleBySample.annotate(
@@ -235,7 +235,7 @@ impl VariantAnnotations {
                 return AttributeObject::VecU8(statistics);
             }
             Self::DepthPerAlleleBySample => {
-                let mut genotype = genotype.unwrap();
+                let genotype = genotype.unwrap();
                 let alleles = vc.alleles.clone().into_iter().collect::<LinkedHashSet<_>>();
                 // debug!("Depth per allele alleles {:?}", &alleles);
                 // alleles.iter().for_each(|a| {
