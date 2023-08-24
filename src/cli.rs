@@ -316,7 +316,7 @@ fn threads_options() -> Section {
                 .short("-t")
                 .help("Maximum number of threads used. [default: 10] \n"),
         )
-        .option(Opt::new("INT").long("--parallel-genomes").short("-p").help(
+        .option(Opt::new("INT").long("--parallel-genomes").short("-P").help(
             "Number of genomes to run in parallel. \
                      Increases memory usage linearly. \
                      Thread usage qill not exceed the value \
@@ -1373,7 +1373,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("features-vcf")
                         .long("features-vcf")
-                        .short('f')
                         .required(false),
                 )
                 .arg(
@@ -1384,7 +1383,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("parallel-genomes")
-                        .short('p').long("parallel-genomes")
+                        .short('P').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
                 )
@@ -2158,7 +2157,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("features-vcf")
                         .long("features-vcf")
-                        .short('f')
                         .required(false),
                 )
                 .arg(
@@ -2169,7 +2167,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("parallel-genomes")
-                        .short('p').long("parallel-genomes")
+                        .short('P').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
                 )
@@ -2938,7 +2936,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("features-vcf")
                         .long("features-vcf")
-                        .short('f')
                         .required(false),
                 )
                 .arg(
@@ -2949,7 +2946,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("parallel-genomes")
-                        .short('p').long("parallel-genomes")
+                        .short('P').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
                 )
