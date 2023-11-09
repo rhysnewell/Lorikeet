@@ -90,7 +90,6 @@ impl GenotypingEngine {
         }
 
         let mut reduced_vc: VariantContext;
-        let debug = vc.loc.start == 483;
         if VariantContext::MAX_ALTERNATE_ALLELES < (vc.get_alternate_alleles().len()) {
             let alleles_to_keep = AlleleSubsettingUtils::calculate_most_likely_alleles(
                 &vc,
@@ -119,11 +118,6 @@ impl GenotypingEngine {
             reduced_vc = vc.clone();
         }
 
-        if debug {
-            debug!("FOUND POSITION {}", vc.loc.start);
-            debug!("GC {:?}", &reduced_vc.genotypes);
-        }
-
         //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
         let max_pl_length =
             GenotypeLikelihoods::calc_num_likelihoods(reduced_vc.get_n_alleles(), ploidy);
@@ -138,7 +132,7 @@ impl GenotypingEngine {
         let af_result = self
             .allele_frequency_calculator
             .calculate(reduced_vc, ploidy);
-        debug!("AFresult {:?}", &af_result);
+        // debug!("AFresult {:?}", &af_result);
         debug!("VC {:?}", &vc);
         let given_alleles_empty = given_alleles.is_empty();
         let output_alternative_alleles =

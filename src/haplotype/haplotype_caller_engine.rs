@@ -406,8 +406,9 @@ impl HaplotypeCallerEngine {
                         }
                     })
             });
-
-        let chunk_size = max(250000, max_assembly_region_size * 5);
+        
+        let total_sample_count = short_sample_count + long_sample_count;
+        let chunk_size = max(250000 / (total_sample_count / 2), max_assembly_region_size * 5);
         let contexts = tids
             .into_par_iter()
             .map(|tid| {
@@ -636,8 +637,6 @@ impl HaplotypeCallerEngine {
                     .into_iter()
                     .map(|pos| RefVsAnyResult::new(likelihoodcount, pos, tid))
                     .collect::<Vec<RefVsAnyResult>>();
-
-                let _outer_chunk_size = outer_chunk_location.size();
 
                 let mut positions = per_contig_per_base_hq_soft_clips
                     .iter_mut()
@@ -921,8 +920,15 @@ impl HaplotypeCallerEngine {
         let depth_per_sample_filter = *args
             .get_one::<i64>("depth-per-sample-filter")
             .unwrap() as i32;
+        
+        // the total sample count will increase the number of RAM we will be using
+        // each sample adds a "Genotype" struct which is a large struct with many fields
+        let total_sample_count = short_read_bam_count + long_read_bam_count;
 
-        let inner_chunk_size = max(50000, max_assembly_region_size * 2);
+        // so we need to limit the inner_chunk_size to a reasonable size
+        // to avoid OOM errors whilst also keeping it above max_assembly_region_size
+        let inner_chunk_size = max(50000 / (total_sample_count / 4), max_assembly_region_size * 2);
+
         let variant_contexts = (0..chunk_location.size())
             .into_par_iter()
             .chunks(inner_chunk_size)
