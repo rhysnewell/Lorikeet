@@ -181,13 +181,13 @@ impl ByteArrayAllele {
 
     pub fn acceptable_allele_bases(bases: &[u8], is_ref: bool) -> bool {
         if Self::would_be_null_allele(bases) {
-            debug!("Null allele bases are not acceptable");
+            // debug!("Null allele bases are not acceptable");
             return false;
         } else if Self::would_be_no_call_allele(bases) || Self::would_be_symbolic_allele(bases) {
-            debug!("No call or symbolic allele bases are acceptable: {} {}", Self::would_be_no_call_allele(bases), Self::would_be_symbolic_allele(bases));
+            // debug!("No call or symbolic allele bases are acceptable: {} {}", Self::would_be_no_call_allele(bases), Self::would_be_symbolic_allele(bases));
             return true;
         } else if Self::would_be_star_allele(bases) {
-            debug!("Star allele bases are acceptable: {}", is_ref);
+            // debug!("Star allele bases are acceptable: {}", is_ref);
             return !is_ref;
         } else {
             // return true if there are any unacceptable bases, so take conjugate value
@@ -198,9 +198,9 @@ impl ByteArrayAllele {
                     | 'M' | 'S' | 'W' | 'B' | 'D' | 'H' | 'V' | 'U' => false,
                     _ => true,
                 };
-                if result {
-                    debug!("Base {:?} is not acceptable", base);
-                }
+                // if result {
+                //     // debug!("Base {:?} is not acceptable", base);
+                // }
                 result
             })
         }

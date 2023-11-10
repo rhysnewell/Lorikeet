@@ -59,14 +59,15 @@ impl ANICalculator {
         sample_names: &[&str],
         reference_name: &str,
         genome_size: u64,
-        passing_sites: Option<Vec<Vec<i32>>>,
+        compared_bases: Option<Array2<f64>>,
         qual_by_depth_filter: f64,
         qual_threshold: f64,
         depth_per_sample_filter: i64,
     ) {
-        let compared_bases =
-            self.calculate_compared_bases(passing_sites, genome_size, sample_names.len());
-
+        let compared_bases = match compared_bases {
+            Some(compared_bases) => compared_bases,
+            None => Self::calculate_compared_bases(None, genome_size, sample_names.len()),
+        };
         // debug!("Comparable bases \n{:?}", &compared_bases);
         self.calculate_from_contexts(
             contexts,
@@ -100,8 +101,7 @@ impl ANICalculator {
         );
     }
 
-    fn calculate_compared_bases(
-        &mut self,
+    pub fn calculate_compared_bases(
         passing_sites: Option<Vec<Vec<i32>>>,
         genome_size: u64,
         n_samples: usize,

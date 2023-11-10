@@ -1,3 +1,4 @@
+use ndarray::Array2;
 use rayon::prelude::*;
 use rust_htslib::bcf::Read;
 use std::path::Path;
@@ -75,7 +76,7 @@ impl AssemblyRegionWalker {
         n_threads: usize,
         reference_reader: &mut ReferenceReader,
         output_prefix: &str,
-    ) -> Vec<(Vec<VariantContext>, Vec<Vec<i32>>)> {
+    ) -> (Vec<VariantContext>, Array2<f64>) {
         self.evaluator.collect_activity_profile(
             indexed_bam_readers,
             self.short_read_bam_count,

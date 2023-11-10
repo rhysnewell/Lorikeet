@@ -245,7 +245,7 @@ impl ReadThreadingAssembler {
         let old_prune_factor = self.prune_factor;
         if !self.disable_prune_factor_correction && !self.chain_pruner.is_adaptive() {
             let coverage = assembly_region.calculate_coverage(&corrected_reads);
-            debug!("Coverage {} read count {} region size {}", coverage, corrected_reads.len(), assembly_region.get_span().size());
+            // debug!("Coverage {} read count {} region size {}", coverage, corrected_reads.len(), assembly_region.get_span().size());
             let new_prune_factor = if coverage > PRUNE_FACTOR_COVERAGE_THRESHOLD {
                 2
             } else {

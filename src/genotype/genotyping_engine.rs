@@ -133,7 +133,7 @@ impl GenotypingEngine {
             .allele_frequency_calculator
             .calculate(reduced_vc, ploidy);
         // debug!("AFresult {:?}", &af_result);
-        debug!("VC {:?}", &vc);
+        // debug!("VC {:?}", &vc);
         let given_alleles_empty = given_alleles.is_empty();
         let output_alternative_alleles =
             self.calculate_output_allele_subset(&af_result, &vc, given_alleles, stand_min_conf);
@@ -147,12 +147,12 @@ impl GenotypingEngine {
 
         // Add 0.0 removes -0.0 occurrences.
         // if log10_confidence.is_finite() {
-        debug!(
-            "pos {} log10 {} phred {}",
-            vc.loc.start,
-            log10_confidence,
-            (-10.0 * log10_confidence) + 0.0
-        );
+        // debug!(
+        //     "pos {} log10 {} phred {}",
+        //     vc.loc.start,
+        //     log10_confidence,
+        //     (-10.0 * log10_confidence) + 0.0
+        // );
         // }
         let phred_scaled_confidence = (-10.0 * log10_confidence) + 0.0;
 
@@ -166,16 +166,16 @@ impl GenotypingEngine {
             &output_alternative_alleles.alleles,
         ) && given_alleles_empty
         {
-            debug!(
-                "Did not pass emit threshold {} {}",
-                phred_scaled_confidence, stand_min_conf
-            );
-            debug!("Site is mono {}", output_alternative_alleles.site_is_monomorphic);
-            debug!("No alleles or first allele is not NON_REF {:?}", GenotypingEngine::no_alleles_or_first_allele_is_not_non_ref(
-                &output_alternative_alleles.alleles,
-            ));
-            debug!("Given alleles empty {}", given_alleles_empty);
-            debug!("Alleles {:?}", &output_alternative_alleles.alleles);
+            // debug!(
+            //     "Did not pass emit threshold {} {}",
+            //     phred_scaled_confidence, stand_min_conf
+            // );
+            // debug!("Site is mono {}", output_alternative_alleles.site_is_monomorphic);
+            // debug!("No alleles or first allele is not NON_REF {:?}", GenotypingEngine::no_alleles_or_first_allele_is_not_non_ref(
+            //     &output_alternative_alleles.alleles,
+            // ));
+            // debug!("Given alleles empty {}", given_alleles_empty);
+            // debug!("Alleles {:?}", &output_alternative_alleles.alleles);
             return None;
         }
 
@@ -413,17 +413,17 @@ impl GenotypingEngine {
                 let is_non_ref_which_is_lone_alt_allele =
                     alternative_allele_count == 1 && allele.eq(&*NON_REF_ALLELE);
 
-                debug!(
-                    "is non ref which is lone alt_allele {}",
-                    is_non_ref_which_is_lone_alt_allele
-                );
+                // debug!(
+                //     "is non ref which is lone alt_allele {}",
+                //     is_non_ref_which_is_lone_alt_allele
+                // );
                 let is_plausible = af_calculation_result.passes_threshold(allele, stand_min_conf);
-                debug!(
-                    "plausible {} {} {}",
-                    is_plausible,
-                    af_calculation_result.get_log10_posterior_of_allele_absent(allele),
-                    QualityUtils::qual_to_error_prob_log10(stand_min_conf)
-                );
+                // debug!(
+                //     "plausible {} {} {}",
+                //     is_plausible,
+                //     af_calculation_result.get_log10_posterior_of_allele_absent(allele),
+                //     QualityUtils::qual_to_error_prob_log10(stand_min_conf)
+                // );
 
                 //it's possible that the upstream deletion that spanned this site was not emitted, mooting the symbolic spanning deletion allele
                 let is_spurious_spanning_deletion = VCFConstants::is_spanning_deletion(allele)
