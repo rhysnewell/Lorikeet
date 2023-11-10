@@ -544,7 +544,8 @@ impl HaplotypeCallerGenotypingEngine {
             let mut genotype_builder = Genotype::build_from_likelihoods(
                 self.ploidy_model.ploidy,
                 likelihood,
-                self.genotyping_engine.samples[s].clone(),
+                // self.genotyping_engine.samples[s].clone(),
+                s
             );
             genotype_builder.alleles = no_call_alleles.clone();
             // debug!("Adding genotype {:#?}", &genotype_builder);

@@ -543,7 +543,7 @@ impl<'a> LorikeetEngine<'a> {
                                 qual_by_depth_filter,
                                 *self.args
                                     .get_one::<i64>("min-variant-depth-for-genotyping")
-                                    .unwrap(),
+                                    .unwrap() as i32,
                             );
                         
                         {

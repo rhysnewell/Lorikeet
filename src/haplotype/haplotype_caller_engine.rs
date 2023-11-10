@@ -1018,7 +1018,7 @@ impl HaplotypeCallerEngine {
                             genotypes.push(Genotype::build(
                                 ploidy,
                                 result,
-                                sample_names[idx].clone(),
+                                idx,
                             ))
                         }
 
@@ -1268,9 +1268,14 @@ impl HaplotypeCallerEngine {
         //     "Before change: {}",
         //     reads.values().map(|r| r.len()).sum::<usize>()
         // );
+        let sample_indices = sample_names
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| idx)
+            .collect::<Vec<usize>>();
         let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
             .likelihood_calculation_engine
-            .compute_read_likelihoods(&mut assembly_result, sample_names.to_vec(), reads);
+            .compute_read_likelihoods(&mut assembly_result, sample_indices, reads);
 
         // if debug {
         // debug!(

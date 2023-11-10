@@ -47,10 +47,10 @@ fn test_compute_likelihoods() {
         ReadType::Short,
     );
     read1.read.set_mapq(60);
-    let sample1 = "sample1";
+    let sample1 = 0;
     per_sample_read_list.insert(0, vec![read1.clone()]);
 
-    let sample = vec![sample1.to_string()];
+    let sample = vec![sample1];
     let ref_bases = vec![b'A'; n + 1];
     let mut hap1 = Haplotype::new(ref_bases.as_slice(), true);
     hap1.set_genome_location(SimpleInterval::new(

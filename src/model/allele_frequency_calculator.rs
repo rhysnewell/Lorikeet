@@ -20,7 +20,7 @@ use crate::utils::math_utils::MathUtils;
 lazy_static! {
     //from the genotype likelihoods equations assuming the SNP ref conf model with no mismatches
     //PL[2] = GQ; scaleFactor = PL[3]/GQ ~ -10 * DP * log10(P_error) / (-10 * DP * log10(1/ploidy)) where BASE_QUALITY = -10 * log10(P_error)
-    static ref PLOIDY_2_HOM_VAR_SCALE_FACTOR: i64 = (AlleleFrequencyCalculator::TYPICAL_BASE_QUALITY as f64/-10.0/(0.5.log10())).round() as i64;
+    static ref PLOIDY_2_HOM_VAR_SCALE_FACTOR: i32 = (AlleleFrequencyCalculator::TYPICAL_BASE_QUALITY as f64/-10.0/(0.5.log10())).round() as i32;
 }
 
 #[derive(Debug, Clone)]

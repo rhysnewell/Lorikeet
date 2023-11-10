@@ -11,26 +11,17 @@ extern crate approx;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
 
-
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    PairHMMInputScoreImputator,
-};
-
-
-
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMInputScoreImputator;
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
-use lorikeet_genome::utils::base_utils::{BASES};
+use lorikeet_genome::utils::base_utils::BASES;
 use lorikeet_genome::utils::math_utils::MathUtils;
 use lorikeet_genome::utils::quality_utils::QualityUtils;
-use lorikeet_genome::utils::simple_interval::{SimpleInterval};
-
-
-use rayon::prelude::*;
+use lorikeet_genome::utils::simple_interval::SimpleInterval;
 
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::cmp::{max, min};
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 
 
@@ -671,7 +662,7 @@ fn test_likelihoods_from_haplotypes() {
     hmm.do_not_use_tristate_correction();
     let mut haplotype_mat = AlleleLikelihoods::new(
         vec![ref_h],
-        vec!["sample_1".to_string()],
+        vec![0],
         sample_evidence_map,
     );
     hmm.compute_log10_likelihoods(0, &mut haplotype_mat, Vec::new(), &input_score_imputator);

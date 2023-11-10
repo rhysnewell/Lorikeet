@@ -209,7 +209,7 @@ impl ANICalculator {
                     );
                     // which alleles are present in first sample
                     let which_are_present =
-                        context.alleles_present_in_sample(sample_idx_1, depth_per_sample_filter);
+                        context.alleles_present_in_sample(sample_idx_1, depth_per_sample_filter as i32);
 
                     present_alleles.push(which_are_present);
                 }
@@ -228,7 +228,7 @@ impl ANICalculator {
                         );
                         // which alleles are present in first sample with at least two supporting reads
                         let which_are_present = context
-                            .alleles_present_in_sample(sample_idx_2, depth_per_sample_filter);
+                            .alleles_present_in_sample(sample_idx_2, depth_per_sample_filter as i32);
                         present_alleles.push(which_are_present);
                     }
 

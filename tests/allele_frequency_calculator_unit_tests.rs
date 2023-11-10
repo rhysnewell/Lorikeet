@@ -606,7 +606,7 @@ fn genotype_with_obvious_call(
 fn make_genotype(ploidy: usize, sample: usize, pls: Vec<i64>) -> Genotype {
     let mut g = Genotype::build_from_alleles(
         vec![ByteArrayAllele::no_call(); ploidy],
-        format!("sample_{}", sample),
+        sample,
     );
     g.pl(GenotypeLikelihoods::from_pls(pls).as_pls());
     return g;

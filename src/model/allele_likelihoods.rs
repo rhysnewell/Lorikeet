@@ -57,7 +57,7 @@ pub struct AlleleLikelihoods<A: Allele> {
     /**
      * Sample list.
      */
-    pub(crate) samples: Vec<String>,
+    pub(crate) samples: Vec<usize>,
     /**
      * Allele list.
      */
@@ -78,7 +78,7 @@ pub struct AlleleLikelihoods<A: Allele> {
 impl<A: Allele> AlleleLikelihoods<A> {
     pub fn new(
         alleles: Vec<A>,
-        samples: Vec<String>,
+        samples: Vec<usize>,
         evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
     ) -> AlleleLikelihoods<A> {
         let allele_list = AlleleList::new_from_vec(alleles);
@@ -87,7 +87,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
 
     pub fn new_from_allele_list(
         alleles: AlleleList<A>,
-        samples: Vec<String>,
+        samples: Vec<usize>,
         evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
     ) -> AlleleLikelihoods<A> {
         let sample_count = samples.len();
@@ -126,7 +126,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
 
     pub fn new_from_likelihoods(
         alleles: AlleleList<A>,
-        samples: Vec<String>,
+        samples: Vec<usize>,
         evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
         filtered_evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
         values_by_sample_index: Vec<Array2<f64>>,
@@ -186,7 +186,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         }
     }
 
-    pub fn samples(&self) -> &Vec<String> {
+    pub fn samples(&self) -> &[usize] {
         &self.samples
     }
 
@@ -203,8 +203,8 @@ impl<A: Allele> AlleleLikelihoods<A> {
      *
      * @return never Option<usize>.
      */
-    pub fn index_of_sample(&self, sample: &String) -> Option<usize> {
-        self.samples.iter().position(|s| s == sample)
+    pub fn index_of_sample(&self, sample: usize) -> Option<usize> {
+        self.samples.iter().position(|s| s == &sample)
     }
 
     /**

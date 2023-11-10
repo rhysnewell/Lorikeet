@@ -117,7 +117,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                             let mut total_depth = vc.genotypes.genotypes()[sample_index]
                                 .ad
                                 .iter()
-                                .sum::<i64>()
+                                .sum::<i32>()
                                 as f64;
 
                             // catch sample where no mapping occured at this location
