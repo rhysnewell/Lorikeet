@@ -3,11 +3,6 @@
     non_snake_case
 )]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
 use lorikeet_genome::model::variant_context::{VariantContext, VariantType};
 use lorikeet_genome::reference::reference_writer::ReferenceWriter;

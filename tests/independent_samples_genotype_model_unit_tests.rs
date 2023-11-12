@@ -5,8 +5,7 @@
 
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate approx;
+
 
 use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use lorikeet_genome::haplotype::homogenous_ploidy_model::HeterogeneousPloidyModel;

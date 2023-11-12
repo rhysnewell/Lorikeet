@@ -3,11 +3,6 @@
     non_snake_case
 )]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::assembly::assembly_result_set::AssemblyResultSet;
 use lorikeet_genome::haplotype::haplotype::Haplotype;

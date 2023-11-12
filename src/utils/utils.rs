@@ -685,7 +685,7 @@ pub fn table_roff(strings: &[&[&str]]) -> String {
             } else {
                 first_column = false
             }
-            s.push_str(cell.clone());
+            s.push_str(cell);
             s.push_str("\nT}");
         }
         s.push_str("\n");

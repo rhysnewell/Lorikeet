@@ -48,7 +48,7 @@ fn test_update_pls_and_ad_data(
             selected_vc_with_gts.get_alleles(),
             &gpc,
             &GenotypeAssignmentMethod::DoNotAssignGenotypes,
-            original_vc.get_attribute_as_int(&DEPTH_KEY, 0) as i64,
+            original_vc.get_attribute_as_int(&DEPTH_KEY, 0) as i32,
             false,
         )
     };

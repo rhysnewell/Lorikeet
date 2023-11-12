@@ -4,15 +4,13 @@
 )]
 
 extern crate lorikeet_genome;
-#[macro_use]
-extern crate lazy_static;
 extern crate hashlink;
 
 use hashlink::LinkedHashSet;
 use lorikeet_genome::genotype::genotype_builder::{Genotype, GenotypesContext};
-use lorikeet_genome::model::byte_array_allele::{ByteArrayAllele};
+use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
 
-use lorikeet_genome::model::variant_context::{VariantContext};
+use lorikeet_genome::model::variant_context::VariantContext;
 
 use lorikeet_genome::model::variant_context_utils::{
     FilteredRecordMergeType, GenotypeMergeType, VariantContextUtils,
@@ -466,7 +464,7 @@ fn makeG(
     a1: ByteArrayAllele,
     a2: ByteArrayAllele,
     log10_p_error: f64,
-    pls: Option<Vec<i64>>,
+    pls: Option<Vec<i32>>,
 ) -> Genotype {
     let mut g = Genotype::build_from_alleles(vec![a1, a2], sample);
     g.log10_p_error(log10_p_error);

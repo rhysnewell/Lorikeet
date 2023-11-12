@@ -4,8 +4,6 @@
 )]
 
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 extern crate approx;
 
 use lorikeet_genome::haplotype::haplotype::Haplotype;
@@ -22,8 +20,6 @@ use lorikeet_genome::utils::simple_interval::SimpleInterval;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::cmp::{max, min};
 use std::collections::HashMap;
-
-
 
 
 static ALLOW_READS_LONGER_THAN_HAPLOTYPE: bool = true;
