@@ -36,9 +36,9 @@ use crate::model::variant_context_utils::VariantContextUtils;
 /// Since lorikeet calls Indels, we compare the length of the allele rather than just the position
 /// So the rather than alleles different, it is bases different.
 pub struct ANICalculator {
-    popANI: Array2<f64>,
-    subpopANI: Array2<f64>,
-    conANI: Array2<f64>,
+    popANI: Array2<f32>,
+    subpopANI: Array2<f32>,
+    conANI: Array2<f32>,
     // fst: Array2<f64>
 }
 
@@ -59,7 +59,7 @@ impl ANICalculator {
         sample_names: &[&str],
         reference_name: &str,
         genome_size: u64,
-        compared_bases: Option<Array2<f64>>,
+        compared_bases: Option<Array2<f32>>,
         qual_by_depth_filter: f64,
         qual_threshold: f64,
         depth_per_sample_filter: i64,
@@ -105,7 +105,7 @@ impl ANICalculator {
         passing_sites: Option<Vec<Vec<i32>>>,
         genome_size: u64,
         n_samples: usize,
-    ) -> Array2<f64> {
+    ) -> Array2<f32> {
         let mut compared_bases = Array2::default((n_samples, n_samples));
         match passing_sites {
             Some(passing_sites) => {
@@ -151,19 +151,19 @@ impl ANICalculator {
                             }
                         }
 
-                        let comparable_bases = (genome_size - differing_bases as u64) as f64;
+                        let comparable_bases = (genome_size - differing_bases as u64) as f32;
                         compared_bases[[s1_ind, s2_ind]] = comparable_bases;
                         compared_bases[[s2_ind, s1_ind]] = comparable_bases;
                     }
                     let comparable_bases_to_ref = (genome_size as i32
                         + s1.into_iter().filter(|x| x.is_negative()).sum::<i32>())
-                        as f64;
+                        as f32;
                     compared_bases[[s1_ind, s1_ind]] = comparable_bases_to_ref;
                 }
             }
             _ => {
                 compared_bases.iter_mut().for_each(|val| {
-                    *val = genome_size as f64;
+                    *val = genome_size as f32;
                 });
             }
         }
@@ -180,7 +180,7 @@ impl ANICalculator {
         qual_by_depth_filter: f64,
         qual_threshold: f64,
         depth_per_sample_filter: i64,
-        compared_bases: Array2<f64>,
+        compared_bases: Array2<f32>,
     ) {
         let n_samples = self.conANI.ncols();
 
@@ -247,8 +247,8 @@ impl ANICalculator {
                             if context.alleles[*consensus_1].len() > 1
                                 || context.alleles[*consensus_2].len() > 1
                             {
-                                let bases_different = (context.alleles[*consensus_1].len() as f64
-                                    - context.alleles[*consensus_2].len() as f64)
+                                let bases_different = (context.alleles[*consensus_1].len() as f32
+                                    - context.alleles[*consensus_2].len() as f32)
                                     .abs();
                                 self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
                                 self.conANI[[sample_idx_2, sample_idx_1]] += bases_different;
@@ -266,7 +266,7 @@ impl ANICalculator {
                             .enumerate()
                         {
                             if present_1 != present_2 {
-                                bases_different += context.alleles[idx].len() as f64;
+                                bases_different += context.alleles[idx].len() as f32;
                                 divisor += 1.0;
                             }
                         }
@@ -297,8 +297,8 @@ impl ANICalculator {
                             if context.alleles[*consensus_1].len() > 1
                                 || context.alleles[0].len() > 1
                             {
-                                let bases_different = (context.alleles[*consensus_1].len() as f64
-                                    - context.alleles[0].len() as f64)
+                                let bases_different = (context.alleles[*consensus_1].len() as f32
+                                    - context.alleles[0].len() as f32)
                                     .abs();
                                 self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
                             } else {
@@ -312,7 +312,7 @@ impl ANICalculator {
                             let mut divisor = 0.0;
                             for (idx, present) in allele_present_1.iter().enumerate() {
                                 if *present {
-                                    bases_different += context.alleles[idx].len() as f64;
+                                    bases_different += context.alleles[idx].len() as f32;
                                     divisor += 1.0;
                                 }
                             }
@@ -354,7 +354,7 @@ impl ANICalculator {
         output_prefix: &str,
         sample_names: &[&str],
         reference_name: &str,
-        table: &Array2<f64>,
+        table: &Array2<f32>,
         table_name: &str,
     ) {
         // debug!("Printing ani calculations {}", reference_name);

@@ -1,4 +1,5 @@
 use bio_types::sequence::SequenceRead;
+use indicatif::ProgressStyle;
 use mathru::special::gamma::{digamma, ln_gamma};
 use ndarray::Array2;
 use rayon::prelude::*;
@@ -9,6 +10,7 @@ use std::cmp::{max, min};
 use std::collections::{HashSet, HashMap};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, BufRead, Write};
+use std::sync::{Arc, Mutex};
 
 use crate::ani_calculator::ani_calculator::ANICalculator;
 use crate::annotator::variant_annotation::VariantAnnotations;
@@ -32,7 +34,7 @@ use crate::genotype::genotyping_engine::GenotypingEngine;
 use crate::haplotype::haplotype::Haplotype;
 use crate::haplotype::haplotype_caller_genotyping_engine::HaplotypeCallerGenotypingEngine;
 use crate::haplotype::ref_vs_any_result::RefVsAnyResult;
-use crate::processing::lorikeet_engine::ReadType;
+use crate::processing::lorikeet_engine::{ReadType, Elem};
 use crate::read_orientation::beta_distribution_shape::BetaDistributionShape;
 use crate::read_threading::read_threading_assembler::ReadThreadingAssembler;
 use crate::read_threading::read_threading_graph::ReadThreadingGraph;
@@ -318,7 +320,9 @@ impl HaplotypeCallerEngine {
         long_read_bam_count: usize,
         max_input_depth: usize,
         output_prefix: &str,
-    ) -> (Vec<VariantContext>, Array2<f64>) {
+        pb_index: usize,
+        pb_tree: &Arc<Mutex<Vec<&Elem>>>
+    ) -> (Vec<VariantContext>, Array2<f32>) {
         // minimum PHRED base quality
         let bq = *m
             .get_one::<u8>("min-base-quality")
@@ -412,11 +416,35 @@ impl HaplotypeCallerEngine {
         let total_sample_count = short_sample_count + long_sample_count;
         let chunk_size = max(250000 / total_sample_count, max_assembly_region_size * 5);
         let genome_size = reference_reader.target_lens.values().sum::<u64>();
+
+        // how many chunks are there going to be? for each contig, divide it's length by chunk size and count the ceiling
+        let mut n_chunks = 0;
+        for t_length in reference_reader.target_lens.values() {
+            if *t_length < min_contig_length {
+                continue;
+            }
+
+            n_chunks += (t_length / chunk_size as u64) as usize;
+            if t_length % chunk_size as u64 != 0 {
+                n_chunks += 1;
+            }
+        }
+
+        {
+            let pb = pb_tree.lock().unwrap();
+            // simple spinner with a counter
+            let new_style = ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>7}/{len:7}").unwrap();
+            pb[pb_index].progress_bar.set_style(new_style);
+            pb[pb_index].progress_bar.set_length(n_chunks as u64);
+            pb[pb_index].progress_bar.set_message(format!("{}: Generating activity profile...", &pb[pb_index].key));
+        }
+
         let contexts = tids
             .into_par_iter()
             .fold(
                 || (Vec::with_capacity(genome_size as usize), Array2::default((total_sample_count, total_sample_count))), 
-                |mut consolidator: (Vec<VariantContext>, Array2<f64>), tid: usize| {
+                |mut consolidator: (Vec<VariantContext>, Array2<f32>), tid: usize| {
                 let target_length = reference_reader.target_lens[&tid];
                 let mut reference_reader = reference_reader.clone();
                 reference_reader.update_current_sequence_capacity(target_length as usize);
@@ -438,7 +466,7 @@ impl HaplotypeCallerEngine {
                             .enumerate()
                             .fold(
                                 || (Vec::with_capacity(chunk_size), Array2::default((total_sample_count, total_sample_count))), 
-                                | mut consolidator: (Vec<VariantContext>, Array2<f64>), chunk_vals: (usize, Vec<usize>)| {
+                                | mut consolidator: (Vec<VariantContext>, Array2<f32>), chunk_vals: (usize, Vec<usize>)| {
                                 let (chunk_idx, positions) = chunk_vals;
                                 let within_bounds = match &limiting_interval {
                                     Some(limit) => {
@@ -552,6 +580,10 @@ impl HaplotypeCallerEngine {
                                             debug!("Finished calling on chunk {} of size {}", chunk_idx, positions.len());
                                             debug!("N. variant contexts {}", val.0.len());
                                             debug!("N. depth counts {:?}", val.1.shape());
+                                            {
+                                                let pb = pb_tree.lock().unwrap();
+                                                pb[pb_index].progress_bar.inc(1);
+                                            }
                                             let (vc_vec, concatenated_array) = val;
                                             consolidator.0.extend(vc_vec);
                                             (consolidator.0, consolidator.1 + &concatenated_array)
@@ -585,7 +617,10 @@ impl HaplotypeCallerEngine {
                 a.0.extend(b.0);
                 (a.0, a.1 + &b.1)
             });
-
+        {
+            let pb = pb_tree.lock().unwrap();
+            pb[pb_index].progress_bar.finish_with_message(format!("{}: Finished generating activity profile.", &pb[pb_index].key));
+        }
         (contexts.0, contexts.1)
     }
 
@@ -896,7 +931,7 @@ impl HaplotypeCallerEngine {
         chunk_location: &SimpleInterval,
         _chunk_index: usize,
         output_prefix: &str,
-    ) -> Result<(Vec<VariantContext>, Array2<f64>), BirdToolError> {
+    ) -> Result<(Vec<VariantContext>, Array2<f32>), BirdToolError> {
         // let mut per_contig_activity_profiles = HashMap::new();
         let placeholder_vec = Vec::new();
         let depth_per_sample_filter = *args

@@ -413,6 +413,8 @@ impl<'a> LorikeetEngine<'a> {
                         n_threads,
                         &mut reference_reader,
                         &output_prefix,
+                        ref_idx + 2,
+                        &tree
                     );
 
                     let genome_size = reference_reader
