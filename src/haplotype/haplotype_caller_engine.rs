@@ -944,7 +944,7 @@ impl HaplotypeCallerEngine {
 
         // so we need to limit the inner_chunk_size to a reasonable size
         // to avoid OOM errors whilst also keeping it above max_assembly_region_size
-        let inner_chunk_size = max(50000 / (total_sample_count / 2), max_assembly_region_size * 2);
+        let inner_chunk_size = max(50000 / max(total_sample_count / 2, 1), max_assembly_region_size * 2);
 
         let variant_contexts = (0..chunk_location.size())
             .into_par_iter()
