@@ -10,12 +10,11 @@ documentation = "https://github.com/rhysnewell/Lorikeet"
 readme = "README.md"
 keywords = ["bioinformatics", "metagenomics", "variant-calling", "strain-anlaysis"]
 categories = ["bioinformatics::metagenomics", "bioinformatics::variant-calling", "bioinformatics::strain-analysis"]
-exclude = [
-  "tests/*"
+include = [
+  "/src", "/LICENSE", "/README.md", "/Cargo.toml"
 ]
 default-run = "lorikeet"
 edition = "2021"
-
 
 [features]
 # Force openssl-sys to staticly link in the openssl library. Necessary when
