@@ -15,7 +15,6 @@ jobs:
         uses: rhysnewell/rust-cargo-musl-action@v0.1.20
         with:
           command: 'build'
-          flags: '--features vendored-openssl'
       - name: Package binaries
         run: mkdir -p release/ && cp ${{ steps.compile.outputs.release-dir }}/lorikeet INSTALL.md release/
       - name: Compress action step
