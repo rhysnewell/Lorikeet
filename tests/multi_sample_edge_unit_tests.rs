@@ -3,11 +3,6 @@
     non_snake_case
 )]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-
 use lorikeet_genome::graphs::base_edge::BaseEdge;
 use lorikeet_genome::graphs::multi_sample_edge::MultiSampleEdge;
 use lorikeet_genome::utils::utils::make_permutations;

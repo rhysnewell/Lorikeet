@@ -19,9 +19,7 @@ use lorikeet_genome::read_threading::abstract_read_threading_graph::{
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::reads::read_utils::ReadUtils;
-use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    STANDARD_NGS,
-};
+use lorikeet_genome::smith_waterman::smith_waterman_aligner::STANDARD_NGS;
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
 use lorikeet_genome::utils::base_utils::BaseUtils;
 
@@ -37,7 +35,7 @@ lazy_static! {
     static ref DANGLING_END_SW_PARAMETERS: Parameters = *STANDARD_NGS;
 }
 
-fn get_bytes(alignment: &str) -> String {
+fn _get_bytes(alignment: &str) -> String {
     alignment.replace('-', "")
 }
 
@@ -1129,7 +1127,7 @@ fn make_dangling_heads_data() {
     ); // 7 base with snp (NOTE: This triggers extendDanglingPathAgainstReference but should fail unless the cigar is used to predict the correct reference vertex to use for merging)
 }
 
-fn generate_read_with_errors(
+fn _generate_read_with_errors(
     sequence: &[u8],
     start: usize,
     end: Option<usize>,

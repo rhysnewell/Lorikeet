@@ -1,0 +1,81 @@
+---
+##### Semantic Release Configuration #####
+branches:
+  - master
+  - name: dev
+    channel: prerelease
+    prerelease: prerelease
+# ci: true # Set via CLI arg: --ci | --no-ci
+# debug: false # Set via CLI arg: --debug
+# dryRun: false # Set via CLI arg: --dry-run
+# repositoryUrl: "" # Not needed, will use git origin
+tagFormat: "v${version}"
+
+# Global plugin options (passed to all plugins)
+preset: 'angular'
+
+### Plugin Setup ###
+
+plugins:
+  - "@semantic-release/exec"
+  - "@semantic-release/commit-analyzer"
+  - "@semantic-release/release-notes-generator"
+  - "@semantic-release/changelog"
+  - "@semantic-release/git"
+  # - "@saithodev/semantic-release-backmerge"
+
+# 1. Verify conditions necessary to proceed with the release
+verifyConditions:
+  - path: '@semantic-release/changelog'
+  - path: '@semantic-release/git'
+
+# 2. Determine the type of the next release (major, minor or patch)
+analyzeCommits:
+  - path: '@semantic-release/commit-analyzer'
+
+# 3. Verify the parameters (version, type, dist-tag etc...) of the release
+verifyRelease:
+  - path: '@semantic-release/exec'
+    cmd: "echo ${nextRelease.version} > VERSION.txt && echo ${lastRelease.version} > LAST_VERSION.txt"
+
+# 4. Generate the content of the release notes
+generateNotes:
+  - path: '@semantic-release/release-notes-generator'
+
+# 5. Prepare the release, e.g. create or update files such as package.json, CHANGELOG.md etc
+prepare:
+  - path: "@semantic-release/changelog"
+    changelogFile: CHANGELOG.md
+    changelogTitle: "# Change Log"
+  - path: "@semantic-release/git"
+    assets:
+      - CHANGELOG.md
+    message: |-
+      chore(release): ${nextRelease.version} [skip ci]
+
+      ${lastRelease.notes}
+  - path: '@semantic-release/exec'
+    cmd: "git status && git add . && git stash --all"
+
+# 6. Publish the release
+# publish:
+
+# 7. Add a release channel
+# addChannel:
+
+# 8. Notify of a new release
+# success:
+
+# 9. Notify of a failed release
+# fail:
+
+# Other
+# done:
+#   - path: '@saithodev/semantic-release-backmerge'
+#     branches:
+#       - from: master
+#         to: develop
+#     backmergeStrategy: merge # Allowed: rebase (default) | merge
+#     mergeMode: theirs # Allowed: none (default) | ours | theirs
+#     message: 'chore(backmerge): Prepare for next release [skip ci]'
+

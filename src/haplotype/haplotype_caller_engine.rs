@@ -1,6 +1,7 @@
 use bio_types::sequence::SequenceRead;
-use mathru::algebra::abstr::Sign;
+use indicatif::ProgressStyle;
 use mathru::special::gamma::{digamma, ln_gamma};
+use ndarray::Array2;
 use rayon::prelude::*;
 use rust_htslib::bam::{record::Cigar, Record};
 use rust_htslib::bcf::record::GenotypeAllele;
@@ -9,7 +10,9 @@ use std::cmp::{max, min};
 use std::collections::{HashSet, HashMap};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, BufRead, Write};
+use std::sync::{Arc, Mutex};
 
+use crate::ani_calculator::ani_calculator::ANICalculator;
 use crate::annotator::variant_annotation::VariantAnnotations;
 use crate::model::allele_likelihoods::AlleleLikelihoods;
 use crate::model::byte_array_allele::ByteArrayAllele;
@@ -31,7 +34,7 @@ use crate::genotype::genotyping_engine::GenotypingEngine;
 use crate::haplotype::haplotype::Haplotype;
 use crate::haplotype::haplotype_caller_genotyping_engine::HaplotypeCallerGenotypingEngine;
 use crate::haplotype::ref_vs_any_result::RefVsAnyResult;
-use crate::processing::lorikeet_engine::ReadType;
+use crate::processing::lorikeet_engine::{ReadType, Elem};
 use crate::read_orientation::beta_distribution_shape::BetaDistributionShape;
 use crate::read_threading::read_threading_assembler::ReadThreadingAssembler;
 use crate::read_threading::read_threading_graph::ReadThreadingGraph;
@@ -317,7 +320,9 @@ impl HaplotypeCallerEngine {
         long_read_bam_count: usize,
         max_input_depth: usize,
         output_prefix: &str,
-    ) -> Vec<(Vec<VariantContext>, Vec<Vec<i32>>)> {
+        pb_index: usize,
+        pb_tree: &Arc<Mutex<Vec<&Elem>>>
+    ) -> (Vec<VariantContext>, Array2<f32>) {
         // minimum PHRED base quality
         let bq = *m
             .get_one::<u8>("min-base-quality")
@@ -355,6 +360,7 @@ impl HaplotypeCallerEngine {
         let mut tids: HashSet<usize> = HashSet::new();
         let mut found_contigs = HashMap::new();
         let reference = reference_reader.retrieve_reference_stem(ref_idx);
+
 
         indexed_bam_readers
             .iter()
@@ -406,11 +412,39 @@ impl HaplotypeCallerEngine {
                         }
                     })
             });
+        
+        let total_sample_count = short_sample_count + long_sample_count;
+        let chunk_size = max(250000 / total_sample_count, max_assembly_region_size * 5);
+        let genome_size = reference_reader.target_lens.values().sum::<u64>();
 
-        let chunk_size = max(250000, max_assembly_region_size * 5);
+        // how many chunks are there going to be? for each contig, divide it's length by chunk size and count the ceiling
+        let mut n_chunks = 0;
+        for t_length in reference_reader.target_lens.values() {
+            if *t_length < min_contig_length {
+                continue;
+            }
+
+            n_chunks += (t_length / chunk_size as u64) as usize;
+            if t_length % chunk_size as u64 != 0 {
+                n_chunks += 1;
+            }
+        }
+
+        {
+            let pb = pb_tree.lock().unwrap();
+            // simple spinner with a counter
+            let new_style = ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>7}/{len:7}").unwrap();
+            pb[pb_index].progress_bar.set_style(new_style);
+            pb[pb_index].progress_bar.set_length(n_chunks as u64);
+            pb[pb_index].progress_bar.set_message(format!("{}: Generating activity profile...", &pb[pb_index].key));
+        }
+
         let contexts = tids
             .into_par_iter()
-            .map(|tid| {
+            .fold(
+                || (Vec::with_capacity(genome_size as usize), Array2::default((total_sample_count, total_sample_count))), 
+                |mut consolidator: (Vec<VariantContext>, Array2<f32>), tid: usize| {
                 let target_length = reference_reader.target_lens[&tid];
                 let mut reference_reader = reference_reader.clone();
                 reference_reader.update_current_sequence_capacity(target_length as usize);
@@ -425,12 +459,15 @@ impl HaplotypeCallerEngine {
                     // let mut contexts = Vec::new();
                     reference_reader.read_sequence_to_vec();
                     if target_length >= min_contig_length {
-                        let chunk_idx = 0;
 
                         let result = (0..target_length as usize)
                             .into_par_iter()
                             .chunks(chunk_size)
-                            .flat_map(|positions| {
+                            .enumerate()
+                            .fold(
+                                || (Vec::with_capacity(chunk_size), Array2::default((total_sample_count, total_sample_count))), 
+                                | mut consolidator: (Vec<VariantContext>, Array2<f32>), chunk_vals: (usize, Vec<usize>)| {
+                                let (chunk_idx, positions) = chunk_vals;
                                 let within_bounds = match &limiting_interval {
                                     Some(limit) => {
                                         let position_limit = SimpleInterval::new(
@@ -512,6 +549,7 @@ impl HaplotypeCallerEngine {
                                         },
                                     );
                                     // chunk_idx += 1;
+                                    debug!("Beginning calling on chunk {}", chunk_idx);
                                     match self.calculate_activity_probabilities(
                                         genotype_likelihoods,
                                         per_contig_per_base_hq_soft_clips,
@@ -538,66 +576,52 @@ impl HaplotypeCallerEngine {
                                         chunk_idx,
                                         output_prefix,
                                     ) {
-                                        Ok(val) => val,
+                                        Ok(val) => {
+                                            debug!("Finished calling on chunk {} of size {}", chunk_idx, positions.len());
+                                            debug!("N. variant contexts {}", val.0.len());
+                                            debug!("N. depth counts {:?}", val.1.shape());
+                                            {
+                                                let pb = pb_tree.lock().unwrap();
+                                                pb[pb_index].progress_bar.inc(1);
+                                            }
+                                            let (vc_vec, concatenated_array) = val;
+                                            consolidator.0.extend(vc_vec);
+                                            (consolidator.0, consolidator.1 + &concatenated_array)
+                                        },
                                         Err(e) => {
                                             panic!("Activity profile generation failed: {:?}", e)
                                         }
                                     }
                                 } else {
-                                    Vec::new()
+                                    consolidator
                                 }
                             })
-                            .collect::<Vec<(Vec<VariantContext>, Vec<Vec<i32>>)>>();
+                            .reduce(|| (Vec::with_capacity(target_length as usize), Array2::default((total_sample_count, total_sample_count))), |mut a, b| {
+                                a.0.extend(b.0);
+                                (a.0, a.1 + &b.1)
+                            });
                         result
                     } else {
-                        Vec::new()
+                        (Vec::new(), Array2::default((total_sample_count, total_sample_count)))
                     }
                     // contexts
                 } else {
-                    Vec::new()
+                    (Vec::new(), Array2::default((total_sample_count, total_sample_count)))
                 };
 
-                let mut contexts = Vec::with_capacity(target_length as usize);
-                let mut passing_sites =
-                    vec![Vec::with_capacity(target_length as usize); indexed_bam_readers.len()];
-                context_depth_tuples.into_iter().for_each(
-                    |result: (Vec<VariantContext>, Vec<Vec<i32>>)| {
-                        contexts.extend(result.0);
-                        // println!("depths {:?}", &result.1);
-                        for (i, depths) in result.1.into_iter().enumerate() {
-                            let sample_passing_site = &mut passing_sites[i];
-                            let passing_len = sample_passing_site.len();
-                            if sample_passing_site.len() > 0 {
-                                let first = match depths.first() {
-                                    Some(f) => *f,
-                                    None => continue,
-                                };
+                consolidator.0.extend(context_depth_tuples.0);
 
-                                let last = match sample_passing_site.last() {
-                                    Some(res) => *res,
-                                    _ => 0,
-                                };
-
-                                if last.sign() == first.sign() {
-                                    sample_passing_site[passing_len - 1] += first;
-                                } else {
-                                    sample_passing_site.push(first);
-                                }
-                            }
-
-                            if depths.len() > 1 {
-                                sample_passing_site.extend(&depths[1..]);
-                            }
-                        }
-                    },
-                );
-
-                (contexts, passing_sites)
+                (consolidator.0, consolidator.1 + &context_depth_tuples.1)
             })
-            .collect::<Vec<(Vec<VariantContext>, Vec<Vec<i32>>)>>();
-
-        // return genotype_likelihoods for each contig in current genome across samples
-        contexts
+            .reduce(|| (Vec::with_capacity(genome_size as usize), Array2::default((total_sample_count, total_sample_count))), |mut a, b| {
+                a.0.extend(b.0);
+                (a.0, a.1 + &b.1)
+            });
+        {
+            let pb = pb_tree.lock().unwrap();
+            pb[pb_index].progress_bar.finish_with_message(format!("{}: Finished generating activity profile.", &pb[pb_index].key));
+        }
+        (contexts.0, contexts.1)
     }
 
     pub fn update_activity_profile<'b>(
@@ -636,8 +660,6 @@ impl HaplotypeCallerEngine {
                     .into_iter()
                     .map(|pos| RefVsAnyResult::new(likelihoodcount, pos, tid))
                     .collect::<Vec<RefVsAnyResult>>();
-
-                let _outer_chunk_size = outer_chunk_location.size();
 
                 let mut positions = per_contig_per_base_hq_soft_clips
                     .iter_mut()
@@ -685,13 +707,7 @@ impl HaplotypeCallerEngine {
                     ) {
                         continue;
                     }
-                    // debug!("start {} end {} chunk {}-{}",
-                    //        record.reference_start(),
-                    //        record.reference_end(),
-                    //        min(outer_chunk_location.start, target_len as usize),
-                    //        min(outer_chunk_location.end,
-                    //            target_len as usize),
-                    // );
+
                     Self::parse_record(
                         &record,
                         flag_filters,
@@ -915,19 +931,27 @@ impl HaplotypeCallerEngine {
         chunk_location: &SimpleInterval,
         _chunk_index: usize,
         output_prefix: &str,
-    ) -> Result<Vec<(Vec<VariantContext>, Vec<Vec<i32>>)>, BirdToolError> {
+    ) -> Result<(Vec<VariantContext>, Array2<f32>), BirdToolError> {
         // let mut per_contig_activity_profiles = HashMap::new();
         let placeholder_vec = Vec::new();
         let depth_per_sample_filter = *args
             .get_one::<i64>("depth-per-sample-filter")
             .unwrap() as i32;
+        
+        // the total sample count will increase the number of RAM we will be using
+        // each sample adds a "Genotype" struct which is a large struct with many fields
+        let total_sample_count = short_read_bam_count + long_read_bam_count;
 
-        let inner_chunk_size = max(50000, max_assembly_region_size * 2);
+        // so we need to limit the inner_chunk_size to a reasonable size
+        // to avoid OOM errors whilst also keeping it above max_assembly_region_size
+        let inner_chunk_size = max(50000 / max(total_sample_count / 2, 1), max_assembly_region_size * 2);
+
         let variant_contexts = (0..chunk_location.size())
             .into_par_iter()
             .chunks(inner_chunk_size)
             .enumerate()
-            .map(|(i, positions)| {
+            .fold(|| (Vec::with_capacity(inner_chunk_size), Array2::default((total_sample_count, total_sample_count))), 
+            |mut consolidator, (i, positions)| {
                 let within_bounds = match &limiting_interval {
                     Some(limit) => {
                         let position_limit = SimpleInterval::new(
@@ -940,6 +964,7 @@ impl HaplotypeCallerEngine {
                     }
                     None => true,
                 };
+                let n_positions = positions.len();
 
                 if within_bounds {
                     let mut active_region_evaluation_genotyper_engine =
@@ -966,7 +991,7 @@ impl HaplotypeCallerEngine {
                     );
 
                     let mut depth_of_position =
-                        vec![Vec::with_capacity(inner_chunk_size); sample_names.len()];
+                        vec![Vec::with_capacity(n_positions); sample_names.len()];
                     let mut depths_counters = vec![0; sample_names.len()];
                     for pos in positions {
                         match &limiting_interval {
@@ -1028,7 +1053,7 @@ impl HaplotypeCallerEngine {
                             genotypes.push(Genotype::build(
                                 ploidy,
                                 result,
-                                sample_names[idx].clone(),
+                                idx,
                             ))
                         }
 
@@ -1084,6 +1109,9 @@ impl HaplotypeCallerEngine {
                     for (idx, sample_depth) in depths_counters.into_iter().enumerate() {
                         depth_of_position[idx].push(sample_depth);
                     }
+                    
+                    let comparable_bases = ANICalculator::calculate_compared_bases(Some(depth_of_position), n_positions as u64, total_sample_count);
+
                     let inner_reader = ReferenceReader::new_from_reader_with_tid_and_rid(
                         reference_reader,
                         ref_idx,
@@ -1106,17 +1134,22 @@ impl HaplotypeCallerEngine {
                         max_input_depth,
                         output_prefix,
                     );
-                    (processed, depth_of_position)
+
+                    consolidator.0.extend(processed);
+                    (consolidator.0, consolidator.1 + &comparable_bases)
                 } else {
-                    (Vec::new(), Vec::new())
+                    (Vec::new(), Array2::default((total_sample_count, total_sample_count)))
                 }
                 // activity_profile
             })
-            .collect::<Vec<(Vec<VariantContext>, Vec<Vec<i32>>)>>();
+            .reduce(|| (Vec::with_capacity(inner_chunk_size), Array2::default((total_sample_count, total_sample_count))),
+                |mut a, b| {
+                    a.0.extend(b.0);
+                    (a.0, a.1 + &b.1)
+                });
 
-        // debug!("Finished {} of length {}", tid, length);
 
-        Ok(variant_contexts)
+        Ok((variant_contexts.0, variant_contexts.1))
     }
 
     /**
@@ -1239,11 +1272,11 @@ impl HaplotypeCallerEngine {
         let (mut assembly_result, filtered_reads) =
             self.filter_non_passing_reads(assembly_result, flag_filters);
         // let filtered_reads = Vec::new();
-        debug!("Filtered reads {}", filtered_reads.len());
-        debug!(
-            "Assembly result allele order after read filter {:?}",
-            &assembly_result.haplotypes.len()
-        );
+        // debug!("Filtered reads {}", filtered_reads.len());
+        // debug!(
+        //     "Assembly result allele order after read filter {:?}",
+        //     &assembly_result.haplotypes.len()
+        // );
         let per_sample_filtered_read_list =
             AssemblyBasedCallerUtils::split_reads_by_sample(filtered_reads);
 
@@ -1270,17 +1303,22 @@ impl HaplotypeCallerEngine {
         //     "Before change: {}",
         //     reads.values().map(|r| r.len()).sum::<usize>()
         // );
+        let sample_indices = sample_names
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| idx)
+            .collect::<Vec<usize>>();
         let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
             .likelihood_calculation_engine
-            .compute_read_likelihoods(&mut assembly_result, sample_names.to_vec(), reads);
+            .compute_read_likelihoods(&mut assembly_result, sample_indices, reads);
 
         // if debug {
-        debug!(
-            "Read by sample after compute: {:?}",
-            (0..sample_names.len())
-                .map(|s| read_likelihoods.sample_evidence_count(s))
-                .collect::<Vec<usize>>()
-        );
+        // debug!(
+        //     "Read by sample after compute: {:?}",
+        //     (0..sample_names.len())
+        //         .map(|s| read_likelihoods.sample_evidence_count(s))
+        //         .collect::<Vec<usize>>()
+        // );
         // }
 
         // debug!(
@@ -1320,12 +1358,12 @@ impl HaplotypeCallerEngine {
         read_likelihoods.change_evidence(read_alignments);
 
         // if debug {
-        debug!(
-            "After change {:?}",
-            (0..sample_names.len())
-                .map(|s| read_likelihoods.sample_evidence_count(s))
-                .collect::<Vec<usize>>()
-        );
+        // debug!(
+        //     "After change {:?}",
+        //     (0..sample_names.len())
+        //         .map(|s| read_likelihoods.sample_evidence_count(s))
+        //         .collect::<Vec<usize>>()
+        // );
         // // }
 
         // debug!(

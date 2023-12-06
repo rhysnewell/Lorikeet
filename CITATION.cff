@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Newell
+    given-names: Rhys J. P.
+    orcid: https://orcid.org/0000-0002-1300-6116
+  - family-names: McMaster
+    given-names: Eilish S.
+    orcid: https://orcid.org/0000-0002-7415-8690
+  - family-names: Craig
+    given-names: Philip
+  - family-names: Boden
+    given-names: Mikael
+    orcid: https://orcid.org/0000-0003-3548-268X
+  - family-names: Tyson
+    given-names: Gene W.
+    orcid: https://orcid.org/0000-0001-8559-9427
+  - family-names: Woodcroft
+    given-names: Ben J.
+    orcid: https://orcid.org/0000-0003-0670-7480
+title: "Lorikeet: strain-resolved metagenome analysis using local reassembly"
+version: 0.8.2
+date-released: 2023-11-05

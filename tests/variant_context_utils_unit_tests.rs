@@ -4,15 +4,13 @@
 )]
 
 extern crate lorikeet_genome;
-#[macro_use]
-extern crate lazy_static;
 extern crate hashlink;
 
 use hashlink::LinkedHashSet;
 use lorikeet_genome::genotype::genotype_builder::{Genotype, GenotypesContext};
-use lorikeet_genome::model::byte_array_allele::{ByteArrayAllele};
+use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
 
-use lorikeet_genome::model::variant_context::{VariantContext};
+use lorikeet_genome::model::variant_context::VariantContext;
 
 use lorikeet_genome::model::variant_context_utils::{
     FilteredRecordMergeType, GenotypeMergeType, VariantContextUtils,
@@ -461,14 +459,14 @@ fn makeVC<S: Into<String>>(
     vc
 }
 
-fn makeG<S: Into<String>>(
-    sample: S,
+fn makeG(
+    sample: usize,
     a1: ByteArrayAllele,
     a2: ByteArrayAllele,
     log10_p_error: f64,
-    pls: Option<Vec<i64>>,
+    pls: Option<Vec<i32>>,
 ) -> Genotype {
-    let mut g = Genotype::build_from_alleles(vec![a1, a2], sample.into());
+    let mut g = Genotype::build_from_alleles(vec![a1, a2], sample);
     g.log10_p_error(log10_p_error);
     match pls {
         Some(pls) => {
@@ -531,19 +529,19 @@ fn merge_genotypes_data() {
             makeVC(
                 "1",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -1.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -1.0, None)]),
                 None,
             ),
             makeVC(
                 "2",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -2.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -2.0, None)]),
                 None,
             ),
             makeVC(
                 "3",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -1.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -1.0, None)]),
                 None,
             ),
         ],
@@ -556,19 +554,19 @@ fn merge_genotypes_data() {
             makeVC(
                 "1",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -1.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -1.0, None)]),
                 None,
             ),
             makeVC(
                 "2",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -2.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -2.0, None)]),
                 None,
             ),
             makeVC(
                 "3",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -2.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -2.0, None)]),
                 None,
             ),
         ],
@@ -581,21 +579,21 @@ fn merge_genotypes_data() {
             makeVC(
                 "1",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -1.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -1.0, None)]),
                 None,
             ),
             makeVC(
                 "2",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s2", Aref.clone(), T.clone(), -2.0, None)]),
+                Some(vec![makeG(1, Aref.clone(), T.clone(), -2.0, None)]),
                 None,
             ),
             makeVC(
                 "3",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -1.0, None),
-                    makeG("s2", Aref.clone(), T.clone(), -2.0, None),
+                    makeG(0, Aref.clone(), T.clone(), -1.0, None),
+                    makeG(1, Aref.clone(), T.clone(), -2.0, None),
                 ]),
                 None,
             ),
@@ -609,21 +607,21 @@ fn merge_genotypes_data() {
             makeVC(
                 "1",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -1.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -1.0, None)]),
                 None,
             ),
             makeVC(
                 "2",
                 vec![Aref.clone(), C.clone()],
-                Some(vec![makeG("s2", Aref.clone(), C.clone(), -2.0, None)]),
+                Some(vec![makeG(1, Aref.clone(), C.clone(), -2.0, None)]),
                 None,
             ),
             makeVC(
                 "3",
                 vec![Aref.clone(), T.clone(), C.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -1.0, None),
-                    makeG("s2", Aref.clone(), C.clone(), -2.0, None),
+                    makeG(0, Aref.clone(), T.clone(), -1.0, None),
+                    makeG(1, Aref.clone(), C.clone(), -2.0, None),
                 ]),
                 None,
             ),
@@ -637,15 +635,15 @@ fn merge_genotypes_data() {
             makeVC(
                 "1",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -1.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -1.0, None)]),
                 None,
             ),
             makeVC(
                 "2",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -2.0, None),
-                    makeG("s3", Aref.clone(), T.clone(), -3.0, None),
+                    makeG(0, Aref.clone(), T.clone(), -2.0, None),
+                    makeG(2, Aref.clone(), T.clone(), -3.0, None),
                 ]),
                 None,
             ),
@@ -653,8 +651,8 @@ fn merge_genotypes_data() {
                 "3",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -1.0, None),
-                    makeG("s3", Aref.clone(), T.clone(), -3.0, None),
+                    makeG(0, Aref.clone(), T.clone(), -1.0, None),
+                    makeG(2, Aref.clone(), T.clone(), -3.0, None),
                 ]),
                 None,
             ),
@@ -668,15 +666,15 @@ fn merge_genotypes_data() {
             makeVC(
                 "1",
                 vec![Aref.clone(), T.clone()],
-                Some(vec![makeG("s1", Aref.clone(), T.clone(), -1.0, None)]),
+                Some(vec![makeG(0, Aref.clone(), T.clone(), -1.0, None)]),
                 None,
             ),
             makeVC(
                 "2",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -2.0, None),
-                    makeG("s3", Aref.clone(), T.clone(), -3.0, None),
+                    makeG(0, Aref.clone(), T.clone(), -2.0, None),
+                    makeG(2, Aref.clone(), T.clone(), -3.0, None),
                 ]),
                 None,
             ),
@@ -684,8 +682,8 @@ fn merge_genotypes_data() {
                 "3",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -2.0, None),
-                    makeG("s3", Aref.clone(), T.clone(), -3.0, None),
+                    makeG(0, Aref.clone(), T.clone(), -2.0, None),
+                    makeG(2, Aref.clone(), T.clone(), -3.0, None),
                 ]),
                 None,
             ),
@@ -700,7 +698,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     T.clone(),
                     -1.0,
@@ -712,7 +710,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     T.clone(),
                     -1.0,
@@ -731,7 +729,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), T.clone(), C.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     T.clone(),
                     -1.0,
@@ -743,7 +741,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), T.clone(), C.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     T.clone(),
                     -1.0,
@@ -762,7 +760,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), C.clone(), T.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     T.clone(),
                     -1.0,
@@ -774,7 +772,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), C.clone(), T.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     T.clone(),
                     -1.0,
@@ -793,7 +791,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), T.clone(), C.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     T.clone(),
                     -1.0,
@@ -805,7 +803,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), T.clone(), C.clone()],
                 Some(vec![makeG(
-                    "s2",
+                    1,
                     Aref.clone(),
                     C.clone(),
                     -1.0,
@@ -818,14 +816,14 @@ fn merge_genotypes_data() {
                 vec![Aref.clone(), T.clone(), C.clone()],
                 Some(vec![
                     makeG(
-                        "s1",
+                        0,
                         Aref.clone(),
                         T.clone(),
                         -1.0,
                         Some(vec![1, 2, 3, 4, 5, 6]),
                     ),
                     makeG(
-                        "s2",
+                        1,
                         Aref.clone(),
                         C.clone(),
                         -1.0,
@@ -845,7 +843,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     T.clone(),
                     -1.0,
@@ -857,8 +855,8 @@ fn merge_genotypes_data() {
                 "2",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -2.0, Some(vec![4, 0, 2])),
-                    makeG("s3", Aref.clone(), T.clone(), -3.0, Some(vec![3, 0, 2])),
+                    makeG(0, Aref.clone(), T.clone(), -2.0, Some(vec![4, 0, 2])),
+                    makeG(2, Aref.clone(), T.clone(), -3.0, Some(vec![3, 0, 2])),
                 ]),
                 None,
             ),
@@ -866,8 +864,8 @@ fn merge_genotypes_data() {
                 "3",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -2.0, Some(vec![4, 0, 2])),
-                    makeG("s3", Aref.clone(), T.clone(), -3.0, Some(vec![3, 0, 2])),
+                    makeG(0, Aref.clone(), T.clone(), -2.0, Some(vec![4, 0, 2])),
+                    makeG(2, Aref.clone(), T.clone(), -3.0, Some(vec![3, 0, 2])),
                 ]),
                 None,
             ),
@@ -883,7 +881,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), ATC.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     ATC.clone(),
                     -1.0,
@@ -895,8 +893,8 @@ fn merge_genotypes_data() {
                 "2",
                 vec![Aref.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), T.clone(), -2.0, Some(vec![4, 0, 2])),
-                    makeG("s3", Aref.clone(), T.clone(), -3.0, Some(vec![3, 0, 2])),
+                    makeG(0, Aref.clone(), T.clone(), -2.0, Some(vec![4, 0, 2])),
+                    makeG(2, Aref.clone(), T.clone(), -3.0, Some(vec![3, 0, 2])),
                 ]),
                 None,
             ),
@@ -904,8 +902,8 @@ fn merge_genotypes_data() {
                 "3",
                 vec![Aref.clone(), ATC.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), ATC, -1.0, None),
-                    makeG("s3", Aref.clone(), T.clone(), -3.0, None),
+                    makeG(0, Aref.clone(), ATC, -1.0, None),
+                    makeG(2, Aref.clone(), T.clone(), -3.0, None),
                 ]),
                 None,
             ),
@@ -921,7 +919,7 @@ fn merge_genotypes_data() {
                 "1",
                 vec![Aref.clone(), C.clone(), T.clone()],
                 Some(vec![makeG(
-                    "s1",
+                    0,
                     Aref.clone(),
                     C.clone(),
                     -1.0,
@@ -933,7 +931,7 @@ fn merge_genotypes_data() {
                 "2",
                 vec![Aref.clone(), T.clone(), C.clone()],
                 Some(vec![makeG(
-                    "s2",
+                    1,
                     Aref.clone(),
                     T.clone(),
                     -2.0,
@@ -945,8 +943,8 @@ fn merge_genotypes_data() {
                 "3",
                 vec![Aref.clone(), C.clone(), T.clone()],
                 Some(vec![
-                    makeG("s1", Aref.clone(), C, -1.0, None),
-                    makeG("s2", Aref, T, -2.0, None),
+                    makeG(0, Aref.clone(), C, -1.0, None),
+                    makeG(1, Aref, T, -2.0, None),
                 ]),
                 None,
             ),

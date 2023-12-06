@@ -187,25 +187,32 @@ impl HaplotypeCallerGenotypingEngine {
                         !args.get_flag("disable-spanning-event-genotyping"),
                     );
 
-                    debug!("Allele mapper 1 {:?}", &allele_mapper.iter().map(|(k, v)| (*k, v.len())).collect::<Vec<(usize, usize)>>());
-                    self.remove_alt_alleles_if_too_many_genotypes(
+                    // debug!("Allele mapper 1 {:?}", &allele_mapper.iter().map(|(k, v)| (*k, v.len())).collect::<Vec<(usize, usize)>>());
+                    match self.remove_alt_alleles_if_too_many_genotypes(
                         ploidy,
                         &mut allele_mapper,
                         &mut merged_vc,
-                    );
-                    debug!("Allele mapper 2 {:?}", &allele_mapper.iter().map(|(k, v)| (*k, v.len())).collect::<Vec<(usize, usize)>>());
+                    ) {
+                        Ok(_) => (),
+                        Err(error) => {
+                            debug!("Error removing alt alleles {:?} for loc {}", error, loc);
+                            debug!("Likely too many alt alleles, reference allele lost.");
+                            continue;
+                        },
+                    };
+                    // debug!("Allele mapper 2 {:?}", &allele_mapper.iter().map(|(k, v)| (*k, v.len())).collect::<Vec<(usize, usize)>>());
                     // }
-                    debug!("Alleles in read likelihoods {:?}", read_likelihoods.alleles);
+                    // debug!("Alleles in read likelihoods {:?}", read_likelihoods.alleles);
                     let mut read_allele_likelihoods = read_likelihoods
                         .marginalize(&allele_mapper, AlleleList::new(&merged_vc.alleles));
-                    debug!(
-                        "loc {} alleles in likelihood after marginal {:?} evidence {:?}",
-                        loc,
-                        &read_allele_likelihoods.alleles.len(),
-                        (0..read_allele_likelihoods.samples.len())
-                            .map(|s| read_allele_likelihoods.sample_evidence_count(s))
-                            .collect::<Vec<usize>>()
-                    );
+                    // debug!(
+                    //     "loc {} alleles in likelihood after marginal {:?} evidence {:?}",
+                    //     loc,
+                    //     &read_allele_likelihoods.alleles.len(),
+                    //     (0..read_allele_likelihoods.samples.len())
+                    //         .map(|s| read_allele_likelihoods.sample_evidence_count(s))
+                    //         .collect::<Vec<usize>>()
+                    // );
 
                     let variant_calling_relevant_overlap = SimpleInterval::new(
                         merged_vc.loc.tid,
@@ -227,37 +234,37 @@ impl HaplotypeCallerGenotypingEngine {
                         &variant_calling_relevant_overlap,
                     );
 
-                    debug!("loc {} merged vc loc {:?} relevant overlap {:?} alleles in likelihood after retain {:?} evidence {:?}",
-                            loc, &merged_vc.loc, &variant_calling_relevant_overlap, &read_allele_likelihoods.alleles.len(),
-                            (0..read_allele_likelihoods.samples.len()).map(|s| read_allele_likelihoods.sample_evidence_count(s)).collect::<Vec<usize>>());
+                    // debug!("loc {} merged vc loc {:?} relevant overlap {:?} alleles in likelihood after retain {:?} evidence {:?}",
+                    //         loc, &merged_vc.loc, &variant_calling_relevant_overlap, &read_allele_likelihoods.alleles.len(),
+                    //         (0..read_allele_likelihoods.samples.len()).map(|s| read_allele_likelihoods.sample_evidence_count(s)).collect::<Vec<usize>>());
                     
                     read_allele_likelihoods
                         .set_variant_calling_subset_used(&variant_calling_relevant_overlap);
 
                     // TODO: sample contamination downsampling occurs here. Won't worry about this for nmow
                     //      as it would require a clone of read_likelihoods
-                    debug!(
-                        "======================================================================="
-                    );
-                    debug!(
-                        "Event at: {:?} with {} reads and {:?} disqualified",
-                        &merged_vc.loc,
-                        read_allele_likelihoods.evidence_count(),
-                        read_allele_likelihoods
-                            .filtered_evidence_by_sample_index
-                            .iter()
-                            .map(|(k, v)| (*k, v.len()))
-                            .collect::<Vec<(usize, usize)>>()
-                    );
-                    debug!("Genotypes {:?}", &merged_vc.genotypes);
-                    debug!(
-                        "Merged vc {} read allele {}",
-                        merged_vc.alleles.len(),
-                        read_allele_likelihoods.alleles.len()
-                    );
-                    debug!(
-                        "======================================================================="
-                    );                
+                    // debug!(
+                    //     "======================================================================="
+                    // );
+                    // debug!(
+                    //     "Event at: {:?} with {} reads and {:?} disqualified",
+                    //     &merged_vc.loc,
+                    //     read_allele_likelihoods.evidence_count(),
+                    //     read_allele_likelihoods
+                    //         .filtered_evidence_by_sample_index
+                    //         .iter()
+                    //         .map(|(k, v)| (*k, v.len()))
+                    //         .collect::<Vec<(usize, usize)>>()
+                    // );
+                    // debug!("Genotypes {:?}", &merged_vc.genotypes);
+                    // debug!(
+                    //     "Merged vc {} read allele {}",
+                    //     merged_vc.alleles.len(),
+                    //     read_allele_likelihoods.alleles.len()
+                    // );
+                    // debug!(
+                    //     "======================================================================="
+                    // );                
 
                     if emit_reference_confidence {
                         // TODO: Deletes alleles and replaces with symbolic non ref?
@@ -295,49 +302,49 @@ impl HaplotypeCallerGenotypingEngine {
                         stand_min_confidence,
                     );
 
-                    debug!("loc {} call {:?}", loc, &call);
+                    // debug!("loc {} call {:?}", loc, &call);
                     
 
                     match call {
                         None => continue, // pass,
                         Some(mut call) => {
-                            debug!(
-                                "call {} likelihoods {} genotypes {}",
-                                call.alleles.len(),
-                                read_likelihoods.alleles.len(),
-                                call.get_genotypes().genotypes()[0].pl.len()
-                            );
-                            debug!(
-                                "Loc {} Successful call {} error {} {}",
-                                loc,
-                                call.alleles.len(),
-                                call.log10_p_error,
-                                -10.0 * call.log10_p_error
-                            );
-                            // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
-                            // right after a few lines of code below.
-                            debug!("Called allele {:?}", &call.alleles);
-                            debug!("Called genotypes {:?}", &call.genotypes);
+                            // debug!(
+                            //     "call {} likelihoods {} genotypes {}",
+                            //     call.alleles.len(),
+                            //     read_likelihoods.alleles.len(),
+                            //     call.get_genotypes().genotypes()[0].pl.len()
+                            // );
+                            // debug!(
+                            //     "Loc {} Successful call {} error {} {}",
+                            //     loc,
+                            //     call.alleles.len(),
+                            //     call.log10_p_error,
+                            //     -10.0 * call.log10_p_error
+                            // );
+                            // // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
+                            // // right after a few lines of code below.
+                            // debug!("Called allele {:?}", &call.alleles);
+                            // debug!("Called genotypes {:?}", &call.genotypes);
                                 // }
                             
                             let overlapping_filtered_reads = Self::overlapping_filtered_reads(
                                 &per_sample_filtered_read_list,
                                 variant_calling_relevant_overlap,
                             );
-                            debug!(
-                                "Overlapping filtered reads {:?}",
-                                overlapping_filtered_reads
-                                    .iter()
-                                    .map(|(_, v)| v.len())
-                                    .collect::<Vec<usize>>()
-                            );
+                            // debug!(
+                            //     "Overlapping filtered reads {:?}",
+                            //     overlapping_filtered_reads
+                            //         .iter()
+                            //         .map(|(_, v)| v.len())
+                            //         .collect::<Vec<usize>>()
+                            // );
                             read_allele_likelihoods.add_evidence(overlapping_filtered_reads, 0.0);
-                            debug!(
-                                "After adding overlapping {:?}",
-                                (0..read_allele_likelihoods.samples.len())
-                                    .map(|s| read_allele_likelihoods.sample_evidence_count(s))
-                                    .collect::<Vec<usize>>()
-                            );
+                            // debug!(
+                            //     "After adding overlapping {:?}",
+                            //     (0..read_allele_likelihoods.samples.len())
+                            //         .map(|s| read_allele_likelihoods.sample_evidence_count(s))
+                            //         .collect::<Vec<usize>>()
+                            // );
 
                             // convert likelihood allele type
                             let likelihood_alleles =
@@ -355,7 +362,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 .into_iter()
                                 .collect::<LinkedHashSet<_>>();
 
-                            debug!("Depth per allele alleles {:?}", &alleles);
+                            // debug!("Depth per allele alleles {:?}", &alleles);
                             alleles.iter().for_each(|a| {
                                 // type difference mean we can't check if this allele is in the array at this point
                                 assert!(
@@ -372,7 +379,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 allele_counts.insert(allele_index, 0);
                                 subset.insert(allele_index, vec![allele]);
                             }
-                            debug!("Subset {:?}", &subset);
+                            // debug!("Subset {:?}", &subset);
                             let mut read_allele_likelihoods = read_allele_likelihoods
                                 .marginalize(&subset, AlleleList::new(&call.alleles));
 
@@ -382,7 +389,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 &mut call,
                             );
 
-                            debug!("Annotated call {:?}", &annotated_call);
+                            // debug!("Annotated call {:?}", &annotated_call);
                             return_calls.push(annotated_call);
                             call.alleles
                                 .into_iter()
@@ -516,10 +523,10 @@ impl HaplotypeCallerGenotypingEngine {
                 AlleleList::new(vc_alleles)
             };
         // let allele_list = read_likelihoods.alleles.clone();
-        debug!(
-            "Read likelihood {:#?}",
-            read_likelihoods.values_by_sample_index
-        );
+        // debug!(
+        //     "Read likelihood {:#?}",
+        //     read_likelihoods.values_by_sample_index
+        // );
         let likelihoods = self.genotyping_model.calculate_likelihoods(
             &allele_list,
             read_likelihoods.get_allele_list_byte_array(),
@@ -529,7 +536,7 @@ impl HaplotypeCallerGenotypingEngine {
             offset_for_ref_into_event,
         );
 
-        debug!("Proposed likelihoods {:#?}", &likelihoods);
+        // debug!("Proposed likelihoods {:#?}", &likelihoods);
 
         let sample_count = self.genotyping_engine.samples.len();
         let mut result = GenotypesContext::create(sample_count);
@@ -537,7 +544,8 @@ impl HaplotypeCallerGenotypingEngine {
             let mut genotype_builder = Genotype::build_from_likelihoods(
                 self.ploidy_model.ploidy,
                 likelihood,
-                self.genotyping_engine.samples[s].clone(),
+                // self.genotyping_engine.samples[s].clone(),
+                s
             );
             genotype_builder.alleles = no_call_alleles.clone();
             // debug!("Adding genotype {:#?}", &genotype_builder);
@@ -566,7 +574,7 @@ impl HaplotypeCallerGenotypingEngine {
         ploidy: usize,
         allele_mapper: &mut LinkedHashMap<usize, Vec<&'b Haplotype<SimpleInterval>>>,
         merged_vc: &mut VariantContext,
-    ) {
+    ) -> anyhow::Result<()> {
         let original_allele_count = allele_mapper.len();
         let max_genotype_count_to_enumerate = self.max_genotype_count_to_enumerate;
         let practical_allele_count = self
@@ -584,7 +592,7 @@ impl HaplotypeCallerGenotypingEngine {
                 allele_mapper,
                 merged_vc,
                 *practical_allele_count,
-            );
+            )?;
             allele_mapper.retain(|allele, _| alleles_to_keep.contains(&allele));
 
             // debug!(
@@ -593,8 +601,10 @@ impl HaplotypeCallerGenotypingEngine {
             //     merged_vc.loc, ploidy, original_allele_count, practical_allele_count, &alleles_to_keep
             // );
 
-            Self::remove_excess_alt_alleles_from_vc(merged_vc, alleles_to_keep)
+            Self::remove_excess_alt_alleles_from_vc(merged_vc, alleles_to_keep)?;
         }
+
+        Ok(())
     }
 
     /**
@@ -607,30 +617,33 @@ impl HaplotypeCallerGenotypingEngine {
     fn remove_excess_alt_alleles_from_vc(
         input_vc: &mut VariantContext,
         alleles_to_keep: Vec<usize>,
-    ) {
+    ) -> anyhow::Result<()> {
         let input_len = input_vc.alleles.len();
-        assert!(
-            alleles_to_keep
-                .iter()
-                .any(|a| input_vc.alleles[*a].is_reference()),
-            "alleles to keep doesn't contain reference allele!"
-        );
-        assert!(
-            alleles_to_keep.iter().all(|a| a < &input_len),
-            "alleles to keep is not a subset of input VC alleles"
-        );
+
+        if !alleles_to_keep
+            .iter()
+            .any(|a| input_vc.alleles[*a].is_reference()) {
+            anyhow::bail!("alleles to keep doesn't contain reference allele!");
+        }
+
+        if !alleles_to_keep.iter().all(|a| *a < input_len) {
+            anyhow::bail!("alleles to keep is not a subset of input VC alleles");
+        }
 
         if input_vc.alleles.len() == alleles_to_keep.len() {
             // do nothing
-        } else {
-            // input_vc.alleles.retain(|a| alleles_to_keep.contains(&a));
-            let mut index = 0;
-            input_vc.alleles.retain(|_allele| {
-                let retain = alleles_to_keep.contains(&index);
-                index += 1;
-                retain
-            });
+            return Ok(());
         }
+
+        // input_vc.alleles.retain(|a| alleles_to_keep.contains(&a));
+        let mut index = 0;
+        input_vc.alleles.retain(|_allele| {
+            let retain = alleles_to_keep.contains(&index);
+            index += 1;
+            retain
+        });
+
+        Ok(())
     }
 
     /**
@@ -649,9 +662,9 @@ impl HaplotypeCallerGenotypingEngine {
         allele_mapper: &mut LinkedHashMap<usize, Vec<&'b Haplotype<SimpleInterval>>>,
         merged_vc: &mut VariantContext,
         desired_num_of_alleles: usize,
-    ) -> Vec<usize> {
+    ) -> anyhow::Result<Vec<usize>> {
         if allele_mapper.len() <= desired_num_of_alleles {
-            return allele_mapper.keys().map(|a| *a).collect::<Vec<usize>>();
+            return Ok(allele_mapper.keys().map(|a| *a).collect::<Vec<usize>>());
         }
 
         let mut allele_max_priority_q = BinaryHeap::new();
@@ -690,11 +703,24 @@ impl HaplotypeCallerGenotypingEngine {
             alleles_to_retain.insert(current_allele);
         }
 
-        return allele_mapper
+        // get the reference allele index and ensure that it remains in the 
+        // alleles to retain set
+        if let Some(ref_allele_index) = merged_vc.alleles
+            .iter()
+            .position(|a| a.is_reference()) {
+                if !alleles_to_retain.contains(&ref_allele_index) {
+                    // alleles_to_retain.insert(ref_allele_index);
+                    anyhow::bail!("Reference allele not found in alleles to retain!")
+                }
+        } else {
+            anyhow::bail!("Reference allele not found in merged VC alleles!")
+        }
+
+        return Ok(allele_mapper
             .keys()
             .filter(|a| alleles_to_retain.contains(a))
             .map(|a| *a)
-            .collect::<Vec<usize>>();
+            .collect::<Vec<usize>>());
     }
 
     fn replace_span_dels(

@@ -195,7 +195,7 @@ impl PairHMMLikelihoodCalculationEngine {
     pub fn compute_read_likelihoods<'b, A: AbstractReadThreadingGraph>(
         &mut self,
         assembly_result_set: &'b mut AssemblyResultSet<A>,
-        samples: Vec<String>,
+        samples: Vec<usize>,
         mut per_sample_read_list: HashMap<usize, Vec<BirdToolRead>>,
     ) -> AlleleLikelihoods<Haplotype<SimpleInterval>> {
         if samples.len() != per_sample_read_list.keys().len() {

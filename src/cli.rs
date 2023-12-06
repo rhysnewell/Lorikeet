@@ -190,22 +190,22 @@ fn add_thresholding_options(manual: Manual) -> Manual {
                     .help("Include secondary alignments. [default: not set] \n"),
             )
             .option(Opt::new("INT").long("--contig-end-exclusion").help(
-                "Exclude bases at the ends of reference \n
+                "Exclude bases at the ends of reference \
                          sequences from calculation [default: 0]",
             ))
             .option(Opt::new("FLOAT").long("--trim-min").help(
-                "Remove this smallest fraction of positions \n
+                "Remove this smallest fraction of positions \
                          when calculating trimmed_mean [default: 0.00]",
             ))
             .option(Opt::new("FLOAT").long("--trim-max").help(
-                "Maximum fraction for trimmed_mean \n
+                "Maximum fraction for trimmed_mean \
                          calculations [default: 1.00]",
             ))
             .flag(Flag::new().long("--split-bams").help(
                 "Split the mapped read files up per reference.
                          Useful if you think run time is being hampered
                          by I/O. Most of the time this will not improve
-                         performance and instead just increase disk usage. \n",
+                         performance and instead just increase disk usage.",
             )),
     )
 }
@@ -316,7 +316,7 @@ fn threads_options() -> Section {
                 .short("-t")
                 .help("Maximum number of threads used. [default: 10] \n"),
         )
-        .option(Opt::new("INT").long("--parallel-genomes").short("-p").help(
+        .option(Opt::new("INT").long("--parallel-genomes").short("-P").help(
             "Number of genomes to run in parallel. \
                      Increases memory usage linearly. \
                      Thread usage qill not exceed the value \
@@ -614,9 +614,9 @@ fn variant_calling_options_advanced() -> Section {
                      [default: 1] \n",
         ))
         .flag(Flag::new().long("--use-adaptive-pruning").help(
-            "Use more advanced pruning algorithm to prune paths in
-                     graph. Better suited when performing variant calling
-                     on when depth along a genome is variable e.g. RNA
+            "Use more advanced pruning algorithm to prune paths in \
+                     graph. Better suited when performing variant calling \
+                     on when depth along a genome is variable e.g. RNA \
                      and exome data. \n",
         ))
         .option(Opt::new("INT").long("--num-pruning-samples").help(
@@ -709,18 +709,16 @@ pub fn genotype_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "
-            ======= EXPERIMENTAL =======\n
-            lorikeet genotype discovers variants within a given set of reads and genomes and \n
-            clusters the variants into candidate strain haplotypes. Lorikeet uses UMAP and HDBSCAN \n
-            to cluster variants and an Expectation-Maximization algorithm to determine strain \n
-            haplotype abudnances within each samples. Additionally, calculate strain \n
-            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst\n
-            \n
-            This process can be undertaken in several ways, for instance by specifying BAM files \n
-            or raw reads as input, using different mapping programs, thresholding read alignments \n
-            ============================\
-            "
+            "\n\
+            EXPERIMENTAL!\n\n\
+            lorikeet genotype discovers variants within a given set of reads and genomes and \
+            clusters the variants into candidate strain haplotypes. Lorikeet uses UMAP and HDBSCAN \
+            to cluster variants and an Expectation-Maximization algorithm to determine strain \
+            haplotype abudnances within each samples. Additionally, calculate strain \
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst\
+            \n\n\
+            This process can be undertaken in several ways, for instance by specifying BAM files \
+            or raw reads as input, using different mapping programs, thresholding read alignments."
         );
 
     manual = manual.custom(threads_options());
@@ -738,7 +736,7 @@ pub fn genotype_full_help() -> Manual {
                     .short("-o")
                     .long("--output-directory")
                     .help(
-                        "Output directory. Folder will contain subfolders for each input genome \n
+                        "Output directory. Folder will contain subfolders for each input genome \
                 [default: ./]",
                     ),
             )
@@ -797,16 +795,12 @@ pub fn call_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "
-            ===========================\n
-            lorikeet call discovers variants within a given set of reads and genomes using a local \n
-            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \n
-            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \n\
-            \n
-            This process can be undertaken in several ways, for instance by specifying BAM files \n
-            or raw reads as input, using different mapping programs, thresholding read alignments \n
-            ============================\n
-            "
+            "lorikeet call discovers variants within a given set of reads and genomes using a local \
+            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \
+            \n\n\
+            This process can be undertaken in several ways, for instance by specifying BAM files \
+            or raw reads as input, using different mapping programs, thresholding read alignments."
         );
 
     manual = manual.custom(threads_options());
@@ -883,19 +877,15 @@ pub fn consensus_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "
-            ===========================\n
-            lorikeet consensus discovers variants within a given set of reads and genomes using a local \n
-            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \n
-            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \n\
+            "lorikeet consensus discovers variants within a given set of reads and genomes using a local \
+            reassembly algorithm based on the GATK HaplotypeCaller. Additionally, calculate strain \
+            diversity metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust Hudson's Fst \
             \n\
             Lorikeet consensus also generates the consensus strain haplotypes for each sample and prints \
-            them as a FASTA file for each input genome in the output directory. \n\
+            them as a FASTA file for each input genome in the output directory. \
             \n\
-            This process can be undertaken in several ways, for instance by specifying BAM files \n
-            or raw reads as input, using different mapping programs, thresholding read alignments \n
-            ============================\
-            "
+            This process can be undertaken in several ways, for instance by specifying BAM files \
+            or raw reads as input, using different mapping programs, thresholding read alignments."
         );
 
     manual = manual.custom(threads_options());
@@ -972,19 +962,15 @@ pub fn summarise_full_help() -> Manual {
         )
         .author(Author::new(crate::AUTHOR).email("rhys.newell94 near gmail.com"))
         .description(
-            "
-            ===========================\n
-            lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI,
-            subpopANI, and Fst metrics for the variants in each file. \n
-            \n
-            ANI metrics require coverage information to determine the number of shared bases
-            in each sample. VCF files do not provide this information, so the shared base size is just
-            the total size of the genome. In our experience, this doesn't really matter that much as
-            the ANI metrics are quite insensitive when provided low coverage samples anyway.
-            Fst tends to perform better for low and high coverage samples and does not require whole
-            genome coverage information.
-            ============================\n
-            "
+            "lorikeet summarise uses a set of VCF files as input and calculates conANI, popANI, \
+            subpopANI, and Fst metrics for the variants in each file. \
+            \n\
+            ANI metrics require coverage information to determine the number of shared bases \
+            in each sample. VCF files do not provide this information, so the shared base size is just \
+            the total size of the genome. In our experience, this doesn't really matter that much as \
+            the ANI metrics are quite insensitive when provided low coverage samples anyway. \
+            Fst tends to perform better for low and high coverage samples and does not require whole \
+            genome coverage information."
         );
 
     manual = manual
@@ -1000,8 +986,8 @@ pub fn summarise_full_help() -> Manual {
                 .long("--vcfs")
                 .help("Paths to input VCF files. Can provide one or more. \n"),
         )
-        .option(Opt::new("DIRECTORY").short("-o").long("--output").help(
-            "Output directory. Folder will contain subfolders for each input VCF \n
+        .option(Opt::new("DIRECTORY").short("-o").long("--output-directory").help(
+            "Output directory. Folder will contain subfolders for each input VCF \
              [default: ./] \n",
         ))
         .option(
@@ -1387,7 +1373,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("features-vcf")
                         .long("features-vcf")
-                        .short('f')
                         .required(false),
                 )
                 .arg(
@@ -1398,7 +1383,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("parallel-genomes")
-                        .short('p').long("parallel-genomes")
+                        .short('P').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
                 )
@@ -2172,7 +2157,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("features-vcf")
                         .long("features-vcf")
-                        .short('f')
                         .required(false),
                 )
                 .arg(
@@ -2183,7 +2167,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("parallel-genomes")
-                        .short('p').long("parallel-genomes")
+                        .short('P').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
                 )
@@ -2952,7 +2936,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::new("features-vcf")
                         .long("features-vcf")
-                        .short('f')
                         .required(false),
                 )
                 .arg(
@@ -2963,7 +2946,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("parallel-genomes")
-                        .short('p').long("parallel-genomes")
+                        .short('P').long("parallel-genomes")
                         .value_parser(clap::value_parser!(usize))
                         .default_value("1"),
                 )
@@ -3563,7 +3546,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::new("output")
-                        .long("output")
+                        .long("output-directory")
                         .short('o')
                         .default_value("./"),
                 )

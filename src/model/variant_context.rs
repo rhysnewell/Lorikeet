@@ -451,7 +451,7 @@ impl VariantContext {
     /// Returns and owned representation of the consensus allele at this position,
     /// that is the allele with highest sequencing depth in the specified sample index.
     pub fn get_consensus_allele(&self, sample_index: usize) -> Option<ByteArrayAllele> {
-        let mut current_max_depth = std::i64::MIN;
+        let mut current_max_depth = std::i32::MIN;
         let mut current_consensus = None;
         for (i, dp) in self.genotypes.genotypes()[sample_index]
             .ad
@@ -483,7 +483,7 @@ impl VariantContext {
     /// Returns index of the consensus allele at this position,
     /// that is the allele with highest sequencing depth in the specified sample index.
     pub fn get_consensus_allele_index(&self, sample_index: usize) -> Option<usize> {
-        let mut current_max_depth = std::i64::MIN;
+        let mut current_max_depth = std::i32::MIN;
         let mut current_consensus = None;
         for (i, dp) in self.genotypes.genotypes()[sample_index]
             .ad
@@ -513,7 +513,7 @@ impl VariantContext {
     }
 
     /// Detects if alleles are present in a sample given sample index and the read coverage threshold
-    pub fn alleles_present_in_sample(&self, sample_index: usize, threshold: i64) -> Vec<bool> {
+    pub fn alleles_present_in_sample(&self, sample_index: usize, threshold: i32) -> Vec<bool> {
         (0..self.get_n_alleles())
             .map(|allele_index| {
                 self.genotypes.genotypes()[sample_index].ad[allele_index] >= threshold
@@ -610,7 +610,7 @@ impl VariantContext {
                     vec![ref_allele.clone(); g_ploidy]
                 };
 
-                let genotype = Genotype::build_from_alleles(ref_alleles, vc.source.clone());
+                let genotype = Genotype::build_from_alleles(ref_alleles, 0);
                 new_gts.add(genotype);
             }
 
@@ -662,7 +662,7 @@ impl VariantContext {
         self.alleles.iter().enumerate().collect()
     }
 
-    pub fn get_dp(&self) -> i64 {
+    pub fn get_dp(&self) -> i32 {
         self.genotypes.get_dp()
     }
 
@@ -735,6 +735,19 @@ impl VariantContext {
         }
     }
 
+    pub fn get_vcf_reader<S: AsRef<str>>(vcf_path: S) -> IndexedReader {
+        match IndexedReader::from_path(format!("{}.gz", vcf_path.as_ref())) {
+            Ok(vcf_reader) => {
+                // debug!("Found readable VCF file");
+                return vcf_reader;
+            }
+            Err(_e) => {
+                // vcf file likely not indexed
+                Self::generate_vcf_index(vcf_path)
+            }
+        }
+    }
+
     pub fn generate_vcf_index<S: AsRef<str>>(vcf_path: S) -> IndexedReader {
         check_for_bcftools();
         // debug!("Generating VCF index");
@@ -799,7 +812,7 @@ impl VariantContext {
             let genotypes = allele_depths
                 .iter()
                 .map(|depths| {
-                    let mut depths = depths.into_iter().map(|d| *d as i64).collect::<Vec<i64>>();
+                    let mut depths = depths.into_iter().map(|d| *d as i32).collect::<Vec<i32>>();
                     if depths.len() == 1 {
                         depths = vec![0; vc.alleles.len()];
                     };

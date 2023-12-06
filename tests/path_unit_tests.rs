@@ -3,10 +3,6 @@
     non_snake_case
 )]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
 
 use lorikeet_genome::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use lorikeet_genome::graphs::path::Path;

@@ -183,7 +183,12 @@ impl Translations for CodonTable {
                 let end = *gene.end() as usize - 1;
                 // debug!("Start {} End {}", start, end);
                 // fetch variants in this window
-                variants.fetch(rid, start as u64, Some(end as u64)).expect("Unable to fetch variants");
+                match variants.fetch(rid, start as u64, Some(end as u64)) {
+                    Ok(_) => {}
+                    Err(_e) => {
+                        return (vec![0; n_samples], vec![0; n_samples], vec![1.0; n_samples]);
+                    }
+                };
 
                 // VariantContext::process_vcf_in_region()
 
@@ -386,7 +391,7 @@ impl Translations for CodonTable {
                                         let which_are_present = context
                                             .alleles_present_in_sample(
                                                 sample_idx,
-                                                depth_per_sample_filter,
+                                                depth_per_sample_filter as i32,
                                             );
 
                                         if !which_are_present[1..].iter().any(|v| *v) {
