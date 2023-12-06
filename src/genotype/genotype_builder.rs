@@ -63,13 +63,13 @@ impl AttributeObject {
 #[derive(Debug, Clone)]
 pub struct Genotype {
     pub ploidy: usize,
-    pub pl: Vec<i64>,
+    pub pl: Vec<i32>,
     pub alleles: Vec<ByteArrayAllele>,
-    pub ad: Vec<i64>,
-    pub dp: i64,
-    pub gq: i64,
+    pub ad: Vec<i32>,
+    pub dp: i32,
+    pub gq: i32,
     pub is_phased: bool,
-    pub sample_name: String,
+    pub sample_name: usize, // we change this to usize to save on memory
     pub attributes: HashMap<String, AttributeObject>,
     pub genotype_type: Option<GenotypeType>,
 }
@@ -101,7 +101,7 @@ impl Hash for Genotype {
 }
 
 impl Genotype {
-    pub fn build(default_ploidy: usize, likelihoods: Vec<f64>, sample_name: String) -> Genotype {
+    pub fn build(default_ploidy: usize, likelihoods: Vec<f64>, sample_name: usize) -> Genotype {
         Genotype {
             ploidy: default_ploidy,
             alleles: Vec::with_capacity(likelihoods.len()),
@@ -116,7 +116,7 @@ impl Genotype {
         }
     }
 
-    pub fn build_from_ads(ploidy: usize, ad: Vec<i64>) -> Genotype {
+    pub fn build_from_ads(ploidy: usize, ad: Vec<i32>) -> Genotype {
         let dp = ad.iter().sum();
         Genotype {
             ploidy,
@@ -126,7 +126,7 @@ impl Genotype {
             dp,
             gq: -1,
             is_phased: false,
-            sample_name: "".to_string(),
+            sample_name: usize::MAX,
             attributes: HashMap::new(),
             genotype_type: None,
         }
@@ -135,7 +135,7 @@ impl Genotype {
     pub fn build_from_likelihoods(
         default_ploidy: usize,
         likelihoods: GenotypeLikelihoods,
-        sample_name: String,
+        sample_name: usize,
     ) -> Genotype {
         Genotype {
             ploidy: default_ploidy,
@@ -151,7 +151,7 @@ impl Genotype {
         }
     }
 
-    pub fn build_from_alleles(alleles: Vec<ByteArrayAllele>, sample_name: String) -> Genotype {
+    pub fn build_from_alleles(alleles: Vec<ByteArrayAllele>, sample_name: usize) -> Genotype {
         Genotype {
             ploidy: alleles.len(),
             pl: Vec::with_capacity(alleles.len()),
@@ -218,10 +218,10 @@ impl Genotype {
     }
 
     pub fn log10_p_error(&mut self, p_log10_error: f64) {
-        self.gq((p_log10_error * -10.0).round() as i64)
+        self.gq((p_log10_error * -10.0).round() as i32)
     }
 
-    pub fn gq(&mut self, gq: i64) {
+    pub fn gq(&mut self, gq: i32) {
         self.gq = gq
     }
 
@@ -238,7 +238,7 @@ impl Genotype {
                 .any(|a| a.is_called() && !a.is_ref && !a.is_symbolic)
     }
 
-    pub fn pl(&mut self, pl: Vec<i64>) {
+    pub fn pl(&mut self, pl: Vec<i32>) {
         self.pl = pl
     }
 
@@ -254,7 +254,7 @@ impl Genotype {
         self.gq != -1
     }
 
-    pub fn get_ad(&mut self) -> &mut Vec<i64> {
+    pub fn get_ad(&mut self) -> &mut Vec<i32> {
         &mut self.ad
     }
 
@@ -283,7 +283,7 @@ impl Genotype {
     }
 
     pub fn af(&self) -> Vec<f32> {
-        let sum = self.ad.iter().sum::<i64>() as f32;
+        let sum = self.ad.iter().sum::<i32>() as f32;
         let afs: Vec<f32> = self.ad.iter().map(|i| (*i as f32) / sum).collect();
 
         afs
@@ -471,8 +471,8 @@ impl GenotypesContext {
         }
     }
 
-    pub fn contains_sample(&self, sample_name: &String) -> bool {
-        return self.genotypes.iter().any(|g| &g.sample_name == sample_name);
+    pub fn contains_sample(&self, sample_name: usize) -> bool {
+        return self.genotypes.iter().any(|g| g.sample_name == sample_name);
     }
 
     pub fn add(&mut self, genotype: Genotype) {
@@ -499,7 +499,7 @@ impl GenotypesContext {
         self.genotypes[index].clone()
     }
 
-    pub fn get_dp(&self) -> i64 {
+    pub fn get_dp(&self) -> i32 {
         self.genotypes.iter().map(|g| g.dp).sum()
     }
 

@@ -165,7 +165,7 @@ impl AlleleSubsettingUtils {
         alleles_to_keep: &'b Vec<ByteArrayAllele>,
         gpc: &'b GenotypePriorCalculator,
         assignment_method: &'b GenotypeAssignmentMethod,
-        depth: i64,
+        depth: i32,
         emit_empty_pls: bool,
     ) -> GenotypesContext {
         if alleles_to_keep.len() == 0 {
@@ -276,7 +276,7 @@ impl AlleleSubsettingUtils {
                 let mut new_ad = (0..alleles_to_keep.len())
                     .into_iter()
                     .map(|n| old_ad[allele_permutation.from_index(n)])
-                    .collect::<Vec<i64>>();
+                    .collect::<Vec<i32>>();
                 let non_ref_index = alleles_to_keep.iter().position(|p| p == &*NON_REF_ALLELE);
 
                 match non_ref_index {

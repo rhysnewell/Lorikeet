@@ -4,8 +4,6 @@
 )]
 
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 extern crate approx;
 
 use lorikeet_genome::haplotype::haplotype_caller_engine::HaplotypeCallerEngine;

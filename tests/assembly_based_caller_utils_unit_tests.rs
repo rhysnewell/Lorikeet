@@ -196,7 +196,7 @@ fn get_vcs_at_this_location_from_given_alleles_data() {
     deletion_vc_builder_with_gts.genotypes =
         GenotypesContext::new(vec![Genotype::build_from_alleles(
             deletion_alleles,
-            "TEST".to_string(),
+            0,
         )]);
 
     let mut snp_vc_expected = snp_vc_builder.clone();

@@ -34,16 +34,16 @@ lazy_static! {
         vec![100, 10, 100],
         vec![1000, 10, 100, 20, 23],
     ];
-    static ref SAMPLE_SETS: Vec<Vec<String>> = vec![
-        vec![format!("A"), format!("B"), format!("C"),],
-        vec![format!("A"),],
+    static ref SAMPLE_SETS: Vec<Vec<usize>> = vec![
+        vec![0, 1, 2,],
+        vec![0,],
         vec![
-            format!("C"),
-            format!("A"),
-            format!("D"),
-            format!("E"),
-            format!("Pepper"),
-            format!("Pizza")
+            2,
+            0,
+            3,
+            4,
+            5,
+            6
         ],
     ];
     static ref ALLELE_SETS: Vec<Vec<ByteArrayAllele>> = vec![
@@ -73,7 +73,7 @@ const ODD_READ_START: usize = 101;
 const EVEN_READ_START: usize = 1;
 
 fn test_instantiation_and_query(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
@@ -90,7 +90,7 @@ fn test_instantiation_and_query(
 }
 
 fn test_likelihood_filling_and_query(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
@@ -100,7 +100,7 @@ fn test_likelihood_filling_and_query(
 }
 
 fn fill_with_random_likelihoods(
-    samples: &Vec<String>,
+    samples: &Vec<usize>,
     alleles: &Vec<ByteArrayAllele>,
     result: &mut AlleleLikelihoods<ByteArrayAllele>,
 ) -> Vec<Array2<f64>> {
@@ -125,7 +125,7 @@ fn fill_with_random_likelihoods(
 }
 
 fn fill_two_with_random_likelihoods(
-    samples: &Vec<String>,
+    samples: &[usize],
     alleles: &Vec<ByteArrayAllele>,
     result_1: &mut AlleleLikelihoods<ByteArrayAllele>,
     result_2: &mut AlleleLikelihoods<ByteArrayAllele>,
@@ -152,13 +152,13 @@ fn fill_two_with_random_likelihoods(
 }
 
 fn test_likelihood_matrix_queries(
-    samples: &Vec<String>,
+    samples: &Vec<usize>,
     result: &mut AlleleLikelihoods<ByteArrayAllele>,
     likelihoods: Option<&Vec<Array2<f64>>>,
 ) {
     let dummy = Array2::zeros((0, 0));
     for sample in samples.iter() {
-        let index_of_sample = result.index_of_sample(sample).unwrap();
+        let index_of_sample = result.index_of_sample(*sample).unwrap();
         let sample_read_count = result.sample_evidence_count(index_of_sample);
         let number_of_alleles = result.number_of_alleles();
         assert_eq!(result.number_of_alleles(), number_of_alleles);
@@ -214,13 +214,13 @@ fn test_allele_queries(
 }
 
 fn test_sample_queries(
-    samples: &Vec<String>,
+    samples: &Vec<usize>,
     reads: &HashMap<usize, Vec<BirdToolRead>>,
     result: &AlleleLikelihoods<ByteArrayAllele>,
 ) {
     let mut sample_ids = HashSet::new();
     for (idx, sample) in samples.iter().enumerate() {
-        let index_of_sample = result.index_of_sample(sample).unwrap();
+        let index_of_sample = result.index_of_sample(*sample).unwrap();
         assert!(!sample_ids.contains(&index_of_sample));
         sample_ids.insert(index_of_sample);
 
@@ -248,7 +248,7 @@ fn test_sample_queries(
 }
 
 fn test_best_alleles<A: Allele>(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
@@ -397,7 +397,7 @@ fn test_best_alleles<A: Allele>(
 // }
 
 fn test_filer_poorly_modeled_reads(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
@@ -448,7 +448,7 @@ fn test_filer_poorly_modeled_reads(
 }
 
 fn test_filter_reads_to_overlap(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
@@ -487,7 +487,7 @@ fn test_filter_reads_to_overlap(
 }
 
 fn test_filter_poorly_modeled_reads_to_overlap(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
@@ -558,7 +558,7 @@ fn test_filter_poorly_modeled_reads_to_overlap(
 }
 
 fn make_good_and_bad_likelihoods<A: Allele>(
-    samples: &Vec<String>,
+    samples: &Vec<usize>,
     alleles: &Vec<A>,
     reads: &HashMap<usize, Vec<BirdToolRead>>,
     reads_to_skip: Box<dyn Fn(usize) -> bool>,
@@ -598,7 +598,7 @@ fn check_evidence_to_index_map_is_correct<A: Allele>(subject: &AlleleLikelihoods
 }
 
 fn test_marginalization_with_overlap(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     to_alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
@@ -661,7 +661,7 @@ fn test_marginalization_with_overlap(
 }
 
 fn test_marginalization(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     to_alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
@@ -723,7 +723,7 @@ fn test_marginalization(
 }
 
 fn test_normalize_cap_worst_lk(
-    samples: Vec<String>,
+    samples: Vec<usize>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
 ) {
@@ -912,7 +912,7 @@ fn data_for_test_marginalization() {
     }
 }
 
-fn data_set_reads(samples: &Vec<String>, rnd: &mut ThreadRng) -> HashMap<usize, Vec<BirdToolRead>> {
+fn data_set_reads(samples: &Vec<usize>, rnd: &mut ThreadRng) -> HashMap<usize, Vec<BirdToolRead>> {
     let mut result = HashMap::new();
     for (idx, sample) in samples.iter().enumerate() {
         let read_count = rnd.gen_range(0, 100);

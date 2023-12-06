@@ -102,7 +102,7 @@ impl VariantAnnotations {
                 // debug!("Depth");
                 match annotation_type {
                     AnnotationType::Format => {
-                        let mut genotype = genotype.unwrap();
+                        let genotype = genotype.unwrap();
                         if !genotype.has_ad() {
                             // if there is no AD value calculate it now using likelihoods
                             Self::DepthPerAlleleBySample.annotate(
@@ -112,7 +112,7 @@ impl VariantAnnotations {
                                 annotation_type,
                             );
                         };
-                        let total_ad: i64 = genotype.ad.iter().sum();
+                        let total_ad: i32 = genotype.ad.iter().sum();
                         genotype.dp = total_ad;
                         return AttributeObject::None;
                     }
@@ -235,7 +235,7 @@ impl VariantAnnotations {
                 return AttributeObject::VecU8(statistics);
             }
             Self::DepthPerAlleleBySample => {
-                let mut genotype = genotype.unwrap();
+                let genotype = genotype.unwrap();
                 let alleles = vc.alleles.clone().into_iter().collect::<LinkedHashSet<_>>();
                 // debug!("Depth per allele alleles {:?}", &alleles);
                 // alleles.iter().for_each(|a| {
@@ -360,7 +360,7 @@ impl VariantAnnotations {
     pub fn get_depth<A: Allele>(
         genotypes: &mut GenotypesContext,
         likelihoods: &AlleleLikelihoods<A>,
-    ) -> i64 {
+    ) -> i32 {
         let mut depth = 0;
         let mut AD_restrict_depth = 0;
 
@@ -378,7 +378,7 @@ impl VariantAnnotations {
 
             // if we have the AD values for this sample, let's make sure that the variant depth is greater than 1!
             if genotype.has_ad() {
-                let total_ad: i64 = genotype.ad.iter().sum();
+                let total_ad: i32 = genotype.ad.iter().sum();
                 genotype.dp = total_ad;
                 if total_ad != 0 {
                     if total_ad - genotype.ad[0] > 0 {
@@ -390,8 +390,8 @@ impl VariantAnnotations {
             }
 
             // if there is no AD value or it is a dummy value, we want to look to other means to get the depth
-            if let Some(sample_index) = likelihoods.index_of_sample(&genotype.sample_name) {
-                depth += likelihoods.sample_evidence_count(sample_index) as i64;
+            if let Some(sample_index) = likelihoods.index_of_sample(genotype.sample_name) {
+                depth += likelihoods.sample_evidence_count(sample_index) as i32;
             } else if genotype.has_dp() {
                 depth += genotype.dp;
             }

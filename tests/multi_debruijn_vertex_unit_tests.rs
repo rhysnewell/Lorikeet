@@ -3,11 +3,6 @@
     non_snake_case
 )]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate approx;
-
 use lorikeet_genome::graphs::base_vertex::BaseVertex;
 use lorikeet_genome::read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 

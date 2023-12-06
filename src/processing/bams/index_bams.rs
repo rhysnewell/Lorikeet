@@ -25,7 +25,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 
     // progress bar
     let sty = match ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]")
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
     {
         Ok(s) => s,
         Err(e) => return Err(BirdToolError::DebugError(e.to_string())),

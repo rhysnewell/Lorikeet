@@ -3,6 +3,9 @@ use rayon::prelude::*;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::ops::Range;
 
 use crate::annotator::variant_annotation::VariantAnnotations;
@@ -604,7 +607,7 @@ impl VariantContextUtils {
     pub fn split_contexts(
         vcs: Vec<VariantContext>,
         min_qual_by_depth: f64,
-        min_variant_depth: i64,
+        min_variant_depth: i32,
     ) -> (Vec<VariantContext>, Vec<VariantContext>) {
         let mut split_vcs = Vec::new();
         let mut filtered_vcs = Vec::new();
@@ -625,7 +628,7 @@ impl VariantContextUtils {
                         if qbd >= min_qual_by_depth && vc.log10_p_error <= -15.0 {
                             let n_alts = vc.get_alternate_alleles().len();
                             if n_alts == 1 {
-                                let depth_sum: i64 =
+                                let depth_sum: i32 =
                                     vc.get_genotypes().genotypes().iter().map(|g| g.ad[1]).sum();
 
                                 // Only include variants which exceed the min variant depth
@@ -659,7 +662,7 @@ impl VariantContextUtils {
                                                 old_genotype.pl[0],
                                                 old_genotype.pl[alt_index + 1],
                                             ];
-                                            new_depth += new_depths.iter().sum::<i64>();
+                                            new_depth += new_depths.iter().sum::<i32>();
                                             variant_depth += new_depths[1];
                                             new_genotype.dp = old_genotype.dp;
                                             new_genotype.gq = old_genotype.gq;
@@ -758,8 +761,8 @@ impl VariantContextUtils {
     ) {
         //TODO: should we add a check for cases when the genotypeMergeOption is REQUIRE_UNIQUE
         for g in one_vc.get_genotypes().genotypes() {
-            let name = Self::merged_sample_name(&one_vc.source, &g.sample_name, uniquify_samples);
-            if !merged_genotypes.contains_sample(&name) {
+            let name = Self::merged_sample_name(&one_vc.source, g.sample_name, uniquify_samples);
+            if !merged_genotypes.contains_sample(name) {
                 // only add if the name is new
                 let mut new_g = g.clone();
                 if uniquify_samples || allele_mapping.needs_remapping() {
@@ -774,11 +777,15 @@ impl VariantContextUtils {
         }
     }
 
-    pub fn merged_sample_name(track_name: &str, sample_name: &str, uniquify: bool) -> String {
+    pub fn merged_sample_name(track_name: &str, sample_name: usize, uniquify: bool) -> usize {
         if uniquify {
-            return format!("{}.{}", sample_name, track_name);
+            let mut hasher = DefaultHasher::new();
+            let hash_object = format!("{}-{}", track_name, sample_name);
+            hash_object.hash(&mut hasher);
+
+            return hasher.finish() as usize;
         } else {
-            return format!("{}", sample_name);
+            return sample_name;
         }
     }
 

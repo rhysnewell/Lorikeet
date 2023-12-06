@@ -2,7 +2,7 @@ extern crate gkl;
 extern crate lorikeet_genome;
 extern crate rust_htslib;
 
-use gkl::pairhmm::{forward};
+use gkl::pairhmm::forward;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
@@ -71,8 +71,8 @@ fn test_likelihoods_avx() {
             base_quals,
             CigarString::from(vec![Cigar::Match(read_length as u32)]),
         );
-        ReadUtils::set_insertion_base_qualities(&mut read, insertion_quals);
-        ReadUtils::set_deletion_base_qualities(&mut read, deletion_quals);
+        ReadUtils::set_insertion_base_qualities(&mut read, insertion_quals).unwrap();
+        ReadUtils::set_deletion_base_qualities(&mut read, deletion_quals).unwrap();
 
         let mut read_map = HashMap::new();
         read_map.insert(0, vec![read.clone()]);
@@ -80,7 +80,7 @@ fn test_likelihoods_avx() {
         let hap_vec = vec![hap.clone()];
         let mut hmm = PairHMM::initialize(&hap_vec, &read_map, AVXMode::AVX);
         let mut likelihoods =
-            AlleleLikelihoods::new(hap_vec.clone(), vec!["sample".to_string()], read_map);
+            AlleleLikelihoods::new(hap_vec.clone(), vec![0], read_map);
 
         let score_imputator = PairHMMInputScoreImputator::new(gcp[0]);
 

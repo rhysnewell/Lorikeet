@@ -1,12 +1,13 @@
-use bio::io::gff::GffType::GFF3;
 use bird_tool_utils::command::finish_command_safely;
 use indicatif::{style::TemplateError, MultiProgress, ProgressBar, ProgressStyle};
+use itertools::Itertools;
 use rayon::prelude::*;
 use rust_htslib::bcf::Read;
 use scoped_threadpool::Pool;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::fs::{create_dir_all, File};
+use std::fs::{create_dir_all, File, OpenOptions};
+use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -151,8 +152,9 @@ impl<'a> LorikeetEngine<'a> {
                             .to_str()
                             .unwrap()
                             .to_string()
-                    });
-                    if cache.count() > 0 {
+                    })
+                    .collect::<Vec<String>>();
+                    if cache.len() > 0 {
                         if self.args.get_flag("calculate-dnds")
                             || self.args.get_flag("calculate-fst")
                         {
@@ -190,12 +192,25 @@ impl<'a> LorikeetEngine<'a> {
                                             &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                         ));
                                     }
+                                    
 
-                                    let vcf_path = format!(
+                                    let mut vcf_path = format!(
                                         "{}/{}.vcf",
                                         &output_prefix,
                                         &reference_reader.genomes_and_contigs.genomes[ref_idx]
                                     );
+
+                                    // check if we should be using gzipped vcf
+                                    if !Path::new(&vcf_path).exists() {
+                                        vcf_path = format!(
+                                            "{}.gz",
+                                            vcf_path
+                                        );
+
+                                        if !Path::new(&vcf_path).exists() {
+                                            panic!("Unable to find vcf file for Fst calculation: {}", vcf_path);
+                                        }
+                                    }
 
                                     match calculate_fst(
                                         &output_prefix,
@@ -389,7 +404,7 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-                    let vec_of_contexts_sites_tuple = assembly_engine.collect_shards(
+                    let (mut contexts, passing_sites) = assembly_engine.collect_shards(
                         self.args,
                         &indexed_bam_readers,
                         &genomes_and_contigs,
@@ -398,6 +413,8 @@ impl<'a> LorikeetEngine<'a> {
                         n_threads,
                         &mut reference_reader,
                         &output_prefix,
+                        ref_idx + 2,
+                        &tree
                     );
 
                     let genome_size = reference_reader
@@ -405,16 +422,6 @@ impl<'a> LorikeetEngine<'a> {
                         .iter()
                         .map(|(_, length)| length)
                         .sum::<u64>();
-
-                    let mut contexts = Vec::with_capacity(genome_size as usize);
-                    let mut passing_sites =
-                        vec![Vec::with_capacity(genome_size as usize); indexed_bam_readers.len()];
-                    vec_of_contexts_sites_tuple.into_iter().for_each(|result| {
-                        contexts.extend(result.0);
-                        for (i, sites) in result.1.into_iter().enumerate() {
-                            passing_sites[i].extend(sites)
-                        }
-                    });
 
                     contexts.par_sort_unstable();
                     // contexts.reverse();
@@ -448,6 +455,13 @@ impl<'a> LorikeetEngine<'a> {
                     );
                     if mode == "call" {
                         // calculate ANI statistics for short reads only
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar.set_message(format!(
+                                "{}: Running ANI calculations...",
+                                pb.key
+                            ));
+                        }
                         let mut ani_calculator = ANICalculator::new(
                             self.short_read_bam_count + self.long_read_bam_count,
                         );
@@ -531,9 +545,16 @@ impl<'a> LorikeetEngine<'a> {
                                 qual_by_depth_filter,
                                 *self.args
                                     .get_one::<i64>("min-variant-depth-for-genotyping")
-                                    .unwrap(),
+                                    .unwrap() as i32,
                             );
-
+                        
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar.set_message(format!(
+                                "{}: Running ANI calculations...",
+                                pb.key
+                            ));
+                        }
                         // calculate ANI statistics
                         let mut ani_calculator = ANICalculator::new(
                             self.short_read_bam_count + self.long_read_bam_count,
@@ -737,6 +758,13 @@ impl<'a> LorikeetEngine<'a> {
                             reference_writer.generate_strains(split_contexts, ref_idx, vec![0]);
                         }
                     } else if mode == "consensus" {
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar.set_message(format!(
+                                "{}: Running ANI calculations...",
+                                pb.key
+                            ));
+                        }
                         // calculate ANI statistics
                         let mut ani_calculator = ANICalculator::new(
                             self.short_read_bam_count + self.long_read_bam_count,
@@ -1016,7 +1044,7 @@ impl<'a> LorikeetEngine<'a> {
         };
 
         let sty_eta = ProgressStyle::default_bar().template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]",
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
         )?;
 
         let sty_aux = ProgressStyle::default_bar()
@@ -1352,34 +1380,51 @@ fn calculate_dnds(
 
     match check_for_gff(reference, output_prefix, args) {
         Some(mut genes) => {
-            let vcf_path = format!(
+
+            let mut vcf_prefix = format!(
                 "{}/{}.vcf",
-                output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                &output_prefix,
+                &reference_reader.genomes_and_contigs.genomes[ref_idx]
             );
-            if !Path::new(&vcf_path).exists() {
-                // no variants founds
-                return;
+
+            // check if we should be using gzipped vcf
+            if !Path::new(&vcf_prefix).exists() {
+                vcf_prefix = format!(
+                    "{}.gz",
+                    vcf_prefix
+                );
+
+                if !Path::new(&vcf_prefix).exists() {
+                    panic!("Unable to find vcf file for Fst calculation: {}", vcf_prefix);
+                }
             }
 
-            debug!("Reading VCF: {}", &vcf_path);
-
-            let mut variants = VariantContext::generate_vcf_index(vcf_path.as_str());
+            debug!("Reading VCF: {}", &vcf_prefix);
+            let mut variants = VariantContext::get_vcf_reader(vcf_prefix.as_str());
             debug!("Success!");
             let mut dnds_calculator = CodonTable::setup();
             dnds_calculator.get_codon_table(11);
 
-            let mut new_gff_writer = bio::io::gff::Writer::to_file(
-                format!(
-                    "{}/{}.gff",
+            // create new TSV file that will contain gene\tSNPs\tindels\tdN/dS
+            let tsv_file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(format!(
+                    "{}/{}_dnds.tsv",
                     output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx]
-                ),
-                GFF3,
-            )
-            .expect("Unable to create GFF file");
+                )).unwrap();
+            let mut tsv_writer = BufWriter::new(tsv_file);
+            // write header
+            tsv_writer
+                .write_all(
+                    format!(
+                        "contig\tID\tstart\tstop\tSNPs\tindels\tdN/dS\n",
+                    ).as_bytes(),
+                ).expect("Unable to write to TSV file");
 
             for gene in genes.records() {
                 match gene {
-                    Ok(mut gene) => {
+                    Ok(gene) => {
                         let (snps, frameshifts, dnds_values) = dnds_calculator.find_mutations(
                             &gene,
                             &mut variants,
@@ -1390,20 +1435,36 @@ fn calculate_dnds(
                             qual_filter,
                             depth_per_sample_filter,
                         );
+                        if snps.iter().sum::<usize>() == 0 && frameshifts.iter().sum::<usize>() == 0 {
+                            continue;
+                        }
 
-                        let attributes = gene.attributes_mut();
+                        // get the ID from the attributes
+                        let id = gene
+                            .attributes()
+                            .get("ID")
+                            .expect("Unable to get ID from GFF file")
+                            .to_string();
 
-                        attributes.insert("snps".to_string(), format!("{:?}", snps));
-                        attributes.insert("indels".to_string(), format!("{:?}", frameshifts));
-                        attributes.insert("dN/dS".to_string(), format!("{:?}", dnds_values));
-                        match new_gff_writer.write(&gene) {
-                            Ok(_) => continue,
-                            Err(_) => panic!("Unable to write to GFF file"),
-                        };
+                        // write to TSV file
+                        tsv_writer
+                            .write_all(
+                                format!(
+                                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                                    gene.seqname(),
+                                    id,
+                                    gene.start(),
+                                    gene.end(),
+                                    snps.into_iter().map(|s| format!("{}", s)).join(","),
+                                    frameshifts.into_iter().map(|s| format!("{}", s)).join(","),
+                                    dnds_values.into_iter().map(|s| format!("{}", s)).join(","),
+                                ).as_bytes(),
+                            ).expect("Unable to write to TSV file");
                     }
                     Err(_) => continue,
                 }
             }
+            tsv_writer.flush().expect("Unable to flush TSV writer");
         }
         None => {
             // too many GFF files in output folder, abort this genome
@@ -1411,8 +1472,8 @@ fn calculate_dnds(
         }
     };
 
-    let placeholder_gene_file = format!("{}/genes.gff", output_prefix);
-    if Path::new(&placeholder_gene_file).exists() {
-        std::fs::remove_file(&placeholder_gene_file).expect("Unable to remove placeholder gene file");
-    }
+    // let placeholder_gene_file = format!("{}/genes.gff", output_prefix);
+    // if Path::new(&placeholder_gene_file).exists() {
+    //     std::fs::remove_file(&placeholder_gene_file).expect("Unable to remove placeholder gene file");
+    // }
 }

@@ -5,7 +5,7 @@
 
 
 use lorikeet_genome::graphs::base_edge::{BaseEdge, BaseEdgeStruct};
-use lorikeet_genome::graphs::base_graph::{TestGraph};
+use lorikeet_genome::graphs::base_graph::TestGraph;
 use lorikeet_genome::graphs::seq_graph::SeqGraph;
 use lorikeet_genome::graphs::seq_vertex::SeqVertex;
 use lorikeet_genome::graphs::vertex_based_transformer::VertexBasedTransformer;
@@ -643,7 +643,7 @@ fn make_merging_data() {
 //
 // Should become A -> ACT -> C [ref and non-ref edges]
 //
-// #[test]
+#[test]
 fn test_bubble_same_bases_with_ref() {
     let mut graph = SeqGraph::new(11);
     let top = SeqVertex::new(b"A".to_vec());

@@ -1,6 +1,8 @@
+use ndarray::Array2;
 use rayon::prelude::*;
 use rust_htslib::bcf::Read;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 
 use crate::bam_parsing::FlagFilter;
@@ -8,6 +10,7 @@ use crate::activity_profile::activity_profile::Profile;
 use crate::activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use crate::assembly::assembly_region::AssemblyRegion;
 use crate::assembly::assembly_region_iterator::AssemblyRegionIterator;
+use crate::processing::lorikeet_engine::Elem;
 use crate::reference::reference_reader_utils::GenomesAndContigs;
 use crate::haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use crate::model::variant_context::VariantContext;
@@ -75,7 +78,9 @@ impl AssemblyRegionWalker {
         n_threads: usize,
         reference_reader: &mut ReferenceReader,
         output_prefix: &str,
-    ) -> Vec<(Vec<VariantContext>, Vec<Vec<i32>>)> {
+        pb_index: usize,
+        pb_tree: &Arc<Mutex<Vec<&Elem>>>
+    ) -> (Vec<VariantContext>, Array2<f32>) {
         self.evaluator.collect_activity_profile(
             indexed_bam_readers,
             self.short_read_bam_count,
@@ -95,6 +100,8 @@ impl AssemblyRegionWalker {
             self.long_read_bam_count,
             *args.get_one::<usize>("max-input-depth").unwrap(),
             output_prefix,
+            pb_index,
+            pb_tree
         )
     }
 
