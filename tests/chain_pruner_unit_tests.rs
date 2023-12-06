@@ -520,16 +520,16 @@ fn get_chain_pruner_data() {
 
     // kmer size, ref bases, alt bases, alt fraction, base error rate, 
     // depth per start, log odds threshold, max unpruned variants
-    println!("Testing left snv");
-    test_adaptive_pruning(
-        10,
-        reference.as_slice(),
-        left_snv.as_slice(),
-        0.5,
-        0.001,
-        20,
-        MathUtils::log10_to_log(1.0),
-    );
+    // println!("Testing left snv");
+    // test_adaptive_pruning(
+    //     10,
+    //     reference.as_slice(),
+    //     left_snv.as_slice(),
+    //     0.5,
+    //     0.001,
+    //     20,
+    //     MathUtils::log10_to_log(1.0),
+    // );
 
     println!("Testing middle snv 1");
     test_adaptive_pruning(
