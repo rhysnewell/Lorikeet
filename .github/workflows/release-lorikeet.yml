@@ -9,8 +9,10 @@ jobs:
     steps:
       - uses: actions/checkout@main
         if: github.actor != 'dependabot[bot]'
-      - name: Set env
+      - name: Set release version
         run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Set rust flags
+        run: echo "RUSTFLAGS=\"-C target-feature=-crt-static\"" >> $GITHUB_ENV
       - id: 'compile'
         uses: rhysnewell/rust-cargo-musl-action@v0.1.20
         with:
