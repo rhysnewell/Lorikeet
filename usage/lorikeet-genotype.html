@@ -1,0 +1,737 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <title>lorikeet-genotype</title>
+    <meta name="description" content="Documentation for Lorikeet">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Source+Sans+Pro:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/normalize.css?v=1701839268"
+        media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/doctave-style.css?v=1701839268"
+        media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/katex.css?v=1701839268" media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/prism-ghcolors.css?v=1701839268"
+        media="screen" />
+
+    <script>
+        var DOCTAVE_TIMESTAMP = "1701839268";
+        var BASE_PATH = "/Lorikeet/";
+        var color = localStorage.getItem('doctave-color')
+
+        if (color === 'dark') {
+            document.getElementsByTagName('html')[0].classList.remove('light');
+            document.getElementsByTagName('html')[0].classList.add('dark');
+        } else {
+            document.getElementsByTagName('html')[0].classList.remove('dark');
+            document.getElementsByTagName('html')[0].classList.add('light');
+        }
+    </script>
+
+    
+</head>
+
+<body>
+    <label for='menu-toggle-switch' class='menu-toggle-button'>
+        ☰
+    </label>
+    <input type="checkbox" id="menu-toggle-switch" value='0' />
+    <div class='page'>
+        <div class='header'>
+            <div class='logo'>
+                
+                <a href="/Lorikeet/">
+                    <img src="/Lorikeet/images/mini_logo.png" alt='Lorikeet logo'></img>
+                </a>
+                
+                <h2 class='project-name'>
+                    <a href="/Lorikeet/">
+                        Lorikeet
+                    </a>
+                </h2>
+            </div>
+            <div class='search'>
+                <form id='search-form'>
+    <input type='text' id='search-box' autocomplete="off" placeholder="Search..."></input>
+    <span class='search-icon'>S</span>
+    <ul id='search-results'></ul>
+</form>
+
+            </div>
+            <div class='header-dummy-right'>
+            </div>
+        </div>
+        <div class='container'>
+            <div class='sidebar-left'>
+                <nav class='site-nav'>
+    <ul>
+        
+            <li><a href="/Lorikeet/installation">Installation</a></li>
+            
+        
+            <li><a href="/Lorikeet/usage">Usage</a></li>
+            
+                <ul>
+    
+        <li><a href="/Lorikeet/usage/lorikeet-call">lorikeet-call</a></li>
+        
+    
+        <li><a href="/Lorikeet/usage/lorikeet-consensus">lorikeet-consensus</a></li>
+        
+    
+        <li><a class="active" href="/Lorikeet/usage/lorikeet-genotype">lorikeet-genotype</a></li>
+        
+    
+        <li><a href="/Lorikeet/usage/lorikeet-summarise">lorikeet-summarise</a></li>
+        
+    
+</ul>
+
+            
+        
+            <li><a href="/Lorikeet/concepts">Concepts</a></li>
+            
+        
+            <li><a href="/Lorikeet/examples">Examples</a></li>
+            
+        
+            <li><a href="/Lorikeet/comparisons">Comparisons</a></li>
+            
+        
+            <li><a href="/Lorikeet/faqs">FAQs</a></li>
+            
+        
+    </ul>
+    <span id='light-dark-mode-switch'>
+        <svg xmlns="http://www.w3.org/2000/svg" id="dark-mode-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+        </svg>
+
+        <svg xmlns="http://www.w3.org/2000/svg" id="light-mode-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd" />
+        </svg>
+    </span>
+</nav>
+
+            </div>
+            <div class='doctave-content'>
+                <hr>
+<h1 id="title:-lorikeet-genotype-usage----name">title: lorikeet genotype usage
+---NAME</h1>
+<p>lorikeet genotype - Call variants and cluster into potential strain
+haplotypes (version 0.8.2)</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p><strong>lorikeet genotype</strong> [FLAGS]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>EXPERIMENTAL!</p>
+<p>lorikeet genotype discovers variants within a given set of reads and
+genomes and clusters the variants into candidate strain haplotypes.
+Lorikeet uses UMAP and HDBSCAN to cluster variants and an
+Expectation-Maximization algorithm to determine strain haplotype
+abudnances within each samples. Additionally, calculate strain diversity
+metrics like conANI, popANI, subpopANI, dN/dS, and the highly robust
+Hudson's Fst</p>
+<p>This process can be undertaken in several ways, for instance by
+specifying BAM files or raw reads as input, using different mapping
+programs, thresholding read alignments.</p>
+<h1 id="flags">FLAGS</h1>
+<p><strong>-v</strong>, <strong>--verbose</strong></p>
+<p>:   Print extra debugging information. [default: not set]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-q</strong>, <strong>--quiet</strong></p>
+<p>:   Unless there is an error, do not print log messages. [default: not
+set]</p>
+<h1 id="threading-options">THREADING OPTIONS</h1>
+<p><strong>-t</strong>, <strong>--threads</strong> <em>INT</em></p>
+<p>:   Maximum number of threads used. [default: 10]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-P</strong>, <strong>--parallel-genomes</strong> <em>INT</em></p>
+<p>:   Number of genomes to run in parallel. Increases memory usage
+linearly. Thread usage qill not exceed the value provided by
+--threads [default 1]</p>
+<h1 id="input-reference-options">INPUT REFERENCE OPTIONS</h1>
+<p><strong>-r,-f</strong>, <strong>--reference,--genome-fasta-files</strong> <em>PATH</em></p>
+<p>:   FASTA files of contigs e.g. concatenated genomes or metagenome
+assembly [required unless <code>-d/--genome-fasta-directory</code> is
+specified]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-d</strong>, <strong>--genome-fasta-directory</strong> <em>PATH</em></p>
+<p>:   Directory containing FASTA files of contigs e.g. genomes or
+metagenome assembly [required unless
+<code>-r/--reference/-f/--genome-fasta-files</code> is specified]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-x</strong>, <strong>--genome-fasta-extension</strong> <em>STR</em></p>
+<p>:   FASTA file extension in --genome-fasta-directory [default
+"fna"]</p>
+<h1 id="read-mapping-parameters">READ MAPPING PARAMETERS</h1>
+<p><strong>-1</strong> <em>PATH ..</em></p>
+<p>:   Forward FASTA/Q file(s) for mapping. These may be gzipped or not.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-2</strong> <em>PATH ..</em></p>
+<p>:   Reverse FASTA/Q file(s) for mapping. These may be gzipped or not.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-c</strong>, <strong>--coupled</strong> <em>PATH ..</em></p>
+<p>:   One or more pairs of forward and reverse possibly gzipped FASTA/Q
+files for mapping in order &lt;sample1_R1.fq.gz&gt;
+&lt;sample1_R2.fq.gz&gt; &lt;sample2_R1.fq.gz&gt; &lt;sample2_R2.fq.gz&gt; ..</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--interleaved</strong> <em>PATH ..</em></p>
+<p>:   Interleaved FASTA/Q files(s) for mapping. These may be gzipped or
+not.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--single</strong> <em>PATH ..</em></p>
+<p>:   Unpaired FASTA/Q files(s) for mapping. These may be gzipped or not.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--longreads</strong> <em>PATH ..</em></p>
+<p>:   Longread FASTA/Q files(s) for mapping. These may be gzipped or not.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-b</strong>, <strong>--bam-files</strong> <em>PATH</em></p>
+<p>:   Path to BAM file(s). These must be reference sorted (e.g. with
+samtools sort) unless <code>--sharded</code> is specified, in which case they
+must be read name sorted (e.g. with <code>samtools sort -n</code>). When
+specified, no read mapping algorithm is undertaken.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-l</strong>, <strong>--longread-bam-files</strong> <em>PATH</em></p>
+<p>:   Path to longread BAM file(s). These must be reference sorted (e.g.
+with samtools sort) unless <code>--sharded</code> is specified, in which case
+they must be read name sorted (e.g. with <code>samtools sort -n</code>). When
+specified, no read mapping algorithm is undertaken.</p>
+<h1 id="sharding">SHARDING</h1>
+<p><strong>--sharded</strong></p>
+<p>:   If <code>-b/--bam-files</code> was used: Input BAM files are read-sorted
+alignments of a set of reads mapped to multiple reference contig
+sets. Choose the best hit for each read pair. Otherwise if mapping
+was carried out: Map reads to each reference, choosing the best hit
+for each pair. [default: not set]</p>
+<h1 id="mapping-algorithm-options">MAPPING ALGORITHM OPTIONS</h1>
+<p><strong>--mapper</strong> <em>NAME</em></p>
+<p>:   Underlying mapping software used for short reads [default:
+<code>minimap2-sr</code>]. One of:</p>
+<hr>
+<p>name                                          |description
+----------------------   |----------------------------------------
+<code>minimap2-sr</code>                                 |minimap2 with '<code>-x sr</code>' option
+<code>bwa-mem</code>                                     |bwa mem using default parameters
+<code>bwa-mem2</code>                                    |bwa-mem2 using default parameters
+<code>minimap2-ont</code>                                |minimap2 with '<code>-x map-ont</code>' option
+<code>minimap2-pb</code>                                 |minimap2 with '<code>-x map-pb</code>' option
+<code>minimap2-hifi</code>                               |minimap2 with '<code>-x map-hifi</code>' option
+<code>minimap2-no-preset</code>                          |minimap2 with no '<code>-x</code>' option</p>
+<hr>
+<p><strong>--longread-mapper</strong> <em>NAME</em></p>
+<p>:   Underlying mapping software used for long reads [default:
+<code>minimap2-ont</code>]. One of:</p>
+<hr>
+<p>name                                          |description
+----------------------   |----------------------------------------
+<code>minimap2-ont</code>                                |minimap2 with '<code>-x map-ont</code>' option
+<code>minimap2-pb</code>                                 |minimap2 with '<code>-x map-pb</code>' option
+<code>minimap2-hifi</code>                               |minimap2 with '<code>-x map-hifi</code>' option
+<code>minimap2-no-preset</code>                          |minimap2 with no '<code>-x</code>' option</p>
+<hr>
+<p><strong>--minimap2-params</strong> <em>PARAMS</em></p>
+<p>:   Extra parameters to provide to minimap2, both indexing command (if
+used) and for mapping. Note that usage of this parameter has
+security implications if untrusted input is specified. '<code>-a</code>' is
+always specified to minimap2. [default: none]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--minimap2-reference-is-index</strong></p>
+<p>:   Treat reference as a minimap2 database, not as a FASTA file.
+[default: not set]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--bwa-params</strong> <em>PARAMS</em></p>
+<p>:   Extra parameters to provide to BWA or BWA-MEM2. Note that usage of
+this parameter has security implications if untrusted input is
+specified. [default: none]</p>
+<h1 id="alignment-thresholding">ALIGNMENT THRESHOLDING</h1>
+<p><strong>--min-read-aligned-length</strong> <em>INT</em></p>
+<p>:   Exclude reads with smaller numbers of aligned bases. [default:
+<code>0</code>]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-read-percent-identity</strong> <em>FLOAT</em></p>
+<p>:   Exclude reads by overall percent identity e.g. 95 for 95%.
+[default: <code>0</code>]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-read-aligned-percent</strong> <em>FLOAT</em></p>
+<p>:   Exclude reads by percent aligned bases e.g. 95 means 95% of the
+read's bases must be aligned. [default: <code>0</code>]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-read-aligned-length-pair</strong> <em>INT</em></p>
+<p>:   Exclude pairs with smaller numbers of aligned bases. Conflicts with
+--allow-improper-pairs. [default: <code>0</code>]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-read-percent-identity-pair</strong> <em>FLOAT</em></p>
+<p>:   Exclude pairs by overall percent identity e.g. 95 for 95%. Conflicts
+with --allow-improper-pairs. [default: <code>0</code>]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-read-aligned-percent-pair</strong> <em>FLOAT</em></p>
+<p>:   Exclude reads by percent aligned bases e.g. 95 means 95% of the
+read's bases must be aligned. Conflicts with
+--allow-improper-pairs. [default: <code>0</code>]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--allow-improper-pairs</strong></p>
+<p>:   Require reads to be mapped as proper pairs. [default: not set]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--exclude-supplementary</strong></p>
+<p>:   Exclude supplementary alignments. [default: not set]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--include-secondary</strong></p>
+<p>:   Include secondary alignments. [default: not set]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--contig-end-exclusion</strong> <em>INT</em></p>
+<p>:   Exclude bases at the ends of reference sequences from calculation
+[default: 0]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--trim-min</strong> <em>FLOAT</em></p>
+<p>:   Remove this smallest fraction of positions when calculating
+trimmed_mean [default: 0.00]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--trim-max</strong> <em>FLOAT</em></p>
+<p>:   Maximum fraction for trimmed_mean calculations [default: 1.00]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--split-bams</strong></p>
+<p>:   Split the mapped read files up per reference. Useful if you think
+run time is being hampered by I/O. Most of the time this will not
+improve performance and instead just increase disk usage.</p>
+<h1 id="variant-calling-options-(basic)">VARIANT CALLING OPTIONS (BASIC)</h1>
+<p><strong>--profile</strong> <em>STR</em></p>
+<p>:   Assembly profile to use for variant calling. Overrides
+--kmer-sizes, --min-prune-factor,
+--allow-non-unique-kmers-in-ref, and
+--recover-all-dangling-branches. Possible options include:
+'fast', 'very-fast', 'sensitive', 'precise',
+'super-sensitive' [default: not_set]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-k</strong>, <strong>--kmer-sizes</strong> <em>INT ..</em></p>
+<p>:   K-mer sizes used to generate DeBruijn Graphs. Multiple values at
+once are accepted and encouraged at a cost to increased runtime e.g.
+17 21 25 [default: 21 33]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--ploidy</strong> <em>INT</em></p>
+<p>:   Sets the default ploidy for the analysis to N. [default: 2]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--calculate-fst</strong></p>
+<p>:   Calculate Fst values between samples and variants.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--calculate-dnds</strong></p>
+<p>:   Calculate coding regions and perform dN/dS calculations along them
+using called variants. *Microbial only*.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-f</strong>, <strong>--features-vcf</strong> <em>PATH</em></p>
+<p>:   The set of alleles to force-call regardless of evidence. Note: The
+sight containing these alleles has to be called as 'active' in
+order for them to appear in the final VCF. Addtionally, Provided
+file must be compressed using bgzip and indexed using bcftools
+index. If no index is present, and index will be attempted to be
+created. If the file is not properly compressed, Lorikeet will
+unfortunately SEGFAULT with no error message.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--qual-by-depth-filter</strong> <em>INT</em></p>
+<p>:   The minimum QD value for a variant to have for it to be included in
+the genotyping or ANI analyses. [default: 25]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--qual-threshold</strong> <em>INT</em></p>
+<p>:   The PHRED-scaled quality score threshold for use with ANI
+calculations. [default: 150]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--depth-per-sample-filter</strong> <em>INT</em></p>
+<p>:   Minimum depth of a variant in a sample for that sample to be
+included in ANI &amp; Fst calculations for that variant. [default: 5]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-long-read-size</strong> <em>INT</em></p>
+<p>:   The minimum size for long reads to be used for analysis [default:
+1500]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-long-read-average-base-qual</strong> <em>INT</em></p>
+<p>:   The minimum average base quality of a long read for it to be used
+for analysis [default: 20]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-q</strong>, <strong>--min-base-quality</strong> <em>INT</em></p>
+<p>:   Minimum base quality required to consider a base for calling.
+[default: 10]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-mapq</strong> <em>INT</em></p>
+<p>:   Minimum MAPQ score for reads to be considered during variant
+calling. [default: 20]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--base-quality-score-threshold</strong> <em>INT</em></p>
+<p>:   Base qualities below this threshold will be reduced to the minimum
+(6). [default: 18]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--max-input-depth</strong> <em>INT</em></p>
+<p>:   The maximum number of reads included within an assembly region
+across all samples. Larger numbers increase run time. If the depth
+of an assembly region exceeds this value, then the reads will be
+filtered by mean base quality. [default: 200000]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-contig-size</strong> <em>INT</em></p>
+<p>:   The minimum contig size to call variants on. Smaller contigs can
+often contain highly variable regions that mostly represent noise.
+Call variants on them can often be slow and not produce anything
+fruitful. [default: 0]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-sv-qual</strong> <em>INT</em></p>
+<p>:   Minimum structural variants quality returned by svim and used by
+lorikeet. Not PHRED-scaled quality, value determined by number of
+supporting reads. Consult svim documentation for details. [default:
+3]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--do-not-call-svs</strong></p>
+<p>:   Opts not to use svim to call structural variants using provided
+longreads. If no longreads are provided this has no effect.</p>
+<h1 id="variant-calling-options-(advanced)">VARIANT CALLING OPTIONS (ADVANCED)</h1>
+<p><strong>--phred-scaled-global-read-mismapping-rate</strong> <em>INT</em></p>
+<p>:   The global assumed mismapping rate for reads. [default: 45]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--pair-hmm-gap-continuation-penalty</strong> <em>INT</em></p>
+<p>:   Flat gap continuation penalty for use in the Pair HMM. [default:
+10]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--pcr-indel-model</strong> <em>STR</em></p>
+<p>:   The PCR indel model to use. [default: conservative]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--heterozygosity</strong> <em>FLOAT</em></p>
+<p>:   Heterozygosity value used to compute prior likelihoods for any
+locus. [default: 0.001]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--heterozygosity-stdev</strong> <em>FLOAT</em></p>
+<p>:   Standard deviation of heterozygosity for SNP and indel calling.
+[default: 0.01]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--indel-heterozygosity</strong> <em>FLOAT</em></p>
+<p>:   Heterozygosity for indel calling. [default: 0.000125]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>-C</strong>, <strong>--standard-min-confidence-threshold-for-calling</strong> <em>FLOAT</em></p>
+<p>:   The minimum phred-scaled confidence threshold at which variants
+should be called. [default: 25.0]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--use-posteriors-to-calculate-qual</strong></p>
+<p>:   if available, use the genotype posterior probabilities to calculate
+the site QUAL.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--annotate-with-num-discovered-alleles</strong></p>
+<p>:   If provided, we will annotate records with the number of alternate
+alleles that were discovered (but not necessarily genotyped) at a
+given site.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--active-probability-threshold</strong> <em>FLOAT</em></p>
+<p>:   Minimum probability for a locus to be considered active. [default:
+0.002]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-assembly-region-size</strong> <em>INT</em></p>
+<p>:   Minimum size of an assembly region. [default: 50]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--max-assembly-region-size</strong> <em>INT</em></p>
+<p>:   Maximum size of an assembly region. [default: 300]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--assembly-region-padding</strong> <em>INT</em></p>
+<p>:   Number of additional bases of context to include around each
+assembly region. [default: 100]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--dont-increase-kmer-sizes-for-cycles</strong></p>
+<p>:   Disable iterating over kmer sizes when graph cycles are detected.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--allow-non-unique-kmers-in-ref</strong></p>
+<p>:   Allow graphs that have non-unique kmers in the reference. Can
+increase runtime and sensitivity in repeat regions.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--do-not-run-physical-phasing</strong></p>
+<p>:   Disable physical phasing.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--recover-all-dangling-branches</strong></p>
+<p>:   Recover all dangling branches.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-dangling-branch-length</strong> <em>INT</em></p>
+<p>:   Minimum length of a dangling branch to attempt recovery. [default:
+1]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--min-prune-factor</strong> <em>INT</em></p>
+<p>:   Minimum read support to not prune paths in the graph. Lower values
+like 1 or 0 will drastically increase runtime, but recover more
+variants. For faster performance, set this to 2 or 3 at a cost to
+recall. [default: 1]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--use-adaptive-pruning</strong></p>
+<p>:   Use more advanced pruning algorithm to prune paths in graph. Better
+suited when performing variant calling on when depth along a genome
+is variable e.g. RNA and exome data.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--num-pruning-samples</strong> <em>INT</em></p>
+<p>:   Number of samples that must pass the min_pruning threshold
+[default: 1]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--graph-output</strong> <em>PATH</em></p>
+<p>:   Write debug assembly graph information to this file.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--dont-use-soft-clipped-bases</strong></p>
+<p>:   Do not analyse soft clipped bases in the reads.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--initial-error-rate-for-pruning</strong> <em>FLOAT</em></p>
+<p>:   Initial base error rate estimate for adaptive pruning. [default:
+0.001]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--pruning-log-odds-threshold</strong> <em>FLOAT</em></p>
+<p>:   Likelihood ratio threshold for adaptive pruning algorithm. This
+value will be converted to log odds value. [default: 1.0]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--max-unpruned-variants</strong> <em>INT</em></p>
+<p>:   Maximum number of variants in graph the adaptive pruner will allow.
+[default: 100]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--max-prob-propagation-distance</strong> <em>INT</em></p>
+<p>:   Upper limit on how many bases away probability mass can be moved
+around when calculating the boundaries between active and inactive
+assembly regions. [default: 50]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--max-mnp-distance</strong> <em>INT</em></p>
+<p>:   Two or more phased substitutions separated by this distance or less
+are merged into MNPs. [default: 0]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--disable-optimizations</strong></p>
+<p>:   Don't skip calculations in ActiveRegions with no variants</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--disable-avx</strong></p>
+<p>:   Disable the use of the GKL-rs AVX acceleration components for
+PairHMM and Smith-Waterman calculations.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--limiting-interval</strong> <em>STR</em></p>
+<p>:   Mainly used for debugging purposes. Only call variants within this
+given span on all contigs. E.g. providing '1000-2000' would only
+call variants between the 1000 and 2000 bp span on each provided
+contig.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--force</strong></p>
+<p>:   Forcefully overwrite previous runs.</p>
+<h1 id="output-options">OUTPUT OPTIONS</h1>
+<p><strong>-o</strong>, <strong>--output-directory</strong> <em>DIRECTORY</em></p>
+<p>:   Output directory. Folder will contain subfolders for each input
+genome [default: ./]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--bam-file-cache-directory</strong> <em>DIRECTORY</em></p>
+<p>:   Output BAM files generated during alignment to this directory. The
+directory may or may not exist. Note that BAM files in this
+directory contain all mappings, including those that later are
+excluded by alignment thresholding (e.g.
+--min-read-percent-identity) or genome-wise thresholding (e.g.
+--min-covered-fraction). [default: not used]</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>--keep-unmapped</strong></p>
+<p>:   Include unmapped reads from cached BAM files. [default: not set]</p>
+<h1 id="frequently-asked-questions-(faq)">FREQUENTLY ASKED QUESTIONS (FAQ)</h1>
+<p><strong>Can the temporary directory used be changed?</strong> Lorikeet makes use of
+the system temporary directory (often <code>/tmp</code>) to store intermediate
+files. This can cause problems if the amount of storage available there
+is small or used by many programs. To fix, set the <code>TMPDIR</code> environment
+variable e.g. to set it to use the current directory:
+<code>TMPDIR=. lorikeet call &lt;etc&gt;</code></p>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p><strong>0</strong></p>
+<p>:   Successful program execution.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>1</strong></p>
+<p>:   Unsuccessful program execution.</p>
+<pre><code class="language-{=html}">&lt;!-- --&gt;
+</code></pre>
+<p><strong>101</strong></p>
+<p>:   The program panicked.</p>
+<h1 id="examples">EXAMPLES</h1>
+<p>Map paired reads to a reference and generate genotypes</p>
+<p>:   <strong>$ lorikeet genotype --coupled read1.fastq.gz read2.fastq.gz
+--reference assembly.fna --threads 10 --kmer-sizes 17 25 51</strong></p>
+<p>Generate strain-level genotypes from read mappings compared to reference from a sorted BAM file and plots the results</p>
+<p>:   <strong>$ lorikeet genotype --bam-files my.bam --longread-bam-files
+my-longread.bam --genome-fasta-directory genomes/ -x fna
+--bam-file-cache-directory saved_bam_files --output-directory
+lorikeet_out/ --threads 10</strong></p>
+<h1 id="author">AUTHOR</h1>
+<blockquote>
+<pre><code>Rhys J. P. Newell, Centre for Microbiome Research, School of Biomedical Sciences, Faculty of Health, Queensland University of Technology &lt;rhys.newell94 near gmail.com&gt;
+</code></pre>
+</blockquote>
+
+            </div>
+            <div class='sidebar-right'>
+                <div class='page-nav' id='page-nav'>
+                    <p class='page-nav-header'>On this page</p>
+                    <ul>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#title:-lorikeet-genotype-usage----name'>title: lorikeet genotype usage---NAME</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#synopsis'>SYNOPSIS</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#description'>DESCRIPTION</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#flags'>FLAGS</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#threading-options'>THREADING OPTIONS</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#input-reference-options'>INPUT REFERENCE OPTIONS</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#read-mapping-parameters'>READ MAPPING PARAMETERS</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#sharding'>SHARDING</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#mapping-algorithm-options'>MAPPING ALGORITHM OPTIONS</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#alignment-thresholding'>ALIGNMENT THRESHOLDING</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#variant-calling-options-(basic)'>VARIANT CALLING OPTIONS (BASIC)</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#variant-calling-options-(advanced)'>VARIANT CALLING OPTIONS (ADVANCED)</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#output-options'>OUTPUT OPTIONS</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#frequently-asked-questions-(faq)'>FREQUENTLY ASKED QUESTIONS (FAQ)</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#exit-status'>EXIT STATUS</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#examples'>EXAMPLES</a>
+                        </li>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#author'>AUTHOR</a>
+                        </li>
+                        
+                    </ul>
+                </div>
+            </div>
+            <div class='wave-container'>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+                    <path fill-opacity="0.35"
+                        d="M0,192L60,213.3C120,235,240,277,360,277.3C480,277,600,235,720,192C840,149,960,107,1080,122.7C1200,139,1320,213,1380,250.7L1440,288L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z">
+                    </path>
+                    <path fill-opacity="0.5"
+                        d="M0,160L60,181.3C120,203,240,245,360,229.3C480,213,600,139,720,138.7C840,139,960,213,1080,229.3C1200,245,1320,203,1380,181.3L1440,160L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z">
+                    </path>
+                    <path fill-opacity="0.2"
+                        d="M0,224L60,197.3C120,171,240,117,360,117.3C480,117,600,171,720,186.7C840,203,960,181,1080,186.7C1200,192,1320,224,1380,240L1440,256L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z">
+                    </path>
+                </svg>
+                <p>Powered by <a href='https://cli.doctave.com' target='_blank'>Doctave</a></p>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript" src="/Lorikeet/assets/katex.js?v=1701839268"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/mermaid.js?v=1701839268"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/elasticlunr.js?v=1701839268"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/prism.js?v=1701839268"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/doctave-app.js?v=1701839268"></script>
+
+    
+</body>
+
+</html>

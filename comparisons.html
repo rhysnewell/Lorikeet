@@ -1,0 +1,201 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <title>Comparisons</title>
+    <meta name="description" content="Documentation for Lorikeet">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Source+Sans+Pro:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/normalize.css?v=1701839268"
+        media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/doctave-style.css?v=1701839268"
+        media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/katex.css?v=1701839268" media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/prism-ghcolors.css?v=1701839268"
+        media="screen" />
+
+    <script>
+        var DOCTAVE_TIMESTAMP = "1701839268";
+        var BASE_PATH = "/Lorikeet/";
+        var color = localStorage.getItem('doctave-color')
+
+        if (color === 'dark') {
+            document.getElementsByTagName('html')[0].classList.remove('light');
+            document.getElementsByTagName('html')[0].classList.add('dark');
+        } else {
+            document.getElementsByTagName('html')[0].classList.remove('dark');
+            document.getElementsByTagName('html')[0].classList.add('light');
+        }
+    </script>
+
+    
+</head>
+
+<body>
+    <label for='menu-toggle-switch' class='menu-toggle-button'>
+        ☰
+    </label>
+    <input type="checkbox" id="menu-toggle-switch" value='0' />
+    <div class='page'>
+        <div class='header'>
+            <div class='logo'>
+                
+                <a href="/Lorikeet/">
+                    <img src="/Lorikeet/images/mini_logo.png" alt='Lorikeet logo'></img>
+                </a>
+                
+                <h2 class='project-name'>
+                    <a href="/Lorikeet/">
+                        Lorikeet
+                    </a>
+                </h2>
+            </div>
+            <div class='search'>
+                <form id='search-form'>
+    <input type='text' id='search-box' autocomplete="off" placeholder="Search..."></input>
+    <span class='search-icon'>S</span>
+    <ul id='search-results'></ul>
+</form>
+
+            </div>
+            <div class='header-dummy-right'>
+            </div>
+        </div>
+        <div class='container'>
+            <div class='sidebar-left'>
+                <nav class='site-nav'>
+    <ul>
+        
+            <li><a href="/Lorikeet/installation">Installation</a></li>
+            
+        
+            <li><a href="/Lorikeet/usage">Usage</a></li>
+            
+                <ul>
+    
+        <li><a href="/Lorikeet/usage/lorikeet-call">lorikeet-call</a></li>
+        
+    
+        <li><a href="/Lorikeet/usage/lorikeet-consensus">lorikeet-consensus</a></li>
+        
+    
+        <li><a href="/Lorikeet/usage/lorikeet-genotype">lorikeet-genotype</a></li>
+        
+    
+        <li><a href="/Lorikeet/usage/lorikeet-summarise">lorikeet-summarise</a></li>
+        
+    
+</ul>
+
+            
+        
+            <li><a href="/Lorikeet/concepts">Concepts</a></li>
+            
+        
+            <li><a href="/Lorikeet/examples">Examples</a></li>
+            
+        
+            <li><a class="active" href="/Lorikeet/comparisons">Comparisons</a></li>
+            
+        
+            <li><a href="/Lorikeet/faqs">FAQs</a></li>
+            
+        
+    </ul>
+    <span id='light-dark-mode-switch'>
+        <svg xmlns="http://www.w3.org/2000/svg" id="dark-mode-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+        </svg>
+
+        <svg xmlns="http://www.w3.org/2000/svg" id="light-mode-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd" />
+        </svg>
+    </span>
+</nav>
+
+            </div>
+            <div class='doctave-content'>
+                <h1 id="comparisons">Comparisons</h1>
+<h2 id="zymobiomics-ani-benchmarks">ZymoBIOMICs ANI Benchmarks</h2>
+<p>The following contains a series of benchmarks and comparisons of Lorikeet against a variety of other tools. These benchmarks
+are based off of the benchmarks performed in the <a href="https://www.nature.com/articles/s41587-020-00797-0?proof=t%3B">inStrain paper</a>.</p>
+<p>The first benchmarks involves the use of the ZymoBIOMICs microbial community standard samples generated by Olm et al. Each sample
+represents a technical replicate of the same microbial community, as such the distribtion of variants found within each sample
+should ideally be identical. That is, a variant found in sample 1 should also be found in sample 2 and 3. Additionally, the dominant allele 
+in each sample should be identical. ANI values were calculated for each tool by Olm et al. and conANI and popANI values were 
+generated by me for inStrain since the original paper did not provide the conANI values for inStrain. Lorikeet also generated
+conANI, popANI, and subpopANI for each sample and each genome. ANI values close to or at 1.00 are ideal, as that means that the
+same set of alleles was found within each sample. The results are as follows:
+<img src="/Lorikeet/figures/zymo_ani_comparisons_and_performance.png" alt="ANI comparisons"></p>
+<p>Here we can see that Lorikeet and inStrain both manage to perform well on the popANI metric. Lorikeet calculating 1.00 popANI for
+all sample comparisons and inStrain generating 1.00 for 23 out of 24 sample comparisons. However, Lorikeet also managed to generate
+conANI values at or very close 1.00 for all sample comparisons, something that all other tools fail to do. The subpopANI values 
+for Lorikeet show the most variation which makes sense as it is the most stringent measurement most likely to be affected
+by sequencing error. Lorikeet still manages to calculate subpopANI values at or very close to 1.00 for most sample comparisons.</p>
+<p>Another point of comparison for these tools is the time it takes to completely run the algorithm workflow (sans read mapping).
+To analyze this we compared the time taken to profile or call variants on two of the ZymoBiomics reference genomes across all three
+samples for inStrain, GATK HaplotypeCaller, and Lorikeet. Each benchmark for each tool was performed five times and no 
+external tools like GNU parallel were used. Since only one BAM file could be provided to inStrain at a time, the results for
+a single benchmark were the cumulative time taken to analyze all three samples. This is fair since the other tools could
+be provided all three samples at once without any hassle from the user.</p>
+<h2 id="variant-calling-performance">Variant calling performance</h2>
+<p><img src="/Lorikeet/figures/lorikeet_prc_plots.png" alt="PRC plots">
+This plot shows the level of variant call concordance between HaplotypeCaller and Lorikeet on the ZymoBiomics genomes (A).
+Additionally, this plot shows the precision and recall values of Lorikeet and HaplotypeCaller on the NA12878 human variant calling
+benchmark dataset (B). The performance for each tool is nearly identical. Finally, we compare the wall time, CPU time, and RAM
+requirements for running Lorikeet and HaplotypeCaller on the NA12878 dataset (C).</p>
+
+            </div>
+            <div class='sidebar-right'>
+                <div class='page-nav' id='page-nav'>
+                    <p class='page-nav-header'>On this page</p>
+                    <ul>
+                        
+                        <li class='page-nav-level-1'>
+                            <a href='#comparisons'>Comparisons</a>
+                        </li>
+                        
+                        <li class='page-nav-level-2'>
+                            <a href='#zymobiomics-ani-benchmarks'>ZymoBIOMICs ANI Benchmarks</a>
+                        </li>
+                        
+                        <li class='page-nav-level-2'>
+                            <a href='#variant-calling-performance'>Variant calling performance</a>
+                        </li>
+                        
+                    </ul>
+                </div>
+            </div>
+            <div class='wave-container'>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+                    <path fill-opacity="0.35"
+                        d="M0,192L60,213.3C120,235,240,277,360,277.3C480,277,600,235,720,192C840,149,960,107,1080,122.7C1200,139,1320,213,1380,250.7L1440,288L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z">
+                    </path>
+                    <path fill-opacity="0.5"
+                        d="M0,160L60,181.3C120,203,240,245,360,229.3C480,213,600,139,720,138.7C840,139,960,213,1080,229.3C1200,245,1320,203,1380,181.3L1440,160L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z">
+                    </path>
+                    <path fill-opacity="0.2"
+                        d="M0,224L60,197.3C120,171,240,117,360,117.3C480,117,600,171,720,186.7C840,203,960,181,1080,186.7C1200,192,1320,224,1380,240L1440,256L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z">
+                    </path>
+                </svg>
+                <p>Powered by <a href='https://cli.doctave.com' target='_blank'>Doctave</a></p>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript" src="/Lorikeet/assets/katex.js?v=1701839268"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/mermaid.js?v=1701839268"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/elasticlunr.js?v=1701839268"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/prism.js?v=1701839268"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/doctave-app.js?v=1701839268"></script>
+
+    
+</body>
+
+</html>
