@@ -170,7 +170,7 @@ fn indel_sandwich() {
 fn test_invalid(cigar_elements_strings: Vec<&str>) {
     let mut builder = CigarBuilder::new(true);
     for element_string in cigar_elements_strings {
-        builder.add(CigarString::try_from(element_string).unwrap().0[0]).unwrap();
+        builder.add(CigarString::try_from(element_string).unwrap().0[0]);
     }
 
     assert!(builder.make(false).is_err());

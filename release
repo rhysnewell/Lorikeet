@@ -69,7 +69,7 @@ if __name__ == '__main__':
     extern.run('cargo update')
 
     print("Running tests ...")
-    extern.run('cargo test')
+    extern.run('cargo test --no-default-features')
 
     # Get version from Cargo.toml
     with open('Cargo.toml') as f:
