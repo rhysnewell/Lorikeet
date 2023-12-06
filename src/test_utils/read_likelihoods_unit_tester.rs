@@ -23,7 +23,7 @@ impl ReadLikelihoodsUnitTester {
     ) -> AlleleLikelihoods<ByteArrayAllele> {
         let sample_count = read_count.len();
         let allele_list = AlleleListUnitTester::allele_list(allele_count, 100, true).unwrap();
-        let sample_list = (0..sample_count).map(|i| format!("SAMPLE_{}", i)).collect();
+        let sample_list = (0..sample_count).map(|i| i).collect();
         let mut sample_to_reads = HashMap::new();
         for i in 0..sample_count {
             sample_to_reads.insert(i, Self::read_list(i, read_count[i]));

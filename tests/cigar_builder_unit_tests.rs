@@ -3,16 +3,9 @@
     non_snake_case
 )]
 
-
-
-
-
-
-
 use lorikeet_genome::reads::cigar_builder::CigarBuilder;
 
-
-use rust_htslib::bam::record::{CigarString};
+use rust_htslib::bam::record::CigarString;
 use std::convert::TryFrom;
 
 fn test_simple_concatenation(cigar_element_strings: Vec<&str>) {
@@ -119,7 +112,7 @@ fn retain_deletions() {
 fn test_merge_consecutive(cigar_elements_strings: Vec<&str>, expected: &str) {
     let mut builder = CigarBuilder::new(true);
     for element_string in cigar_elements_strings {
-        builder.add(CigarString::try_from(element_string).unwrap().0[0]);
+        builder.add(CigarString::try_from(element_string).unwrap().0[0]).unwrap();
     }
 
     assert_eq!(
@@ -177,7 +170,7 @@ fn indel_sandwich() {
 fn test_invalid(cigar_elements_strings: Vec<&str>) {
     let mut builder = CigarBuilder::new(true);
     for element_string in cigar_elements_strings {
-        builder.add(CigarString::try_from(element_string).unwrap().0[0]);
+        builder.add(CigarString::try_from(element_string).unwrap().0[0]).unwrap();
     }
 
     assert!(builder.make(false).is_err());
@@ -215,7 +208,7 @@ fn test_removed_deletions(
             .unwrap();
     }
 
-    builder.make(false);
+    builder.make(false).unwrap();
     assert_eq!(
         builder.get_leading_deletion_bases_removed(),
         removed_leading
@@ -266,7 +259,7 @@ fn test_removed_deletions_two_makes(
             .unwrap();
     }
 
-    builder.make(false);
+    builder.make(false).unwrap();
 
     for element_string in cigar_elements_strings2 {
         builder
@@ -274,7 +267,7 @@ fn test_removed_deletions_two_makes(
             .unwrap();
     }
 
-    builder.make(false);
+    builder.make(false).unwrap();
     assert_eq!(
         builder.get_leading_deletion_bases_removed(),
         removed_leading

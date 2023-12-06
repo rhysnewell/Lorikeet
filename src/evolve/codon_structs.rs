@@ -391,7 +391,7 @@ impl Translations for CodonTable {
                                         let which_are_present = context
                                             .alleles_present_in_sample(
                                                 sample_idx,
-                                                depth_per_sample_filter,
+                                                depth_per_sample_filter as i32,
                                             );
 
                                         if !which_are_present[1..].iter().any(|v| *v) {

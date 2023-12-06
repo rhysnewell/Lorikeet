@@ -3,33 +3,15 @@
     non_snake_case
 )]
 
-#[macro_use]
-extern crate lazy_static;
+
 #[macro_use]
 extern crate approx;
-
-
-
-
-
-
-
-
-
-
-
 
 use lorikeet_genome::utils::math_utils::{MathUtils, RunningAverage};
 
 
 use rand::distributions::{Distribution, Normal};
 use rand::rngs::ThreadRng;
-
-
-
-
-
-
 
 
 #[test]

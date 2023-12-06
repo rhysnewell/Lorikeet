@@ -5,16 +5,12 @@
 
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate approx;
 
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 
-use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    NEW_SW_PARAMETERS,
-};
+use lorikeet_genome::smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::convert::TryFrom;
 

@@ -404,7 +404,7 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-                    let vec_of_contexts_sites_tuple = assembly_engine.collect_shards(
+                    let (mut contexts, passing_sites) = assembly_engine.collect_shards(
                         self.args,
                         &indexed_bam_readers,
                         &genomes_and_contigs,
@@ -413,6 +413,8 @@ impl<'a> LorikeetEngine<'a> {
                         n_threads,
                         &mut reference_reader,
                         &output_prefix,
+                        ref_idx + 2,
+                        &tree
                     );
 
                     let genome_size = reference_reader
@@ -420,16 +422,6 @@ impl<'a> LorikeetEngine<'a> {
                         .iter()
                         .map(|(_, length)| length)
                         .sum::<u64>();
-
-                    let mut contexts = Vec::with_capacity(genome_size as usize);
-                    let mut passing_sites =
-                        vec![Vec::with_capacity(genome_size as usize); indexed_bam_readers.len()];
-                    vec_of_contexts_sites_tuple.into_iter().for_each(|result| {
-                        contexts.extend(result.0);
-                        for (i, sites) in result.1.into_iter().enumerate() {
-                            passing_sites[i].extend(sites)
-                        }
-                    });
 
                     contexts.par_sort_unstable();
                     // contexts.reverse();
@@ -463,6 +455,13 @@ impl<'a> LorikeetEngine<'a> {
                     );
                     if mode == "call" {
                         // calculate ANI statistics for short reads only
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar.set_message(format!(
+                                "{}: Running ANI calculations...",
+                                pb.key
+                            ));
+                        }
                         let mut ani_calculator = ANICalculator::new(
                             self.short_read_bam_count + self.long_read_bam_count,
                         );
@@ -546,9 +545,16 @@ impl<'a> LorikeetEngine<'a> {
                                 qual_by_depth_filter,
                                 *self.args
                                     .get_one::<i64>("min-variant-depth-for-genotyping")
-                                    .unwrap(),
+                                    .unwrap() as i32,
                             );
-
+                        
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar.set_message(format!(
+                                "{}: Running ANI calculations...",
+                                pb.key
+                            ));
+                        }
                         // calculate ANI statistics
                         let mut ani_calculator = ANICalculator::new(
                             self.short_read_bam_count + self.long_read_bam_count,
@@ -752,6 +758,13 @@ impl<'a> LorikeetEngine<'a> {
                             reference_writer.generate_strains(split_contexts, ref_idx, vec![0]);
                         }
                     } else if mode == "consensus" {
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar.set_message(format!(
+                                "{}: Running ANI calculations...",
+                                pb.key
+                            ));
+                        }
                         // calculate ANI statistics
                         let mut ani_calculator = ANICalculator::new(
                             self.short_read_bam_count + self.long_read_bam_count,

@@ -213,7 +213,7 @@ impl AssemblyBasedCallerUtils {
     ) -> HashMap<ReadIndexer, BirdToolRead> {
         let best_alleles = original_read_likelihoods
             .best_alleles_breaking_ties_main(Self::haplotype_alignment_tiebreaking_priority());
-        debug!("Best alleles {:?}", best_alleles.iter().map(|x| x.allele_index).collect::<Vec<_>>());
+        // debug!("Best alleles {:?}", best_alleles.iter().map(|x| x.allele_index).collect::<Vec<_>>());
         return best_alleles
             .iter()
             .map(|best_allele| {

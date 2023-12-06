@@ -3,9 +3,6 @@
     non_snake_case
 )]
 
-
-#[macro_use]
-extern crate lazy_static;
 #[macro_use]
 extern crate approx;
 
@@ -19,24 +16,19 @@ use lorikeet_genome::graphs::seq_vertex::SeqVertex;
 use lorikeet_genome::model::byte_array_allele::Allele;
 use lorikeet_genome::read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
-use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    STANDARD_NGS,
-};
+use lorikeet_genome::smith_waterman::smith_waterman_aligner::STANDARD_NGS;
 use lorikeet_genome::utils::base_utils::BaseUtils;
-use lorikeet_genome::utils::math_utils::{MathUtils};
+use lorikeet_genome::utils::math_utils::MathUtils;
 
-use lorikeet_genome::utils::simple_interval::{SimpleInterval};
+use lorikeet_genome::utils::simple_interval::SimpleInterval;
 
 use petgraph::graph::NodeIndex;
 
 use rand::rngs::ThreadRng;
 
-use rand::{Rng};
-use rayon::prelude::*;
+use rand::Rng;
 
-
-
-use std::collections::{HashSet};
+use std::collections::HashSet;
 
 
 
@@ -498,7 +490,7 @@ fn test_adaptive_pruning(
 // So these tests seem to be failing
 // luckily we don't use the adaptive chain pruner. But it is odd, and should be investigated
 // TODO: investigate why these tests are failing
-// #[test]
+#[test]
 fn get_chain_pruner_data() {
     let mut rng = ThreadRng::default();
     let ref_length = 100;

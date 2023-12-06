@@ -21,7 +21,7 @@ pub struct GenotypeLikelihoods {
 
 impl GenotypeLikelihoods {
     pub const MAX_DIPLOID_ALT_ALLELES_THAT_CAN_BE_GENOTYPED: usize = 50;
-    pub const MAX_PL: i64 = std::i64::MAX;
+    pub const MAX_PL: i32 = std::i32::MAX;
 
     pub fn calc_num_likelihoods(num_alleles: usize, ploidy: usize) -> i64 {
         binomial((num_alleles + ploidy - 1) as u64, ploidy as u64) as i64
@@ -45,23 +45,23 @@ impl GenotypeLikelihoods {
         }
     }
 
-    pub fn from_pls(pls: Vec<i64>) -> GenotypeLikelihoods {
+    pub fn from_pls(pls: Vec<i32>) -> GenotypeLikelihoods {
         GenotypeLikelihoods {
             num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),
             log10_likelihoods: Self::pls_to_gls(pls),
         }
     }
 
-    pub fn as_pls(self) -> Vec<i64> {
+    pub fn as_pls(self) -> Vec<i32> {
         Self::gls_to_pls(self.log10_likelihoods)
     }
 
-    pub fn gls_to_pls(gls: Vec<f64>) -> Vec<i64> {
+    pub fn gls_to_pls(gls: Vec<f64>) -> Vec<i32> {
         let mut pls = Vec::with_capacity(gls.len());
         let adjust = Self::max_pl(&gls);
         for i in 0..gls.len() {
             pls.push(min(
-                (-10.0 * (gls[i] - adjust)).round() as i64,
+                (-10.0 * (gls[i] - adjust)).round() as i32,
                 Self::MAX_PL,
             ));
         }
@@ -77,7 +77,7 @@ impl GenotypeLikelihoods {
         return adjust.into();
     }
 
-    pub fn pls_to_gls(pls: Vec<i64>) -> Vec<f64> {
+    pub fn pls_to_gls(pls: Vec<i32>) -> Vec<f64> {
         return pls
             .into_iter()
             .map(|p| (p as f64) / (-10.0))

@@ -331,7 +331,7 @@ impl Profile for ActivityProfile {
                         }
                     }
                 }
-                debug!("Soft clips added {}", states.len());
+                // debug!("Soft clips added {}", states.len());
                 return states;
             }
             ActivityProfileDataType::None => {
@@ -392,7 +392,7 @@ impl Profile for ActivityProfile {
             };
             // let force_conversion = false;
 
-            debug!("Force conversion {}", force_conversion);
+            // debug!("Force conversion {}", force_conversion);
             let next_region = self.pop_next_ready_assembly_region(
                 assembly_region_extension,
                 min_region_size,
@@ -403,7 +403,7 @@ impl Profile for ActivityProfile {
             match next_region {
                 Some(region) => {
                     region_start = Some(region.active_span.start);
-                    debug!("Next region {:?}", &region.active_span);
+                    // debug!("Next region {:?}", &region.active_span);
                     regions.push(region);
                 }
                 None => return regions,
@@ -474,7 +474,7 @@ impl Profile for ActivityProfile {
             force_conversion,
         );
 
-        debug!("Offset {:?}", &offset_of_next_region_end);
+        // debug!("Offset {:?}", &offset_of_next_region_end);
         match offset_of_next_region_end {
             Some(offset_of_next_region_end) => {
                 // we need to create the active region, and clip out the states we're extracting from this profile
@@ -507,7 +507,7 @@ impl Profile for ActivityProfile {
                 // divide this density count by the length
                 let activity_density = activity_density as f32 / region_loc.size() as f32;
 
-                debug!("regionLoc {:?}: activity density {}", &region_loc, activity_density);
+                // debug!("regionLoc {:?}: activity density {}", &region_loc, activity_density);
                 return Some(AssemblyRegion::new(
                     region_loc,
                     is_active_region,
@@ -559,10 +559,10 @@ impl Profile for ActivityProfile {
 
         let mut end_of_active_region =
             self.find_first_activity_boundary(is_active_region, max_region_size);
-        debug!("Find end 1 {}", end_of_active_region);
+        // debug!("Find end 1 {}", end_of_active_region);
         if is_active_region && (end_of_active_region == max_region_size) {
             end_of_active_region = self.find_best_cut_site(end_of_active_region, min_region_size);
-            debug!("Find end 2 {}", end_of_active_region);
+            // debug!("Find end 2 {}", end_of_active_region);
         }
 
         return end_of_active_region.checked_sub(1);
@@ -631,7 +631,7 @@ impl Profile for ActivityProfile {
             if (self.get_prob(end_of_active_region) > self.active_prob_threshold)
                 != is_active_region
             {
-                debug!("Active {}", self.get_prob(end_of_active_region));
+                // debug!("Active {}", self.get_prob(end_of_active_region));
                 break;
             }
             end_of_active_region += 1;

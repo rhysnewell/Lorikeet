@@ -19,9 +19,7 @@ use lorikeet_genome::graphs::seq_vertex::SeqVertex;
 use lorikeet_genome::model::byte_array_allele::Allele;
 use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use lorikeet_genome::reads::cigar_builder::CigarBuilder;
-use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
-    NEW_SW_PARAMETERS,
-};
+use lorikeet_genome::smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
 use lorikeet_genome::utils::simple_interval::SimpleInterval;
 use petgraph::prelude::NodeIndex;
 use rust_htslib::bam::record::Cigar;
@@ -339,19 +337,19 @@ fn test_basic_bubble_data(ref_bubble_length: usize, alt_bubble_length: usize) {
 
     // Construct the actual cigar
     let mut expected_cigar = CigarBuilder::new(true);
-    expected_cigar.add(Cigar::Match(pre_ref.len() as u32));
+    expected_cigar.add(Cigar::Match(pre_ref.len() as u32)).unwrap();
 
     if ref_bubble_length > alt_bubble_length {
-        expected_cigar.add(Cigar::Del((ref_bubble_length - alt_bubble_length) as u32));
-        expected_cigar.add(Cigar::Match(alt_bubble_length as u32));
+        expected_cigar.add(Cigar::Del((ref_bubble_length - alt_bubble_length) as u32)).unwrap();
+        expected_cigar.add(Cigar::Match(alt_bubble_length as u32)).unwrap();
     } else if ref_bubble_length < alt_bubble_length {
-        expected_cigar.add(Cigar::Match(ref_bubble_length as u32));
-        expected_cigar.add(Cigar::Ins((alt_bubble_length - ref_bubble_length) as u32));
+        expected_cigar.add(Cigar::Match(ref_bubble_length as u32)).unwrap();
+        expected_cigar.add(Cigar::Ins((alt_bubble_length - ref_bubble_length) as u32)).unwrap();
     } else {
-        expected_cigar.add(Cigar::Match(ref_bubble_length as u32));
+        expected_cigar.add(Cigar::Match(ref_bubble_length as u32)).unwrap();
     }
 
-    expected_cigar.add(Cigar::Match(post_ref.len() as u32));
+    expected_cigar.add(Cigar::Match(post_ref.len() as u32)).unwrap();
 
     let reference = (pre_ref.to_string() + v2_ref.get_sequence_string()) + post_ref;
     assert_eq!(
@@ -511,40 +509,40 @@ fn test_triple_bubble_data(
 
     let mut expected_cigar = CigarBuilder::new(true);
     if off_ref_beginning {
-        expected_cigar.add(Cigar::Ins(pre_alt_option.len() as u32));
+        expected_cigar.add(Cigar::Ins(pre_alt_option.len() as u32)).unwrap();
     }
-    expected_cigar.add(Cigar::Match(pre_ref.len() as u32));
+    expected_cigar.add(Cigar::Match(pre_ref.len() as u32)).unwrap();
     //first bubble
     if ref_bubble_length > alt_bubble_length {
-        expected_cigar.add(Cigar::Del((ref_bubble_length - alt_bubble_length) as u32));
-        expected_cigar.add(Cigar::Match(alt_bubble_length as u32));
+        expected_cigar.add(Cigar::Del((ref_bubble_length - alt_bubble_length) as u32)).unwrap();
+        expected_cigar.add(Cigar::Match(alt_bubble_length as u32)).unwrap();
     } else if ref_bubble_length < alt_bubble_length {
-        expected_cigar.add(Cigar::Match(ref_bubble_length as u32));
-        expected_cigar.add(Cigar::Ins((alt_bubble_length - ref_bubble_length) as u32));
+        expected_cigar.add(Cigar::Match(ref_bubble_length as u32)).unwrap();
+        expected_cigar.add(Cigar::Ins((alt_bubble_length - ref_bubble_length) as u32)).unwrap();
     } else {
-        expected_cigar.add(Cigar::Match(ref_bubble_length as u32));
+        expected_cigar.add(Cigar::Match(ref_bubble_length as u32)).unwrap();
     }
 
-    expected_cigar.add(Cigar::Match(mid_ref1.len() as u32));
+    expected_cigar.add(Cigar::Match(mid_ref1.len() as u32)).unwrap();
 
     // second bubble is ref path
-    expected_cigar.add(Cigar::Match(ref_bubble_length as u32));
-    expected_cigar.add(Cigar::Match(mid_ref2.len() as u32));
+    expected_cigar.add(Cigar::Match(ref_bubble_length as u32)).unwrap();
+    expected_cigar.add(Cigar::Match(mid_ref2.len() as u32)).unwrap();
 
     // third bubble
     if ref_bubble_length > alt_bubble_length {
-        expected_cigar.add(Cigar::Del((ref_bubble_length - alt_bubble_length) as u32));
-        expected_cigar.add(Cigar::Match(alt_bubble_length as u32));
+        expected_cigar.add(Cigar::Del((ref_bubble_length - alt_bubble_length) as u32)).unwrap();
+        expected_cigar.add(Cigar::Match(alt_bubble_length as u32)).unwrap();
     } else if ref_bubble_length < alt_bubble_length {
-        expected_cigar.add(Cigar::Match(ref_bubble_length as u32));
-        expected_cigar.add(Cigar::Ins((alt_bubble_length - ref_bubble_length) as u32));
+        expected_cigar.add(Cigar::Match(ref_bubble_length as u32)).unwrap();
+        expected_cigar.add(Cigar::Ins((alt_bubble_length - ref_bubble_length) as u32)).unwrap();
     } else {
-        expected_cigar.add(Cigar::Match(ref_bubble_length as u32));
+        expected_cigar.add(Cigar::Match(ref_bubble_length as u32)).unwrap();
     }
-    expected_cigar.add(Cigar::Match(post_ref.len() as u32));
+    expected_cigar.add(Cigar::Match(post_ref.len() as u32)).unwrap();
 
     if off_ref_ending {
-        expected_cigar.add(Cigar::Ins(post_alt_option.len() as u32));
+        expected_cigar.add(Cigar::Ins(post_alt_option.len() as u32)).unwrap();
     };
 
     assert_eq!(

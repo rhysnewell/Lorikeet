@@ -30,8 +30,8 @@ static TRIPLOID: usize = 3;
 static BIALLELIC: usize = 2;
 static TRIALLELIC: usize = 3;
 
-static EXTREMELY_CONFIDENT_PL: i64 = 1000;
-static FAIRLY_CONFIDENT_PL: i64 = 20;
+static EXTREMELY_CONFIDENT_PL: i32 = 1000;
+static FAIRLY_CONFIDENT_PL: i32 = 20;
 
 static DEFAULT_PLOIDY: usize = 2;
 
@@ -581,8 +581,8 @@ fn PLs_for_obvious_call(
     ploidy: usize,
     num_alleles: usize,
     allele_counts: Vec<usize>,
-    PL: i64,
-) -> Vec<i64> {
+    PL: i32,
+) -> Vec<i32> {
     let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, num_alleles);
     let mut result = vec![PL; gl_calc.genotype_count as usize];
     result[gl_calc.allele_counts_to_index(&allele_counts)] = 0;
@@ -593,7 +593,7 @@ fn genotype_with_obvious_call(
     ploidy: usize,
     num_alleles: usize,
     alleles: Vec<usize>,
-    PL: i64,
+    PL: i32,
     sample: usize,
 ) -> Genotype {
     return make_genotype(
@@ -603,10 +603,10 @@ fn genotype_with_obvious_call(
     );
 }
 
-fn make_genotype(ploidy: usize, sample: usize, pls: Vec<i64>) -> Genotype {
+fn make_genotype(ploidy: usize, sample: usize, pls: Vec<i32>) -> Genotype {
     let mut g = Genotype::build_from_alleles(
         vec![ByteArrayAllele::no_call(); ploidy],
-        format!("sample_{}", sample),
+        sample,
     );
     g.pl(GenotypeLikelihoods::from_pls(pls).as_pls());
     return g;
