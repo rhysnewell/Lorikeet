@@ -3,7 +3,7 @@
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/version.svg)
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/latest_release_relative_date.svg)
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/platforms.svg)
-
+[![DOI](https://zenodo.org/badge/187937357.svg)](https://zenodo.org/doi/10.5281/zenodo.10275468)
 
 ![](docs/_include/images/lorikeet_logo.png)
 
