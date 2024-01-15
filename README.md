@@ -1,4 +1,4 @@
-![](https://travis-ci.com/rhysnewell/Lorikeet.svg?branch=master)
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/lorikeet-genome/README.html)
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/license.svg)
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/version.svg)
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/latest_release_relative_date.svg)
